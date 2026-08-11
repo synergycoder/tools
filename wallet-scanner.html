@@ -113,6 +113,7 @@
   <div class="row">
     <button class="ghost" id="rescanBtn" style="display:none">Rescan</button>
     <span class="note" id="connectStatus" style="margin:0"></span>
+    <span class="note" id="cacheStatus" style="margin:0"></span>
   </div>
   <div class="addrbox" id="addrBox" style="display:none; margin-top:12px"></div>
 </div>
@@ -179,6 +180,7 @@ async function loadNftRealms() {
 }
 
 let wallet = null;
+const cacheStatus = document.getElementById("cacheStatus");
 
 function resetPanels(message) {
   tokenTable.style.display = "none";
@@ -190,13 +192,57 @@ function resetPanels(message) {
   nftEmpty.textContent = message;
   nftCount.textContent = "";
   nftCoverageNote.style.display = "none";
+  cacheStatus.textContent = "";
+}
+
+// Scan results (token balances + NFT holdings, including fetched thumbs)
+// are cached per address+network so navigating to another page and back
+// shows what was already found instantly instead of an empty "connect to
+// scan" state — a live re-scan is always one click away via Rescan.
+const SCAN_CACHE_PREFIX = "gnoTools:walletScan:";
+function scanCacheKey(netKey, address) { return `${SCAN_CACHE_PREFIX}${netKey}:${address}`; }
+function saveScanCache(netKey, address, data) {
+  try { localStorage.setItem(scanCacheKey(netKey, address), JSON.stringify({ ...data, scannedAt: Date.now() })); } catch {}
+}
+function loadScanCache(netKey, address) {
+  try {
+    const raw = localStorage.getItem(scanCacheKey(netKey, address));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function formatAgo(ts) {
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
 
 window.addEventListener("gnotools:activenetwork", (e) => {
   if (!e.detail) return;
   activeNetKey = e.detail.key;
-  if (wallet) scan();
+  if (wallet) loadForCurrentNetwork();
 });
+
+function renderTokenRows(rows) {
+  tokenBody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.symbol)}</td>
+      <td class="num">${escapeHtml(r.balance)}</td>
+      <td class="realm" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</td>
+    </tr>
+  `).join("");
+  tokenTable.style.display = rows.length ? "table" : "none";
+  tokenEmpty.style.display = rows.length ? "none" : "block";
+  tokenEmpty.textContent = rows.length ? "" : "No token balances found on this network.";
+  tokenCount.textContent = `${rows.length} held`;
+}
 
 async function scanTokens(net) {
   tokenTable.style.display = "none";
@@ -231,18 +277,46 @@ async function scanTokens(net) {
     }
   }
 
-  tokenBody.innerHTML = rows.map(r => `
-    <tr>
-      <td>${escapeHtml(r.name)}</td>
-      <td>${escapeHtml(r.symbol)}</td>
-      <td class="num">${escapeHtml(r.balance)}</td>
-      <td class="realm" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</td>
-    </tr>
+  renderTokenRows(rows);
+  return rows;
+}
+
+function nftThumbsHTML(entry) {
+  if (entry.loading) return `<span class="unlisted"><span class="spinner"></span>${escapeHtml(entry.loading)}</span>`;
+  const tokenIds = entry.tokenIds || [];
+  if (!tokenIds.length) {
+    return `<span class="unlisted">Individual tokens not listed — this collection's IDs couldn't be matched.</span>`;
+  }
+  const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
+  const metas = entry.metas || [];
+  return metas.map(m => m.image
+    ? `<img src="${escapeHtml(m.image)}" alt="#${escapeHtml(m.tokenId)}" title="#${escapeHtml(m.tokenId)}" loading="lazy">`
+    : `<span class="ph" title="#${escapeHtml(m.tokenId)}">#${escapeHtml(m.tokenId)}</span>`
+  ).join("") + (tokenIds.length > shown.length ? `<span class="ph">+${tokenIds.length - shown.length}</span>` : "");
+}
+
+function renderNftShell(held, net, checkedCount, errorCount) {
+  nftEmpty.style.display = held.length ? "none" : "block";
+  nftEmpty.textContent = held.length ? "" : "No NFTs found in any known collection.";
+  nftCount.textContent = held.length ? `${held.length} collection(s)` : "";
+  nftCoverageNote.style.display = "block";
+  nftCoverageNote.innerHTML = `Checked against ${checkedCount} known collection(s) on ${escapeHtml(net.label)}` +
+    (errorCount ? ` (${errorCount} couldn't be checked)` : "") +
+    `. This is not a full-chain scan — a real NFT collection this scanner doesn't know about yet won't show up here.`;
+  nftGrid.innerHTML = held.map(r => `
+    <div class="nft-card" data-path="${escapeHtml(r.path)}">
+      <div class="top"><span class="cname">${escapeHtml(r.name)}</span>${r.symbol ? `<span class="sym">${escapeHtml(r.symbol)}</span>` : ""}</div>
+      <div class="balance">${r.count}<span class="lbl">held</span></div>
+      <div class="thumbs" data-thumbs>${nftThumbsHTML(r)}</div>
+    </div>
   `).join("");
-  tokenTable.style.display = rows.length ? "table" : "none";
-  tokenEmpty.style.display = rows.length ? "none" : "block";
-  tokenEmpty.textContent = rows.length ? "" : "No token balances found on this network.";
-  tokenCount.textContent = `${rows.length} held`;
+}
+
+// Renders instantly from a cached scan — no RPC calls at all.
+function renderNftFromCache(held, net) {
+  nftGrid.innerHTML = "";
+  nftCoverageNote.style.display = "none";
+  renderNftShell(held, net, held.length, 0);
 }
 
 async function scanNfts(net, netKey) {
@@ -255,7 +329,7 @@ async function scanNfts(net, netKey) {
   const realms = nftRealmsByNetwork[netKey] || [];
   if (!realms.length) {
     nftEmpty.textContent = "No known NFT collections for this network yet.";
-    return;
+    return [];
   }
 
   const balances = await mapLimit(realms, 6, async (r) => {
@@ -267,36 +341,19 @@ async function scanNfts(net, netKey) {
     }
   });
   const held = balances.filter(r => r.count != null && r.count > 0);
-
-  nftEmpty.style.display = held.length ? "none" : "block";
-  nftEmpty.textContent = held.length ? "" : "No NFTs found in any known collection.";
-  nftCount.textContent = held.length ? `${held.length} collection(s)` : "";
-
   const checkedCount = balances.length;
   const errorCount = balances.filter(r => r.error).length;
-  nftCoverageNote.style.display = "block";
-  nftCoverageNote.innerHTML = `Checked against ${checkedCount} known collection(s) on ${escapeHtml(net.label)}` +
-    (errorCount ? ` (${errorCount} couldn't be checked)` : "") +
-    `. This is not a full-chain scan — a real NFT collection this scanner doesn't know about yet won't show up here.`;
-
-  if (!held.length) return;
-
-  nftGrid.innerHTML = held.map(r => `
-    <div class="nft-card" data-path="${escapeHtml(r.path)}">
-      <div class="top"><span class="cname">${escapeHtml(r.name)}</span>${r.symbol ? `<span class="sym">${escapeHtml(r.symbol)}</span>` : ""}</div>
-      <div class="balance">${r.count}<span class="lbl">held</span></div>
-      <div class="thumbs" data-thumbs></div>
-    </div>
-  `).join("");
+  renderNftShell(held, net, checkedCount, errorCount);
+  if (!held.length) return held;
 
   // Best-effort per-collection token-id + image fetch — a collection
   // that doesn't emit Mint/Transfer/Burn events with a tokenId attr
   // (not guaranteed by the GRC721 standard) yields nothing here even
   // though the balance above is real; say so honestly rather than
-  // leaving a card looking broken.
+  // leaving a card looking broken. Results are attached onto each `held`
+  // entry so the whole thing (including fetched thumbs) can be cached.
   await mapLimit(held, 3, async (r) => {
     const card = nftGrid.querySelector(`[data-path="${CSS.escape(r.path)}"] [data-thumbs]`);
-    if (!card) return;
     let tokenIds = [];
     try {
       tokenIds = await fetchOwnedTokenIds(net, r.path, wallet.address);
@@ -308,26 +365,26 @@ async function scanNfts(net, netKey) {
       // directly, so it finds tokens the event scrape can miss entirely.
       // Progress text (not a static spinner) so a scan across dozens of
       // ids doesn't read as a frozen/looping page.
-      card.innerHTML = `<span class="unlisted"><span class="spinner"></span>Looking up token IDs…</span>`;
+      r.loading = "Looking up token IDs…";
+      if (card) card.innerHTML = nftThumbsHTML(r);
       try {
         tokenIds = await bruteForceOwnedTokenIds(net, r.path, wallet.address, r.count, {
           onProgress: (checked, total) => {
-            card.innerHTML = `<span class="unlisted"><span class="spinner"></span>Looking up token IDs… (${checked}/${total})</span>`;
+            r.loading = `Looking up token IDs… (${checked}/${total})`;
+            if (card) card.innerHTML = nftThumbsHTML(r);
           },
         });
       } catch {}
+      delete r.loading;
     }
-    if (!tokenIds.length) {
-      card.innerHTML = `<span class="unlisted">Individual tokens not listed — this collection's IDs couldn't be matched.</span>`;
-      return;
+    r.tokenIds = tokenIds;
+    if (tokenIds.length) {
+      const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
+      r.metas = await mapLimit(shown, 3, (tid) => fetchOwnedTokenMetadata(net, r.path, tid).catch(() => ({ tokenId: tid, image: null })));
     }
-    const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
-    const metas = await mapLimit(shown, 3, (tid) => fetchOwnedTokenMetadata(net, r.path, tid).catch(() => ({ tokenId: tid, image: null })));
-    card.innerHTML = metas.map(m => m.image
-      ? `<img src="${escapeHtml(m.image)}" alt="#${escapeHtml(m.tokenId)}" title="#${escapeHtml(m.tokenId)}" loading="lazy">`
-      : `<span class="ph" title="#${escapeHtml(m.tokenId)}">#${escapeHtml(m.tokenId)}</span>`
-    ).join("") + (tokenIds.length > shown.length ? `<span class="ph">+${tokenIds.length - shown.length}</span>` : "");
+    if (card) card.innerHTML = nftThumbsHTML(r);
   });
+  return held;
 }
 
 async function scan() {
@@ -335,10 +392,28 @@ async function scan() {
   const netKey = activeNetKey;
   const net = NETWORKS[netKey];
   rescanBtn.disabled = true;
+  cacheStatus.textContent = "";
   try {
-    await Promise.all([scanTokens(net), scanNfts(net, netKey)]);
+    const [tokens, nfts] = await Promise.all([scanTokens(net), scanNfts(net, netKey)]);
+    saveScanCache(netKey, wallet.address, { tokens, nfts });
+    cacheStatus.textContent = "Updated just now";
   } finally {
     rescanBtn.disabled = false;
+  }
+}
+
+// Shows a cached result instantly (if there is one for this address on
+// the currently-selected network) with no RPC calls, then falls back to
+// a live scan when there's nothing cached yet.
+function loadForCurrentNetwork() {
+  if (!wallet) return;
+  const cached = loadScanCache(activeNetKey, wallet.address);
+  if (cached) {
+    renderTokenRows(cached.tokens || []);
+    renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey]);
+    cacheStatus.textContent = `Cached · ${formatAgo(cached.scannedAt)} — click Rescan for the latest`;
+  } else {
+    scan();
   }
 }
 
@@ -351,7 +426,7 @@ onWalletChange((w) => {
     addrBox.innerHTML = `<b>Connected:</b> ${escapeHtml(w.address)}`;
     rescanBtn.style.display = "inline-block";
     connectStatus.textContent = "";
-    scan();
+    loadForCurrentNetwork();
   } else {
     wallet = null;
     addrBox.style.display = "none";

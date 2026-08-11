@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>gno.land Name Registry — query · names · history · register</title>
+<!-- Required for Adena to inject window.adena on an otherwise-inline-only page. Do not remove. -->
+<script src="adena-compat.js"></script>
+<style>
+  :root{
+    --bg:#0f1512; --panel:#16201b; --panel2:#1b271f; --ink:#e7ece7; --muted:#93a49a;
+    --faint:#63726a; --hair:rgba(231,236,231,.12); --hair2:rgba(231,236,231,.22);
+    --accent:#57c6a2; --accent-soft:rgba(87,198,162,.13); --accent-line:rgba(87,198,162,.34);
+    --warn:#d69a5a; --warn-soft:rgba(214,154,90,.13); --bad:#e06a6a;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  code,.mono{font-family:var(--mono)}
+  .wrap{max-width:920px;margin:0 auto;padding:0 20px 90px}
+  header{border-bottom:1px solid var(--hair);background:radial-gradient(120% 100% at 90% -20%,var(--accent-soft),transparent 60%)}
+  .head-inner{max-width:920px;margin:0 auto;padding:26px 20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13px;margin:0;max-width:60ch}
+  .net{display:flex;gap:6px;align-items:center}
+  .net .lbl{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
+  .net button{font-family:var(--mono);font-size:12px;padding:7px 11px;border-radius:8px;border:1px solid var(--hair2);background:var(--panel);color:var(--muted);cursor:pointer}
+  .net button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+  .net button:hover{color:var(--ink)}
+  .netinfo{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
+  .netinfo .dot{color:var(--accent)}
+  .tabs{display:flex;gap:4px;margin:26px 0 0;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+  .tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);font-family:var(--sans);font-size:14px;font-weight:600;padding:11px 14px;cursor:pointer;margin-bottom:-1px}
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+  .tabs button:hover{color:var(--ink)}
+  section.panel{display:none;padding:24px 0 0}
+  section.panel.on{display:block}
+  h2{font-size:16px;margin:0 0 4px}
+  .hint{color:var(--muted);font-size:13px;margin:0 0 16px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text],textarea{flex:1;min-width:180px;font-family:var(--mono);font-size:14px;background:var(--panel);border:1px solid var(--hair2);border-radius:9px;color:var(--ink);padding:11px 13px;width:100%;resize:vertical}
+  input[type=text]:focus,textarea:focus{outline:2px solid var(--accent-line);outline-offset:1px;border-color:var(--accent-line)}
+  button.act{font-family:var(--sans);font-weight:600;font-size:14px;padding:11px 16px;border-radius:9px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);cursor:pointer;white-space:nowrap}
+  button.act:hover{background:rgba(87,198,162,.2)}
+  button.act:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:var(--panel);color:var(--muted);border-color:var(--hair2)}
+  .result{margin-top:16px;background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:16px 18px;min-height:20px}
+  .kv{display:flex;gap:10px;padding:5px 0;font-size:14px;flex-wrap:wrap}
+  .kv .k{color:var(--faint);font-family:var(--mono);font-size:12px;width:120px;flex:none;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+  .kv .v{font-family:var(--mono);word-break:break-all;flex:1;min-width:150px}
+  .big{font-size:20px;font-family:var(--mono)}
+  .badge{display:inline-block;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--hair2);color:var(--muted)}
+  .badge.ok{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
+  .badge.warn{background:var(--warn-soft);color:var(--warn);border-color:rgba(214,154,90,.34)}
+  .badge.bad{background:rgba(224,106,106,.13);color:var(--bad);border-color:rgba(224,106,106,.34)}
+  .muted{color:var(--muted)}.faint{color:var(--faint)}
+  .list{margin-top:10px;display:flex;flex-direction:column;gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden}
+  .list .item{background:var(--panel);padding:11px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
+  .list .item:hover{background:var(--panel2)}
+  .list .nm{font-family:var(--mono);font-size:14px}
+  .spinner{display:inline-block;width:13px;height:13px;border:2px solid var(--faint);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .note{border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:0 10px 10px 0;padding:12px 15px;font-size:13px;color:var(--ink);margin-top:6px}
+  .note.info{border-left-color:var(--accent);background:var(--accent-soft)}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--faint);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+  .preview{font-family:var(--mono);font-size:16px;margin:8px 0}
+  .err{color:var(--bad);font-size:13px;margin-top:8px;font-family:var(--mono)}
+  .ok{color:var(--accent)}
+  .stat{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .stat b{color:var(--ink);font-size:15px}
+  /* table */
+  .tblwrap{overflow-x:auto;border:1px solid var(--hair);border-radius:12px;margin-top:8px}
+  table{border-collapse:collapse;width:100%;min-width:600px;font-size:13px}
+  thead th{text-align:left;font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:11px 14px;border-bottom:1px solid var(--hair2);white-space:nowrap;background:var(--panel)}
+  tbody td{padding:10px 14px;border-bottom:1px solid var(--hair);vertical-align:top;font-family:var(--mono)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr{cursor:pointer}tbody tr:hover{background:var(--panel2)}
+  .num{font-variant-numeric:tabular-nums}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;z-index:50}
+  .overlay.on{display:flex}
+  .modal{background:var(--panel);border:1px solid var(--hair2);border-radius:16px;max-width:640px;width:100%;padding:24px 26px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+  .modal-head h3{margin:0;font-size:22px;font-family:var(--mono)}
+  .modal .x{background:none;border:1px solid var(--hair2);color:var(--muted);border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:16px;flex:none}
+  .modal .x:hover{color:var(--ink)}
+  .sect{margin-top:18px}
+  .sect .h{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid var(--hair);padding-bottom:5px}
+  .avatar{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1px solid var(--hair2);background:var(--panel2)}
+  footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--hair);color:var(--faint);font-size:12px;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div>
+      <h1>gno.land Name Registry</h1>
+      <p class="sub">Explore the on-chain user registry (<code>r/sys/users</code>) — a single source of truth for both <code>nym-…</code> and vanity names. Query, browse every name with full metadata, view registration history, and register.</p>
+    </div>
+    <div class="net">
+      <span class="lbl">Network</span>
+      <button data-net="sapphire" class="on">Testnet · sapphire</button>
+      <button data-net="betanet">Mainnet-beta</button>
+    </div>
+  </div>
+  <div class="head-inner" style="padding-top:0"><div class="netinfo" id="netinfo"></div></div>
+  <div class="head-inner" style="padding-top:0"><div class="netinfo"><a href="index.html">← gno.tools</a> · <a href="wallet-scanner.html">Wallet Scanner</a></div></div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button data-tab="query" class="on">Query</button>
+    <button data-tab="names">Names</button>
+    <button data-tab="history">History</button>
+    <button data-tab="register">Register</button>
+    <button data-tab="profile">Profile</button>
+  </div>
+
+  <!-- QUERY -->
+  <section class="panel on" id="tab-query">
+    <h2>Resolve a name or address</h2>
+    <p class="hint">Enter a name (e.g. <code>nym-alice123</code>) or an address (<code>g1…</code>). Works on both networks.</p>
+    <div class="row">
+      <input type="text" id="q-input" placeholder="nym-alice123  or  g1…" autocomplete="off" spellcheck="false" />
+      <button class="act" id="q-btn">Resolve</button>
+    </div>
+    <div class="result" id="q-result"><span class="faint">No lookup yet.</span></div>
+  </section>
+
+  <!-- NAMES -->
+  <section class="panel" id="tab-names">
+    <h2>All registered names</h2>
+    <p class="hint">Click any name for its full on-chain metadata. Or look up any name directly (covers system/genesis names too).</p>
+    <div class="row" style="margin-bottom:12px">
+      <input type="text" id="n-input" placeholder="inspect any name → nym-alice123" autocomplete="off" spellcheck="false" />
+      <button class="act ghost" id="n-lookup">Inspect</button>
+    </div>
+    <div class="result" id="n-stats"><span class="faint">Loading…</span></div>
+    <div id="n-list"></div>
+  </section>
+
+  <!-- HISTORY -->
+  <section class="panel" id="tab-history">
+    <h2>Registration history</h2>
+    <p class="hint">Every open-tier registration transaction (via <code>r/sys/namereg</code>), newest first — with timestamp, block, and a link to GnoScan. Click a row for full details.</p>
+    <div id="h-body"><span class="faint">Loading…</span></div>
+  </section>
+
+  <!-- REGISTER -->
+  <section class="panel" id="tab-register">
+    <h2>Register a name</h2>
+    <div id="r-body"></div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="panel" id="tab-profile">
+    <h2>Edit profile</h2>
+    <div id="p-body"></div>
+  </section>
+
+  <footer>
+    <div>Reads: chain RPC (resolve/metadata) + tx-indexer (history). Registration is signed by your own Adena wallet — this page never holds keys.</div>
+    <div id="foot-net"></div>
+  </footer>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay" id="overlay"><div class="modal" id="modal"></div></div>
+
+<script>
+"use strict";
+/* ---------------- config ---------------- */
+const NETWORKS = {
+  sapphire: {
+    label:"Testnet (sapphire-1)", chainId:"sapphire-1",
+    rpc:"https://rpc.sapphire.testnets.gno.land",
+    indexer:"https://indexer.sapphire.testnets.gno.land/graphql/query",
+    gnoweb:"https://sapphire.testnets.gno.land", gnoscan:"https://gnoscan.io",
+    hasNamereg:true,
+  },
+  betanet: {
+    label:"Mainnet-beta (gnoland1)", chainId:"gnoland1",
+    rpc:"https://rpc.betanet.testnets.gno.land",
+    indexer:"https://indexer.betanet.testnets.gno.land/graphql/query",
+    gnoweb:"https://gno.land", gnoscan:"https://gnoscan.io",
+    hasNamereg:false,
+  },
+};
+const USERS="gno.land/r/sys/users", NAMEREG="gno.land/r/sys/namereg/v1", PROFILE="gno.land/r/demo/profile";
+let NET=NETWORKS.sapphire;
+let REGS=[];               // cached registrations for the active network
+let regsLoaded=false;
+
+/* ---------------- helpers ---------------- */
+function esc(s){const d=document.createElement("div");d.textContent=s==null?"":s;return d.innerHTML;}
+async function mapLimit(items,limit,fn){
+  const out=[];let i=0;
+  const workers=Array.from({length:Math.min(limit,items.length)},async()=>{
+    while(i<items.length){const idx=i++;out[idx]=await fn(items[idx],idx);}
+  });
+  await Promise.all(workers);return out;
+}
+
+/* ---------------- RPC (vm/qeval) — verified shape ---------------- */
+async function qeval(expr,timeoutMs=12000){
+  const url=NET.rpc+'/abci_query?path='+encodeURIComponent('"vm/qeval"')+'&data='+encodeURIComponent('"'+btoa(expr)+'"');
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    const res=await fetch(url,{signal:ctrl.signal});
+    if(!res.ok)return{error:"rpc http "+res.status};
+    const j=await res.json();
+    const rb=j&&j.result&&j.result.response&&j.result.response.ResponseBase;
+    if(!rb)return{error:"malformed rpc response"};
+    if(rb.Error)return{gnoError:true,log:rb.Log||""};
+    return{data:rb.Data?atob(rb.Data):""};
+  }catch(e){return{error:e.name==="AbortError"?"timeout":(e.message||"network error")};}
+  finally{clearTimeout(t);}
+}
+/* ---------------- indexer (GraphQL) ---------------- */
+async function gql(query,timeoutMs=15000){
+  if(!NET.indexer)return{error:"no indexer configured for this network"};
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    const res=await fetch(NET.indexer,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({query}),signal:ctrl.signal});
+    const j=await res.json();
+    if(j.errors)return{error:j.errors.map(e=>e.message).join("; ")};
+    return{data:j.data};
+  }catch(e){return{error:e.name==="AbortError"?"indexer timeout":(e.message||"indexer unreachable (CORS?)")};}
+  finally{clearTimeout(t);}
+}
+
+/* ---------------- parsing ---------------- */
+function parseUser(s){
+  if(!s)return null;
+  if(/^\(nil\b/.test(s.split("\n")[0]))return null;
+  const addr=(s.match(/"(g1[a-z0-9]+)"\s*\.uverse\.address/)||[])[1]||null;
+  const name=(s.match(/"([^"]*)"\s+string\)/)||[])[1]||null;
+  const deleted=/,\(true\s+bool\)\}/.test(s);
+  const lines=s.trim().split("\n");
+  const isCurrent=lines.length>1?/\(true\s+bool\)/.test(lines[lines.length-1]):null;
+  if(!addr&&!name)return null;
+  return{addr,name,deleted,isCurrent};
+}
+function pInt(s){const m=(s||"").match(/\((-?\d+)\s+int\)/);return m?parseInt(m[1],10):null;}
+function pStr(s){const m=(s||"").match(/^\("([\s\S]*)"\s+string\)$/);return m?m[1]:null;}
+function pBool(s){return /\(true\s+bool\)/.test(s||"");}
+function isAddr(s){return /^g1[a-z0-9]{38}$/.test(s);}
+function safeName(s){return /^[a-z0-9._-]{1,64}$/i.test(s);}
+function fmtTime(iso){if(!iso)return"—";const d=new Date(iso);return isNaN(d)?iso:d.toISOString().slice(0,19).replace("T"," ")+" UTC";}
+function gnoscanTx(hash){return NET.gnoscan+"/transactions/details?chainId="+encodeURIComponent(NET.chainId)+"&txhash="+encodeURIComponent(hash);}
+
+/* ---------------- QUERY tab ---------------- */
+const qInput=document.getElementById("q-input"),qResult=document.getElementById("q-result");
+document.getElementById("q-btn").onclick=doQuery;
+qInput.addEventListener("keydown",e=>{if(e.key==="Enter")doQuery();});
+async function doQuery(){
+  const raw=qInput.value.trim();if(!raw)return;
+  qResult.innerHTML='<span class="spinner"></span> <span class="faint">resolving on '+esc(NET.chainId)+'…</span>';
+  const rec=await resolveOne(raw);
+  if(rec.error)return qResult.innerHTML='<span class="err">✕ '+esc(rec.error)+'</span>';
+  if(!rec.found)return qResult.innerHTML='<div class="kv"><span class="k">'+(rec.byAddr?"address":"name")+'</span><span class="v">'+esc(raw)+'</span></div><div class="kv"><span class="k">status</span><span class="v"><span class="badge">not registered</span></span></div>';
+  qResult.innerHTML=recordHTML(rec)+'<div style="margin-top:12px"><button class="act ghost" onclick="openDetail(\''+esc(rec.name)+'\')">Full details ↗</button></div>';
+}
+async function resolveOne(raw){
+  if(isAddr(raw)){
+    const r=await qeval(USERS+'.ResolveAddress("'+raw+'")');
+    if(r.error)return{error:r.error};
+    const u=r.gnoError?null:parseUser(r.data);
+    if(!u||!u.name)return{found:false,byAddr:true};
+    return{found:true,name:u.name,address:raw,deleted:u.deleted};
+  }
+  if(!safeName(raw))return{error:"not a valid name or g1… address"};
+  const r=await qeval(USERS+'.ResolveName("'+raw+'")');
+  if(r.error)return{error:r.error};
+  const u=r.gnoError?null:parseUser(r.data);
+  if(!u||!u.addr)return{found:false};
+  return{found:true,name:raw,matched:u.name,address:u.addr,deleted:u.deleted,isCurrent:u.isCurrent};
+}
+function recordHTML(o){
+  let b=o.deleted?'<span class="badge bad">deleted</span> ':'<span class="badge ok">active</span> ';
+  if(o.isCurrent===false)b+='<span class="badge warn">alias (not current default)</span>';
+  else if(o.isCurrent===true)b+='<span class="badge">current default name</span>';
+  let h='<div class="kv"><span class="k">name</span><span class="v big">@'+esc(o.name)+'</span></div>'+
+        '<div class="kv"><span class="k">address</span><span class="v">'+esc(o.address)+'</span></div>'+
+        '<div class="kv"><span class="k">status</span><span class="v">'+b+'</span></div>';
+  if(o.matched&&o.matched!==o.name)h+='<div class="kv"><span class="k">note</span><span class="v muted">current default name for this address is @'+esc(o.matched)+'</span></div>';
+  return h;
+}
+
+/* ---------------- registrations (shared by Names + History) ---------------- */
+async function loadRegs(){
+  if(regsLoaded)return REGS;
+  if(!NET.hasNamereg||!NET.indexer){REGS=[];regsLoaded=true;return REGS;}
+  const q='{ getTransactions(where:{ success:{eq:true}, messages:{ value:{ MsgCall:{ pkg_path:{eq:"'+NAMEREG+'"}, func:{eq:"Register"} } } } }) '+
+          '{ hash block_height gas_used messages { value { __typename ... on MsgCall { caller func args } } } } }';
+  const r=await gql(q);
+  if(r.error){REGS=[];regsLoaded=true;REGS.loadError=r.error;return REGS;}
+  const txs=(r.data.getTransactions||[]).map(t=>{
+    const m=(t.messages||[]).find(x=>x.value&&x.value.__typename==="MsgCall");
+    return{name:m&&m.value.args&&m.value.args[0],caller:m&&m.value.caller,hash:t.hash,block:t.block_height,gas:t.gas_used};
+  }).filter(x=>x.name);
+  const heights=[...new Set(txs.map(t=>t.block))];
+  const times={};
+  await mapLimit(heights,4,async h=>{
+    const br=await gql('{ getBlocks(where:{height:{eq:'+h+'}}){ height time } }');
+    if(!br.error&&br.data.getBlocks&&br.data.getBlocks[0])times[h]=br.data.getBlocks[0].time;
+  });
+  txs.forEach(t=>t.time=times[t.block]||null);
+  txs.sort((a,b)=>b.block-a.block);
+  REGS=txs;regsLoaded=true;return REGS;
+}
+
+/* ---------------- NAMES tab ---------------- */
+document.getElementById("n-lookup").onclick=()=>{const v=document.getElementById("n-input").value.trim();if(v)openDetail(v);};
+document.getElementById("n-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
+async function loadNames(){
+  const stats=document.getElementById("n-stats"),listEl=document.getElementById("n-list");
+  stats.innerHTML='<span class="spinner"></span> <span class="faint">reading '+esc(NET.chainId)+'…</span>';listEl.innerHTML="";
+  const cnt=await qeval(USERS+".GetReadOnlyNameStore().Size()");
+  const total=cnt.error?null:pInt(cnt.data);
+  stats.innerHTML=cnt.error?'<span class="err">✕ '+esc(cnt.error)+'</span>':
+    '<span class="stat">Total names in registry on '+esc(NET.chainId)+': <b>'+(total==null?"?":total)+'</b></span>';
+
+  if(cnt.error)return;
+  if(!total){listEl.innerHTML='<div class="note">This registry is empty on '+esc(NET.chainId)+'. Use the box above to inspect any name that may exist.</div>';return;}
+  listEl.innerHTML='<p class="faint" style="margin-top:14px"><span class="spinner"></span> enumerating '+total+' names…</p>';
+  // Enumerate ALL names dynamically via the read-only store's index accessor (GetByIndex).
+  const regs=await loadRegs();
+  const regNames=new Set((Array.isArray(regs)?regs:[]).map(r=>r.name));
+  const entries=await mapLimit([...Array(total).keys()],5,async i=>{
+    const r=await qeval(USERS+'.GetReadOnlyNameStore().GetByIndex('+i+')');
+    if(r.error||r.gnoError)return null;
+    const nm=(r.data.split("\n")[0].match(/^\("([\s\S]*?)"\s+string\)/)||[])[1];
+    const deleted=/,\(true\s+bool\)\}/.test(r.data);
+    return nm?{name:nm,deleted}:null;
+  });
+  const list=entries.filter(Boolean).sort((a,b)=>a.name.localeCompare(b.name));
+  const regN=list.filter(e=>regNames.has(e.name)).length;
+  let html='<p class="faint" style="margin:16px 0 6px;font-family:var(--mono);font-size:12px">ALL '+list.length+' NAME(S) — '+regN+' via transaction, '+(list.length-regN)+' genesis/system (click any for details)</p>';
+  html+='<div class="list">'+list.map(e=>{
+    const badge=regNames.has(e.name)?'<span class="badge ok">registered</span>':'<span class="badge">genesis</span>';
+    const del=e.deleted?' <span class="badge bad">deleted</span>':'';
+    return '<div class="item" onclick="openDetail(\''+esc(e.name)+'\')"><span class="nm">@'+esc(e.name)+' '+badge+del+'</span><span class="faint">details ↗</span></div>';
+  }).join("")+'</div>';
+  if(list.length<total)html+='<div class="note" style="margin-top:12px">Showing '+list.length+' of '+total+' (some entries could not be read — retry).</div>';
+  if(regs&&regs.loadError)html+='<div class="note" style="margin-top:12px">Registration timestamps unavailable (indexer: '+esc(regs.loadError)+'); registered/genesis labels may be approximate.</div>';
+  listEl.innerHTML=html;
+}
+
+/* ---------------- HISTORY tab ---------------- */
+async function loadHistory(){
+  const body=document.getElementById("h-body");
+  body.innerHTML='<span class="spinner"></span> <span class="faint">querying indexer…</span>';
+  if(!NET.hasNamereg){body.innerHTML='<div class="note">No registration transactions on mainnet-beta (no open registration controller deployed).</div>';return;}
+  const regs=await loadRegs();
+  if(regs.loadError){body.innerHTML='<div class="err">✕ indexer: '+esc(regs.loadError)+'</div>';return;}
+  if(!regs.length){body.innerHTML='<p class="muted">No registration transactions found yet.</p>';return;}
+  body.innerHTML='<div class="tblwrap"><table><thead><tr><th>Name</th><th>Registered</th><th>Block</th><th>Registrant</th><th>Tx</th></tr></thead><tbody>'+
+    regs.map(r=>'<tr onclick="openDetail(\''+esc(r.name)+'\')">'+
+      '<td class="ok">@'+esc(r.name)+'</td>'+
+      '<td>'+esc(fmtTime(r.time))+'</td>'+
+      '<td class="num">'+esc(r.block)+'</td>'+
+      '<td title="'+esc(r.caller||"")+'">'+esc((r.caller||"").slice(0,12))+'…</td>'+
+      '<td><a href="'+esc(gnoscanTx(r.hash))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">GnoScan ↗</a></td>'+
+    '</tr>').join("")+'</tbody></table></div>';
+}
+
+/* ---------------- DETAIL modal ---------------- */
+const overlay=document.getElementById("overlay"),modal=document.getElementById("modal");
+overlay.onclick=e=>{if(e.target===overlay)closeDetail();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDetail();});
+function closeDetail(){overlay.classList.remove("on");}
+window.openDetail=async function(name){
+  name=(name||"").trim();if(!safeName(name))return;
+  overlay.classList.add("on");
+  modal.innerHTML='<div class="modal-head"><h3>@'+esc(name)+'</h3><button class="x" onclick="closeDetail()">×</button></div><p class="faint"><span class="spinner"></span> loading on-chain data…</p>';
+  const rec=await resolveOne(name);
+  if(rec.error){modal.innerHTML=head(name)+'<div class="err">✕ '+esc(rec.error)+'</div>';return;}
+  if(!rec.found){modal.innerHTML=head(name)+'<div class="note">Not registered in <code>r/sys/users</code> on '+esc(NET.chainId)+'.</div>';return;}
+  const addr=rec.address;
+  // registration (from cached indexer regs)
+  const reg=REGS.find&&REGS.find(x=>x.name===name);
+  // profile fields
+  const prof=await loadProfile(addr);
+
+  let h=head(name);
+  // registry
+  let st=rec.deleted?'<span class="badge bad">deleted</span>':'<span class="badge ok">active</span>';
+  if(rec.isCurrent===false)st+=' <span class="badge warn">alias (not current default)</span>';
+  else if(rec.isCurrent===true)st+=' <span class="badge">current default name</span>';
+  h+='<div class="sect"><div class="h">Registry · r/sys/users</div>'+
+     kv("name","@"+name)+kv("address",addr)+kv("status",st,true)+
+     (rec.matched&&rec.matched!==name?kv("current name","@"+rec.matched):"")+'</div>';
+  // registration
+  h+='<div class="sect"><div class="h">Registration</div>';
+  if(reg)h+=kv("timestamp",fmtTime(reg.time))+kv("block",String(reg.block))+kv("registrant",reg.caller)+kv("gas used",reg.gas!=null?String(reg.gas):"—")+
+           '<div class="kv"><span class="k">transaction</span><span class="v"><a href="'+esc(gnoscanTx(reg.hash))+'" target="_blank" rel="noopener">'+esc(reg.hash)+'</a></span></div>';
+  else h+='<div class="muted" style="font-size:13px">No open-tier registration transaction found (this name may be a genesis/system pre-registration, or was set by a controller). '+(NET.hasNamereg?"":"Indexer not available on this network.")+'</div>';
+  h+='</div>';
+  // profile
+  h+='<div class="sect"><div class="h">Profile · r/demo/profile</div>';
+  if(prof.error)h+='<div class="err">✕ '+esc(prof.error)+'</div>';
+  else{
+    const any=prof.fields.some(f=>f.set);
+    if(prof.avatar)h+='<div style="margin-bottom:10px"><img class="avatar" src="'+esc(prof.avatar)+'" alt="" onerror="this.style.display=\'none\'"/></div>';
+    h+=prof.fields.map(f=>kv(f.label,f.set?f.display:'<span class="faint">(unset)</span>',true)).join("");
+    if(!any)h+='<div class="muted" style="font-size:12px;margin-top:6px">No profile fields set. (r/sys/users stores only name+address; richer profile data is optional and lives here.)</div>';
+  }
+  h+='</div>';
+  // links
+  h+='<div class="sect"><div class="h">Links</div>'+
+     '<div class="kv"><span class="k">gnoweb</span><span class="v"><a href="'+NET.gnoweb+'/u/'+esc(name)+'" target="_blank" rel="noopener">'+esc(NET.gnoweb)+'/u/'+esc(name)+' ↗</a></span></div></div>';
+  modal.innerHTML=h;
+};
+function head(n){return '<div class="modal-head"><h3>@'+esc(n)+'</h3><button class="x" onclick="closeDetail()">×</button></div>';}
+function kv(k,v,html){return '<div class="kv"><span class="k">'+esc(k)+'</span><span class="v">'+(html?v:esc(v))+'</span></div>';}
+
+// profile fields: strings + Age(int) + AvailableForHiring(bool)
+async function loadProfile(addr){
+  const strFields=[["DisplayName","display name"],["Bio","bio"],["Homepage","homepage"],["Location","location"],["Avatar","avatar"],["GravatarEmail","gravatar email"],["com.twitter","twitter / x"],["com.github","github"],["com.discord","discord"],["org.telegram","telegram"]];
+  try{
+    const out=[];let avatar=null;
+    await mapLimit(strFields,4,async ([f,label])=>{
+      const r=await qeval(PROFILE+'.GetStringField("'+addr+'","'+f+'","")');
+      const val=(!r.error&&!r.gnoError)?pStr(r.data):"";
+      const set=!!val;
+      if(f==="Avatar"&&set)avatar=val;
+      let display=val;
+      if(set&&(f==="Homepage"||f==="Avatar")&&/^https?:\/\//.test(val))display='<a href="'+esc(val)+'" target="_blank" rel="noopener">'+esc(val)+'</a>';
+      else display=esc(val);
+      out.push({key:f,label,set,display,order:strFields.findIndex(x=>x[0]===f)});
+    });
+    const ageR=await qeval(PROFILE+'.GetIntField("'+addr+'","Age",0)');
+    const age=(!ageR.error&&!ageR.gnoError)?pInt(ageR.data):0;
+    out.push({key:"Age",label:"age",set:age>0,display:esc(String(age)),order:98});
+    const hireR=await qeval(PROFILE+'.GetBoolField("'+addr+'","AvailableForHiring",false)');
+    const hire=(!hireR.error&&!hireR.gnoError)?pBool(hireR.data):false;
+    out.push({key:"AvailableForHiring",label:"available for hiring",set:hire,display:hire?"yes":"no",order:99});
+    out.sort((a,b)=>a.order-b.order);
+    return{fields:out,avatar};
+  }catch(e){return{error:e.message||"profile read failed"};}
+}
+
+/* ---------------- REGISTER tab (unchanged logic) ---------------- */
+let walletAddr=null;
+const NYM_RE=/^nym-[a-z]{5,13}[0-9]{3}$/;
+const RESERVED_PREFIX=["gno","gl","atom","atone","photon","cosmos"];
+function renderRegister(){
+  const body=document.getElementById("r-body");
+  if(!NET.hasNamereg){
+    body.innerHTML='<p class="hint">Open self-registration is not available on <b>mainnet-beta</b>.</p>'+
+      '<div class="note">The controller <code>r/sys/namereg/v1</code> is only on the testnet. On mainnet-beta, writing to <code>r/sys/users</code> is controller-gated (GovDAO-whitelisted realms only). Switch to <b>Testnet · sapphire</b> to register.</div>';
+    return;
+  }
+  body.innerHTML='<p class="hint">Register a <code>nym-&lt;stem&gt;&lt;digits&gt;</code> name for <b>your own wallet</b> on '+esc(NET.chainId)+'. Signed by Adena — one name per address.</p>'+
+    '<div id="r-wallet"><button class="act" id="r-connect">Connect Adena</button></div>'+
+    '<div id="r-form" style="display:none;margin-top:18px"></div><div id="r-msg" style="margin-top:14px"></div>';
+  document.getElementById("r-connect").onclick=connectAdena;
+}
+async function connectWalletCore(msgEl){
+  if(typeof window.adena==="undefined"){if(msgEl)msgEl.innerHTML='<div class="note">Adena not found. Install it and reload — and serve this page over http(s), not file://, so Adena can inject.</div>';return{ok:false};}
+  try{
+    await window.adena.AddEstablish("gno.land Name Registry");
+    const acc=await window.adena.GetAccount();const d=(acc&&acc.data)||{};
+    walletAddr=d.address;
+    if(d.chainId&&d.chainId!==NET.chainId){try{await window.adena.SwitchNetwork(NET.chainId);}catch(e){if(msgEl)msgEl.innerHTML='<div class="note">Your Adena is on <code>'+esc(d.chainId)+'</code>. Switch it to <b>'+esc(NET.chainId)+'</b> and reconnect.</div>';}}
+    return{ok:true,addr:walletAddr};
+  }catch(e){if(msgEl)msgEl.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"connection cancelled/failed")+'</div>';return{ok:false};}
+}
+function connectedBadge(){return '<span class="badge ok">✓ connected</span> <span class="mono faint" style="font-size:12px">'+esc(walletAddr||"?")+'</span>';}
+async function connectAdena(){
+  const btn=document.getElementById("r-connect"),msg=document.getElementById("r-msg");
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Connecting…';
+  const c=await connectWalletCore(msg);
+  if(!c.ok){btn.disabled=false;btn.innerHTML="Connect Adena";return;}
+  document.getElementById("r-wallet").innerHTML=connectedBadge();
+  await showRegisterForm();
+}
+async function showRegisterForm(){
+  const form=document.getElementById("r-form"),msg=document.getElementById("r-msg");form.style.display="block";
+  const r=await qeval(USERS+'.ResolveAddress("'+walletAddr+'")');
+  const existing=(!r.error&&!r.gnoError)?parseUser(r.data):null;
+  if(existing&&existing.name){form.innerHTML='<div class="note info">This address already has a name: <b>@'+esc(existing.name)+'</b>. One name per address (aliases are governance-only).</div>';return;}
+  form.innerHTML='<div class="field"><label>Stem — 5 to 13 lowercase letters</label><div class="row">'+
+    '<input type="text" id="r-stem" placeholder="alice" maxlength="13" autocomplete="off" spellcheck="false" style="max-width:220px" />'+
+    '<input type="text" id="r-digits" placeholder="123" maxlength="3" autocomplete="off" style="max-width:90px" />'+
+    '<button class="act ghost" id="r-rand" title="random digits">⟳</button></div></div>'+
+    '<div class="preview" id="r-preview"></div>'+
+    '<div class="row"><button class="act ghost" id="r-check">Check availability</button><button class="act" id="r-submit" disabled>Register</button></div>';
+  const stem=document.getElementById("r-stem"),digits=document.getElementById("r-digits"),prev=document.getElementById("r-preview"),submit=document.getElementById("r-submit");
+  const name=()=>"nym-"+stem.value.toLowerCase().trim()+digits.value.trim();
+  function validate(){submit.disabled=true;const n=name(),st=stem.value.toLowerCase().trim();let p="";
+    if(!/^[a-z]{5,13}$/.test(st))p="stem must be 5–13 lowercase letters";
+    else if(!/^[0-9]{3}$/.test(digits.value.trim()))p="need exactly 3 digits";
+    else if(RESERVED_PREFIX.some(x=>st.startsWith(x)))p="stem can't start with a reserved prefix ("+RESERVED_PREFIX.join(", ")+")";
+    else if(!NYM_RE.test(n))p="invalid format";
+    prev.innerHTML=p?'<span class="mono">'+esc(n)+'</span> <span class="err">'+esc(p)+'</span>':'<span class="mono ok">'+esc(n)+'</span> <span class="faint">— format ok, check availability</span>';
+    return!p;}
+  stem.oninput=digits.oninput=validate;
+  document.getElementById("r-rand").onclick=()=>{digits.value=String(Math.floor(Math.random()*1000)).padStart(3,"0");validate();};
+  document.getElementById("r-check").onclick=async()=>{if(!validate())return;const n=name();
+    msg.innerHTML='<span class="spinner"></span> <span class="faint">checking…</span>';
+    const rr=await qeval(USERS+'.ResolveName("'+n+'")');
+    if(rr.error){msg.innerHTML='<div class="err">✕ '+esc(rr.error)+'</div>';return;}
+    const taken=!rr.gnoError&&parseUser(rr.data);
+    if(taken){msg.innerHTML='<div class="err">✕ <span class="mono">'+esc(n)+'</span> is taken</div>';submit.disabled=true;}
+    else{msg.innerHTML='<div class="ok">✓ <span class="mono">'+esc(n)+'</span> is available</div>';submit.disabled=false;}};
+  document.getElementById("r-submit").onclick=()=>doRegister(name(),submit,msg);
+}
+async function doRegister(n,submit,msg){
+  if(!NYM_RE.test(n))return;submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Registering…';
+  try{
+    const res=await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:""});
+    const status=res&&(res.status||(res.data&&"success"));
+    const check=await qeval(USERS+'.ResolveName("'+n+'")');
+    const ok=!check.error&&!check.gnoError&&parseUser(check.data);
+    if(ok){msg.innerHTML='<div class="note info">✓ Registered <b>@'+esc(n)+'</b>. <a href="'+NET.gnoweb+'/u/'+esc(n)+'" target="_blank" rel="noopener">Profile ↗</a></div>';submit.innerHTML="Registered ✓";regsLoaded=false;}
+    else{msg.innerHTML='<div class="err">✕ Tx returned but name isn\'t resolving yet. If Adena showed an error it did not register; else wait a block. (status: '+esc(String(status))+')</div>';submit.disabled=false;submit.innerHTML="Register";}
+  }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"registration failed / rejected")+'</div>';submit.disabled=false;submit.innerHTML="Register";}
+}
+
+/* ---------------- PROFILE tab (r/demo/profile) ---------------- */
+const PROFILE_FIELDS=[
+  {key:"DisplayName",label:"Display name",ph:"Alice"},
+  {key:"Bio",label:"Bio / description",ph:"Pixel-game player and builder",area:true},
+  {key:"Avatar",label:"Avatar image URL",ph:"https://…/pfp.png"},
+  {key:"Homepage",label:"Homepage / website",ph:"https://…"},
+  {key:"Location",label:"Location",ph:"Internet"},
+  {key:"com.twitter",label:"Twitter / X",ph:"@handle"},
+  {key:"com.github",label:"GitHub",ph:"username"},
+  {key:"com.discord",label:"Discord",ph:"username"},
+  {key:"org.telegram",label:"Telegram",ph:"@handle"},
+];
+let profileLoaded={};
+function renderProfile(){
+  const body=document.getElementById("p-body");
+  body.innerHTML='<p class="hint">Your on-chain profile lives in <code>r/demo/profile</code>, keyed to your <b>wallet address</b> (separate from the name registry — the native system splits them). All fields are optional; changed fields batch into a single Adena signature. Saved values appear in a name\'s detail view.</p>'+
+    '<div id="p-wallet"><button class="act" id="p-connect">Connect Adena</button></div>'+
+    '<div id="p-form" style="display:none;margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
+  document.getElementById("p-connect").onclick=connectProfile;
+}
+async function connectProfile(){
+  const btn=document.getElementById("p-connect"),msg=document.getElementById("p-msg");
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Connecting…';
+  const c=await connectWalletCore(msg);
+  if(!c.ok){btn.disabled=false;btn.innerHTML="Connect Adena";return;}
+  document.getElementById("p-wallet").innerHTML=connectedBadge();
+  await loadProfileForm();
+}
+async function loadProfileForm(){
+  const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
+  form.style.display="block";form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
+  profileLoaded={};
+  await mapLimit(PROFILE_FIELDS,4,async f=>{
+    const r=await qeval(PROFILE+'.GetStringField("'+walletAddr+'","'+f.key+'","")');
+    profileLoaded[f.key]=(!r.error&&!r.gnoError)?(pStr(r.data)||""):"";
+  });
+  let nm="";const nr=await qeval(USERS+'.ResolveAddress("'+walletAddr+'")');
+  const nu=(!nr.error&&!nr.gnoError)?parseUser(nr.data):null;if(nu&&nu.name)nm=nu.name;
+  form.innerHTML=(nm?'<div class="note info" style="margin-bottom:14px">Editing profile for <b>@'+esc(nm)+'</b> · '+esc(walletAddr)+'</div>':'<div class="note" style="margin-bottom:14px">This wallet has no registry name yet — the profile still attaches to your address '+esc(walletAddr)+'.</div>')+
+    PROFILE_FIELDS.map(f=>{
+      const v=profileLoaded[f.key]||"";
+      const input=f.area?'<textarea id="pf-'+esc(f.key)+'" rows="3" placeholder="'+esc(f.ph)+'">'+esc(v)+'</textarea>'
+        :'<input type="text" id="pf-'+esc(f.key)+'" placeholder="'+esc(f.ph)+'" value="'+esc(v)+'" autocomplete="off" spellcheck="false" />';
+      return '<div class="field"><label>'+esc(f.label)+'</label>'+input+'</div>';
+    }).join("")+
+    '<div class="row"><button class="act" id="p-save">Save changes</button><button class="act ghost" id="p-reload">Reload</button></div>';
+  document.getElementById("p-save").onclick=saveProfile;
+  document.getElementById("p-reload").onclick=loadProfileForm;
+}
+async function saveProfile(){
+  const msg=document.getElementById("p-msg"),btn=document.getElementById("p-save");
+  const msgs=[];
+  PROFILE_FIELDS.forEach(f=>{
+    const el=document.getElementById("pf-"+f.key);if(!el)return;
+    const v=el.value.trim();
+    if(v!==(profileLoaded[f.key]||""))msgs.push({type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:PROFILE,func:"SetStringField",args:[f.key,v]}});
+  });
+  if(!msgs.length){msg.innerHTML='<div class="muted">No changes to save.</div>';return;}
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
+  try{
+    await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:""});
+    await loadProfileForm();
+    document.getElementById("p-msg").innerHTML='<div class="note info">✓ Saved '+msgs.length+' field(s) in one transaction. Open your name in the Names tab to see them in its detail view.</div>';
+  }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";}
+}
+/* ---------------- chrome ---------------- */
+function setNetInfo(){
+  document.getElementById("netinfo").innerHTML='<span><span class="dot">●</span> '+esc(NET.label)+'</span><span>rpc: '+esc(NET.rpc.replace("https://",""))+'</span><span>'+(NET.hasNamereg?"registration: open (nym- tier)":"registration: closed")+'</span>';
+  document.getElementById("foot-net").textContent="reading "+NET.chainId+(NET.indexer?" + indexer":"");
+}
+document.querySelectorAll(".net button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".net button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  NET=NETWORKS[b.dataset.net];walletAddr=null;REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+});
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+  document.querySelectorAll("section.panel").forEach(x=>x.classList.remove("on"));
+  b.classList.add("on");document.getElementById("tab-"+b.dataset.tab).classList.add("on");refreshActiveTab();
+});
+function activeTab(){const b=document.querySelector(".tabs button.on");return b?b.dataset.tab:"query";}
+function refreshActiveTab(){const t=activeTab();if(t==="names")loadNames();else if(t==="history")loadHistory();else if(t==="register")renderRegister();else if(t==="profile")renderProfile();}
+setNetInfo();
+</script>
+</body>
+</html>

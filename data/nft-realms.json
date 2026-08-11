@@ -1,0 +1,90 @@
+{
+  "sourcedFrom": "gno-observer's own precomputed chain scan (scripts/build-cache.mjs) \u2014 see that project for the full-chain discovery heuristic this snapshot was extracted from.",
+  "generatedAt": "2026-08-11T00:00:00.000Z",
+  "networks": {
+    "betanet": [
+      {
+        "path": "gno.land/r/g1n500fmqx8m6tgts85kmn43htegkv0eewkdm4lg/gingernft",
+        "name": "Lord Ginge Genesis",
+        "symbol": "GINGE"
+      },
+      {
+        "path": "gno.land/r/g1n500fmqx8m6tgts85kmn43htegkv0eewkdm4lg/gingernft2",
+        "name": "Lord G's - Ginge Gnomie",
+        "symbol": "GNOMIE"
+      },
+      {
+        "path": "gno.land/r/g1w93f099t4pp9jamyghp88p60fvkg39dxz2qzrc/tardigrades",
+        "name": "Tardigrades in Gnoland",
+        "symbol": "TARDIGRADE"
+      }
+    ],
+    "testnet": [
+      {
+        "path": "gno.land/r/g198mxzjqsfflcckfgm9yu5d586z88vt67t9tard/nftminter",
+        "name": "Tardigrades in Gnoland",
+        "symbol": "TARDIGRADE"
+      },
+      {
+        "path": "gno.land/r/g198mxzjqsfflcckfgm9yu5d586z88vt67t9tard/tardigrades",
+        "name": "Tardigrades in Gnoland",
+        "symbol": "TARDIGRADE"
+      },
+      {
+        "path": "gno.land/r/g1hudwmwn99hwqldtqjz9m6w7q7qef57a2ffp4hg/gingernft",
+        "name": "LordG Ginger NFTs",
+        "symbol": "GNFT"
+      },
+      {
+        "path": "gno.land/r/g1n27703259g9ts046dqzly6h6ynp2cuf6hfez3c/solarmint",
+        "name": "Solar System Test",
+        "symbol": "SOLARTEST"
+      },
+      {
+        "path": "gno.land/r/g1tstg4l99ga0zup3s5xs0zm4vl3u8p7ma9m56ma/gingernft",
+        "name": "LordG Ginger NFTs",
+        "symbol": "GNFT"
+      },
+      {
+        "path": "gno.land/r/g1w7kytlgsgstspzlpy4fdtd9uqf0ga2dzud4wzv/nftminter",
+        "name": "Tardigrades in Gnoland",
+        "symbol": "TARDIGRADE"
+      },
+      {
+        "path": "gno.land/r/gnoswap/gnft",
+        "name": "GNOSWAP NFT",
+        "symbol": "GNFT"
+      },
+      {
+        "path": "gno.land/r/gnoswap/position/v1",
+        "name": "v1",
+        "symbol": ""
+      },
+      {
+        "path": "gno.land/r/gnoswap/staker",
+        "name": "staker",
+        "symbol": ""
+      },
+      {
+        "path": "gno.land/r/samcrew/gnobuilders_badges_v2",
+        "name": "GnoBuilders Badges",
+        "symbol": "GNOBADGE"
+      },
+      {
+        "path": "gno.land/r/samcrew/memba_collections",
+        "name": "memba_collections",
+        "symbol": ""
+      },
+      {
+        "path": "gno.land/r/samcrew/memba_nft_v2",
+        "name": "memba_nft_v2",
+        "symbol": ""
+      },
+      {
+        "path": "gno.land/r/test1/tba",
+        "name": "tba",
+        "symbol": ""
+      }
+    ]
+  }
+}

@@ -5,21 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wallet Scanner — gno.tools</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Applies a stored light/dark choice before first paint, so reloading
+     with an explicit preference never flashes the other theme. A "system"
+     preference (no stored choice) needs no JS — it's handled by a plain
+     @media query in lib/site-chrome.js's injected stylesheet. -->
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <!-- Works around a real bug in Adena's own extension (a window.adena
      that never gets set on some page-load orderings), not this code —
      must stay an external <script src>, not inlined. -->
 <script src="adena-compat.js"></script>
 <style>
-  :root{
-    --bg:#070c14; --bg2:#0c1420; --panel:#0e1826; --panel2:#101b2c;
-    --hair:#1c2c42; --hair2:#25395580;
-    --ink:#e7edf7; --muted:#8fa2bd; --faint:#5b6f8c;
-    --accent:#5ee6c8; --accent-soft:#5ee6c81a; --accent-line:#5ee6c855;
-    --amber:#f0b357; --amber-soft:#f0b3571a; --amber-line:#f0b35755;
-    --bad:#f0687a; --bad-soft:#f0687a1a;
-    --mono:ui-monospace,"SF Mono",Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  }
+  /* Palette (--bg, --panel, --accent, --mono, --sans, etc.) is defined
+     once, globally, by lib/site-chrome.js's injected stylesheet — same
+     tokens across every gno.tools page, light/dark/system aware. */
+  :root{ color-scheme: light dark; }
   *{box-sizing:border-box}
   body{
     margin:0; background:
@@ -112,7 +111,6 @@
 
 <div class="panel">
   <div class="row">
-    <select id="networkSelect"></select>
     <button class="ghost" id="rescanBtn" style="display:none">Rescan</button>
     <span class="note" id="connectStatus" style="margin:0"></span>
   </div>
@@ -141,14 +139,18 @@
 
 <script type="module">
 import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit } from "./lib/gno-rpc.js";
-import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata } from "./lib/gno-nft.js";
+import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "./lib/gno-nft.js";
 import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
 
-initSiteChrome();
+// Network is picked from the shared wallet bubble now, not a separate
+// <select> easy to forget was even there — same control used to connect.
+initSiteChrome({
+  networkOptions: Object.entries(NETWORKS).map(([key, net]) => ({ key, chainId: net.chainId, label: net.label })),
+});
+let activeNetKey = Object.keys(NETWORKS)[0];
 
 const MAX_THUMBS_PER_COLLECTION = 8;
 
-const networkSelect = document.getElementById("networkSelect");
 const rescanBtn = document.getElementById("rescanBtn");
 const connectStatus = document.getElementById("connectStatus");
 const addrBox = document.getElementById("addrBox");
@@ -163,13 +165,6 @@ const nftCoverageNote = document.getElementById("nftCoverageNote");
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-}
-
-for (const [key, net] of Object.entries(NETWORKS)) {
-  const opt = document.createElement("option");
-  opt.value = key;
-  opt.textContent = net.label;
-  networkSelect.appendChild(opt);
 }
 
 let nftRealmsByNetwork = {};
@@ -197,7 +192,11 @@ function resetPanels(message) {
   nftCoverageNote.style.display = "none";
 }
 
-networkSelect.addEventListener("change", () => { if (wallet) scan(); });
+window.addEventListener("gnotools:activenetwork", (e) => {
+  if (!e.detail) return;
+  activeNetKey = e.detail.key;
+  if (wallet) scan();
+});
 
 async function scanTokens(net) {
   tokenTable.style.display = "none";
@@ -303,7 +302,17 @@ async function scanNfts(net, netKey) {
       tokenIds = await fetchOwnedTokenIds(net, r.path, wallet.address);
     } catch {}
     if (!tokenIds.length) {
-      card.innerHTML = `<span class="unlisted">Individual tokens not listed — this collection's events couldn't be matched to specific IDs.</span>`;
+      // Event-log replay is best-effort and misses collections that don't
+      // emit Mint/Transfer/Burn with a tokenId attribute — OwnerOf(id) is
+      // part of the standard GRC721 surface and reads live ownership
+      // directly, so it finds tokens the event scrape can miss entirely.
+      card.innerHTML = `<span class="unlisted"><span class="spinner"></span>Looking up token IDs…</span>`;
+      try {
+        tokenIds = await bruteForceOwnedTokenIds(net, r.path, wallet.address, r.count);
+      } catch {}
+    }
+    if (!tokenIds.length) {
+      card.innerHTML = `<span class="unlisted">Individual tokens not listed — this collection's IDs couldn't be matched.</span>`;
       return;
     }
     const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
@@ -317,7 +326,7 @@ async function scanNfts(net, netKey) {
 
 async function scan() {
   if (!wallet) return;
-  const netKey = networkSelect.value;
+  const netKey = activeNetKey;
   const net = NETWORKS[netKey];
   rescanBtn.disabled = true;
   try {

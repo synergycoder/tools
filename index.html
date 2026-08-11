@@ -5,39 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gno.tools</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Applies a stored light/dark choice before first paint, so reloading
+     with an explicit preference never flashes the other theme. A "system"
+     preference (no stored choice) needs no JS — it's handled by a plain
+     @media query in lib/site-chrome.js's injected stylesheet. -->
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <!-- Works around a real bug in Adena's own extension (a window.adena that
      never gets set on some page-load orderings), not this code — must
      stay an external <script src>, not inlined. -->
 <script src="adena-compat.js"></script>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light dark; }
   *{box-sizing:border-box}
   body {
     margin:0;
     background:
       radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
       radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
-      #070c14;
-    color:#e7edf7;
+      var(--bg);
+    color:var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.55;
   }
   .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
   .hero{padding:56px 0 8px}
   h1{margin:0 0 8px; font-size:32px; letter-spacing:-0.02em; font-family:ui-monospace,"SF Mono",Consolas,monospace}
-  .sub{color:#8fa2bd; margin:0; max-width:56ch; font-size:15px}
+  .sub{color:var(--muted); margin:0; max-width:56ch; font-size:15px}
   .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 34px 0 60px; }
   .tool-card {
-    display: flex; gap:16px; border: 1px solid #1c2c4280; border-radius: 16px;
-    padding: 20px; text-decoration: none; color: inherit; background:#0e182666;
+    display: flex; gap:16px; border: 1px solid var(--hair); border-radius: 16px;
+    padding: 20px; text-decoration: none; color: inherit; background:var(--panel);
     transition: border-color .15s, transform .15s, background .15s;
   }
-  .tool-card:hover { border-color:#5ee6c855; background:#0e1826; transform:translateY(-2px); }
+  .tool-card:hover { border-color:var(--accent-line); background:var(--panel2); transform:translateY(-2px); }
   .tool-card:hover .tool-icon{ transform:scale(1.04); }
   .tool-icon{ width:52px; height:52px; flex:none; transition:transform .15s; }
   .tool-icon img{ width:100%; height:100%; display:block; }
-  .tool-card h2 { margin: 0 0 5px; font-size: 15.5px; }
-  .tool-card p { margin: 0; color: #8fa2bd; font-size: 13px; line-height:1.5 }
+  .tool-card h2 { margin: 0 0 5px; font-size: 15.5px; color:var(--ink) }
+  .tool-card p { margin: 0; color: var(--muted); font-size: 13px; line-height:1.5 }
 </style>
 </head>
 <body>

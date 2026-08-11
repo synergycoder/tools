@@ -4,8 +4,13 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>gno.land Name Registry — query · names · history · register</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <!-- Required for Adena to inject window.adena on an otherwise-inline-only page. Do not remove. -->
 <script src="adena-compat.js"></script>
+<script type="module">
+  import { initSiteChrome } from "./lib/site-chrome.js";
+  initSiteChrome();
+</script>
 <style>
   :root{
     --bg:#0f1512; --panel:#16201b; --panel2:#1b271f; --ink:#e7ece7; --muted:#93a49a;
@@ -20,7 +25,7 @@
   a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
   code,.mono{font-family:var(--mono)}
   .wrap{max-width:920px;margin:0 auto;padding:0 20px 90px}
-  header{border-bottom:1px solid var(--hair);background:radial-gradient(120% 100% at 90% -20%,var(--accent-soft),transparent 60%)}
+  .reg-header{border-bottom:1px solid var(--hair);background:radial-gradient(120% 100% at 90% -20%,var(--accent-soft),transparent 60%)}
   .head-inner{max-width:920px;margin:0 auto;padding:26px 20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
   .sub{color:var(--muted);font-size:13px;margin:0;max-width:60ch}
@@ -90,11 +95,11 @@
   .sect{margin-top:18px}
   .sect .h{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid var(--hair);padding-bottom:5px}
   .avatar{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1px solid var(--hair2);background:var(--panel2)}
-  footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--hair);color:var(--faint);font-size:12px;font-family:var(--mono)}
+  .reg-footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--hair);color:var(--faint);font-size:12px;font-family:var(--mono)}
 </style>
 </head>
 <body>
-<header>
+<div class="reg-header">
   <div class="head-inner">
     <div>
       <h1>gno.land Name Registry</h1>
@@ -107,8 +112,7 @@
     </div>
   </div>
   <div class="head-inner" style="padding-top:0"><div class="netinfo" id="netinfo"></div></div>
-  <div class="head-inner" style="padding-top:0"><div class="netinfo"><a href="index.html">← gno.tools</a> · <a href="wallet-scanner.html">Wallet Scanner</a></div></div>
-</header>
+</div>
 
 <div class="wrap">
   <div class="tabs">
@@ -161,10 +165,10 @@
     <div id="p-body"></div>
   </section>
 
-  <footer>
+  <div class="reg-footer">
     <div>Reads: chain RPC (resolve/metadata) + tx-indexer (history). Registration is signed by your own Adena wallet — this page never holds keys.</div>
     <div id="foot-net"></div>
-  </footer>
+  </div>
 </div>
 
 <!-- DETAIL MODAL -->

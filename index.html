@@ -2,47 +2,74 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Works around a real bug in Adena's own extension (a window.adena that
+     never gets set on some page-load orderings), not this code — must
+     stay an external <script src>, not inlined. -->
+<script src="adena-compat.js"></script>
 <style>
-  :root { color-scheme: light dark; }
+  :root { color-scheme: dark; }
+  *{box-sizing:border-box}
   body {
+    margin:0;
+    background:
+      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
+      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
+      #070c14;
+    color:#e7edf7;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    max-width: 640px;
-    margin: 4rem auto;
-    padding: 0 1.2rem;
     line-height: 1.55;
   }
-  h1 { margin-bottom: 0.2rem; letter-spacing: -0.01em; }
-  .sub { color: #888; margin-top: 0; }
-  .tools { display: flex; flex-direction: column; gap: 0.8rem; margin-top: 2rem; }
+  .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
+  .hero{padding:56px 0 8px}
+  h1{margin:0 0 8px; font-size:32px; letter-spacing:-0.02em; font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:#8fa2bd; margin:0; max-width:56ch; font-size:15px}
+  .tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 34px 0 60px; }
   .tool-card {
-    display: block; border: 1px solid #8884; border-radius: 10px;
-    padding: 1.1rem 1.3rem; text-decoration: none; color: inherit;
-    transition: border-color 0.15s;
+    display: flex; gap:16px; border: 1px solid #1c2c4280; border-radius: 16px;
+    padding: 20px; text-decoration: none; color: inherit; background:#0e182666;
+    transition: border-color .15s, transform .15s, background .15s;
   }
-  .tool-card:hover { border-color: #8888; }
-  .tool-card h2 { margin: 0 0 0.3rem; font-size: 1.05rem; }
-  .tool-card p { margin: 0; color: #888; font-size: 0.9rem; }
-  footer { margin-top: 3rem; color: #888; font-size: 0.8rem; }
+  .tool-card:hover { border-color:#5ee6c855; background:#0e1826; transform:translateY(-2px); }
+  .tool-card:hover .tool-icon{ transform:scale(1.04); }
+  .tool-icon{ width:52px; height:52px; flex:none; transition:transform .15s; }
+  .tool-icon img{ width:100%; height:100%; display:block; }
+  .tool-card h2 { margin: 0 0 5px; font-size: 15.5px; }
+  .tool-card p { margin: 0; color: #8fa2bd; font-size: 13px; line-height:1.5 }
 </style>
 </head>
 <body>
 
-<h1>gno.tools</h1>
-<p class="sub">Read-only tools for gno.land — static, client-side, no backend.</p>
+<div class="wrap">
+  <div class="hero">
+    <h1>gno.tools</h1>
+    <p class="sub">Read-only tools for gno.land — static, client-side, no backend. Connect Adena once in the header above and it works across every tool here.</p>
+  </div>
 
-<div class="tools">
-  <a class="tool-card" href="wallet-scanner.html">
-    <h2>Wallet Scanner</h2>
-    <p>Connect Adena and see everything one address holds — native GNOT, every GRC20 token, and every NFT collection this scanner knows about.</p>
-  </a>
-  <a class="tool-card" href="name-registry.html">
-    <h2>Name Registry</h2>
-    <p>Explore the on-chain user registry — query, browse, view registration history, and register a name.</p>
-  </a>
+  <div class="tools">
+    <a class="tool-card" href="wallet-scanner.html">
+      <span class="tool-icon"><img src="icons/wallet-scanner.svg" alt=""></span>
+      <div>
+        <h2>Wallet Scanner</h2>
+        <p>Connect Adena and see everything one address holds — native GNOT, every GRC20 token, and every NFT collection this scanner knows about.</p>
+      </div>
+    </a>
+    <a class="tool-card" href="name-registry.html">
+      <span class="tool-icon"><img src="icons/name-registry.svg" alt=""></span>
+      <div>
+        <h2>Name Registry</h2>
+        <p>Explore the on-chain user registry — query, browse, view registration history, and register a name.</p>
+      </div>
+    </a>
+  </div>
 </div>
 
-<footer>Nothing here ever touches a private key or signs a transaction on your behalf.</footer>
+<script type="module">
+  import { initSiteChrome } from "./lib/site-chrome.js";
+  initSiteChrome();
+</script>
 
 </body>
 </html>

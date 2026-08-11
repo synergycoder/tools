@@ -313,10 +313,10 @@ function renderNftShell(held, net, checkedCount, errorCount) {
 }
 
 // Renders instantly from a cached scan — no RPC calls at all.
-function renderNftFromCache(held, net) {
+function renderNftFromCache(held, net, checkedCount, errorCount) {
   nftGrid.innerHTML = "";
   nftCoverageNote.style.display = "none";
-  renderNftShell(held, net, held.length, 0);
+  renderNftShell(held, net, checkedCount ?? held.length, errorCount ?? 0);
 }
 
 async function scanNfts(net, netKey) {
@@ -329,7 +329,7 @@ async function scanNfts(net, netKey) {
   const realms = nftRealmsByNetwork[netKey] || [];
   if (!realms.length) {
     nftEmpty.textContent = "No known NFT collections for this network yet.";
-    return [];
+    return { held: [], checkedCount: 0, errorCount: 0 };
   }
 
   const balances = await mapLimit(realms, 6, async (r) => {
@@ -344,7 +344,7 @@ async function scanNfts(net, netKey) {
   const checkedCount = balances.length;
   const errorCount = balances.filter(r => r.error).length;
   renderNftShell(held, net, checkedCount, errorCount);
-  if (!held.length) return held;
+  if (!held.length) return { held, checkedCount, errorCount };
 
   // Best-effort per-collection token-id + image fetch — a collection
   // that doesn't emit Mint/Transfer/Burn events with a tokenId attr
@@ -384,7 +384,7 @@ async function scanNfts(net, netKey) {
     }
     if (card) card.innerHTML = nftThumbsHTML(r);
   });
-  return held;
+  return { held, checkedCount, errorCount };
 }
 
 async function scan() {
@@ -394,8 +394,13 @@ async function scan() {
   rescanBtn.disabled = true;
   cacheStatus.textContent = "";
   try {
-    const [tokens, nfts] = await Promise.all([scanTokens(net), scanNfts(net, netKey)]);
-    saveScanCache(netKey, wallet.address, { tokens, nfts });
+    const [tokens, nftResult] = await Promise.all([scanTokens(net), scanNfts(net, netKey)]);
+    saveScanCache(netKey, wallet.address, {
+      tokens,
+      nfts: nftResult.held,
+      nftCheckedCount: nftResult.checkedCount,
+      nftErrorCount: nftResult.errorCount,
+    });
     cacheStatus.textContent = "Updated just now";
   } finally {
     rescanBtn.disabled = false;
@@ -410,7 +415,7 @@ function loadForCurrentNetwork() {
   const cached = loadScanCache(activeNetKey, wallet.address);
   if (cached) {
     renderTokenRows(cached.tokens || []);
-    renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey]);
+    renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], cached.nftCheckedCount, cached.nftErrorCount);
     cacheStatus.textContent = `Cached · ${formatAgo(cached.scannedAt)} — click Rescan for the latest`;
   } else {
     scan();

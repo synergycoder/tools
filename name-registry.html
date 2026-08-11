@@ -10,6 +10,26 @@
 <script type="module">
   import { initSiteChrome } from "./lib/site-chrome.js";
   initSiteChrome();
+
+  // This tool's own "which network to read/write" control — genuinely
+  // different from the wallet pill's network badge (that's just a
+  // read-out of whatever chain your wallet happens to be on), so it lives
+  // in the header's tool-controls slot rather than duplicating the
+  // wallet's display or living in its own separate row on the page.
+  const slot = document.getElementById("gtToolControls");
+  if (slot) {
+    slot.innerHTML = `
+      <button class="gt-net-btn gt-on" data-net="sapphire">Sapphire testnet</button>
+      <button class="gt-net-btn" data-net="betanet">Mainnet-beta</button>
+    `;
+    slot.querySelectorAll(".gt-net-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        slot.querySelectorAll(".gt-net-btn").forEach((b) => b.classList.remove("gt-on"));
+        btn.classList.add("gt-on");
+        window.dispatchEvent(new CustomEvent("regpage:network", { detail: btn.dataset.net }));
+      });
+    });
+  }
 </script>
 <style>
   :root{
@@ -32,11 +52,6 @@
   .head-inner{max-width:920px;margin:0 auto;padding:26px 20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
   .sub{color:var(--muted);font-size:13px;margin:0;max-width:60ch}
-  .net{display:flex;gap:6px;align-items:center}
-  .net .lbl{font-family:var(--mono);font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;margin-right:4px}
-  .net button{font-family:var(--mono);font-size:12px;padding:7px 11px;border-radius:8px;border:1px solid var(--hair2);background:var(--panel);color:var(--muted);cursor:pointer}
-  .net button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line)}
-  .net button:hover{color:var(--ink)}
   .netinfo{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
   .netinfo .dot{color:var(--accent)}
   .tabs{display:flex;gap:4px;margin:26px 0 0;border-bottom:1px solid var(--hair);flex-wrap:wrap}
@@ -108,11 +123,6 @@
       <h1>gno.land Name Registry</h1>
       <p class="sub">Explore the on-chain user registry (<code>r/sys/users</code>) — a single source of truth for both <code>nym-…</code> and vanity names. Query, browse every name with full metadata, view registration history, and register.</p>
     </div>
-    <div class="net">
-      <span class="lbl">Network</span>
-      <button data-net="sapphire" class="on">Testnet · sapphire</button>
-      <button data-net="betanet">Mainnet-beta</button>
-    </div>
   </div>
   <div class="head-inner" style="padding-top:0"><div class="netinfo" id="netinfo"></div></div>
 </div>
@@ -144,6 +154,7 @@
     <div class="row" style="margin-bottom:12px">
       <input type="text" id="n-input" placeholder="inspect any name → nym-alice123" autocomplete="off" spellcheck="false" />
       <button class="act ghost" id="n-lookup">Inspect</button>
+      <button class="act ghost" id="n-refresh" title="Reload from chain — e.g. after registering a name">↻ Refresh</button>
     </div>
     <div class="result" id="n-stats"><span class="faint">Loading…</span></div>
     <div id="n-list"></div>
@@ -153,6 +164,7 @@
   <section class="panel" id="tab-history">
     <h2>Registration history</h2>
     <p class="hint">Every open-tier registration transaction (via <code>r/sys/namereg</code>), newest first — with timestamp, block, and a link to GnoScan. Click a row for full details.</p>
+    <div class="row" style="margin-bottom:12px"><button class="act ghost" id="h-refresh" title="Reload from chain — e.g. after registering a name">↻ Refresh</button></div>
     <div id="h-body"><span class="faint">Loading…</span></div>
   </section>
 
@@ -323,6 +335,7 @@ async function loadRegs(){
 /* ---------------- NAMES tab ---------------- */
 document.getElementById("n-lookup").onclick=()=>{const v=document.getElementById("n-input").value.trim();if(v)openDetail(v);};
 document.getElementById("n-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
+document.getElementById("n-refresh").onclick=()=>{regsLoaded=false;loadNames();};
 async function loadNames(){
   const stats=document.getElementById("n-stats"),listEl=document.getElementById("n-list");
   stats.innerHTML='<span class="spinner"></span> <span class="faint">reading '+esc(NET.chainId)+'…</span>';listEl.innerHTML="";
@@ -358,6 +371,7 @@ async function loadNames(){
 }
 
 /* ---------------- HISTORY tab ---------------- */
+document.getElementById("h-refresh").onclick=()=>{regsLoaded=false;loadHistory();};
 async function loadHistory(){
   const body=document.getElementById("h-body");
   body.innerHTML='<span class="spinner"></span> <span class="faint">querying indexer…</span>';
@@ -451,43 +465,63 @@ async function loadProfile(addr){
   }catch(e){return{error:e.message||"profile read failed"};}
 }
 
-/* ---------------- REGISTER tab (unchanged logic) ---------------- */
+/* ---------------- REGISTER tab ---------------- */
 let walletAddr=null;
 const NYM_RE=/^nym-[a-z]{5,13}[0-9]{3}$/;
 const RESERVED_PREFIX=["gno","gl","atom","atone","photon","cosmos"];
+
+// Single source of truth for the wallet is the shared header (site-chrome.js)
+// — no more per-tab "Connect Adena" button duplicating it. Mirrored onto
+// window.gnoToolsWallet on every change (see lib/site-chrome.js).
+function walletState(){return window.gnoToolsWallet||{status:"idle"};}
+
+// Shown instead of a form whenever the connected wallet can't actually
+// submit right now — either not connected, or connected to a different
+// chain than the one this page is currently reading/writing.
+function walletGateHTML(w){
+  if(w.status!=="connected"){
+    return '<div class="note info">Connect your wallet at the top right to continue.</div>';
+  }
+  if(w.chainId!==NET.chainId){
+    return '<div class="note">Your connected wallet is on <code>'+esc(w.chainId)+'</code>. Switch it to <b>'+esc(NET.chainId)+'</b> to continue — '+
+      '<button class="act ghost" id="switch-net-btn" style="margin-top:8px">Switch network</button></div>';
+  }
+  return null;
+}
+function wireSwitchNetworkButton(){
+  const btn=document.getElementById("switch-net-btn");
+  if(!btn)return;
+  btn.onclick=async()=>{
+    btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Switching…';
+    try{await window.adena.SwitchNetwork(NET.chainId);}
+    catch(e){btn.disabled=false;btn.innerHTML="Switch network";}
+    // A successful switch fires Adena's own changedNetwork event, which
+    // the shared header picks up and re-emits as gnotools:wallet — the
+    // listener below re-renders this tab once that lands.
+  };
+}
+
 function renderRegister(){
   const body=document.getElementById("r-body");
   if(!NET.hasNamereg){
     body.innerHTML='<p class="hint">Open self-registration is not available on <b>mainnet-beta</b>.</p>'+
-      '<div class="note">The controller <code>r/sys/namereg/v1</code> is only on the testnet. On mainnet-beta, writing to <code>r/sys/users</code> is controller-gated (GovDAO-whitelisted realms only). Switch to <b>Testnet · sapphire</b> to register.</div>';
+      '<div class="note">The controller <code>r/sys/namereg/v1</code> is only on the testnet. On mainnet-beta, writing to <code>r/sys/users</code> is controller-gated (GovDAO-whitelisted realms only). Switch to <b>Sapphire testnet</b> in the header to register.</div>';
     return;
   }
-  body.innerHTML='<p class="hint">Register a <code>nym-&lt;stem&gt;&lt;digits&gt;</code> name for <b>your own wallet</b> on '+esc(NET.chainId)+'. Signed by Adena — one name per address.</p>'+
-    '<div id="r-wallet"><button class="act" id="r-connect">Connect Adena</button></div>'+
-    '<div id="r-form" style="display:none;margin-top:18px"></div><div id="r-msg" style="margin-top:14px"></div>';
-  document.getElementById("r-connect").onclick=connectAdena;
-}
-async function connectWalletCore(msgEl){
-  if(typeof window.adena==="undefined"){if(msgEl)msgEl.innerHTML='<div class="note">Adena not found. Install it and reload — and serve this page over http(s), not file://, so Adena can inject.</div>';return{ok:false};}
-  try{
-    await window.adena.AddEstablish("gno.land Name Registry");
-    const acc=await window.adena.GetAccount();const d=(acc&&acc.data)||{};
-    walletAddr=d.address;
-    if(d.chainId&&d.chainId!==NET.chainId){try{await window.adena.SwitchNetwork(NET.chainId);}catch(e){if(msgEl)msgEl.innerHTML='<div class="note">Your Adena is on <code>'+esc(d.chainId)+'</code>. Switch it to <b>'+esc(NET.chainId)+'</b> and reconnect.</div>';}}
-    return{ok:true,addr:walletAddr};
-  }catch(e){if(msgEl)msgEl.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"connection cancelled/failed")+'</div>';return{ok:false};}
-}
-function connectedBadge(){return '<span class="badge ok">✓ connected</span> <span class="mono faint" style="font-size:12px">'+esc(walletAddr||"?")+'</span>';}
-async function connectAdena(){
-  const btn=document.getElementById("r-connect"),msg=document.getElementById("r-msg");
-  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Connecting…';
-  const c=await connectWalletCore(msg);
-  if(!c.ok){btn.disabled=false;btn.innerHTML="Connect Adena";return;}
-  document.getElementById("r-wallet").innerHTML=connectedBadge();
-  await showRegisterForm();
+  const w=walletState();
+  const gate=walletGateHTML(w);
+  const hint='<p class="hint">Register a name for <b>your own wallet</b> on '+esc(NET.chainId)+' — a lowercase word 5 to 13 letters long, prefixed with <code>nym-</code> and followed by 3 digits (for example <code>nym-alice123</code>). Signed by Adena — one name per address.</p>';
+  if(gate){
+    body.innerHTML=hint+gate;
+    wireSwitchNetworkButton();
+    return;
+  }
+  walletAddr=w.address;
+  body.innerHTML=hint+'<div id="r-form" style="margin-top:18px"></div><div id="r-msg" style="margin-top:14px"></div>';
+  showRegisterForm();
 }
 async function showRegisterForm(){
-  const form=document.getElementById("r-form"),msg=document.getElementById("r-msg");form.style.display="block";
+  const form=document.getElementById("r-form"),msg=document.getElementById("r-msg");
   const r=await qeval(USERS+'.ResolveAddress("'+walletAddr+'")');
   const existing=(!r.error&&!r.gnoError)?parseUser(r.data):null;
   if(existing&&existing.name){form.innerHTML='<div class="note info">This address already has a name: <b>@'+esc(existing.name)+'</b>. One name per address (aliases are governance-only).</div>';return;}
@@ -519,14 +553,41 @@ async function showRegisterForm(){
 }
 async function doRegister(n,submit,msg){
   if(!NYM_RE.test(n))return;submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Registering…';
+  msg.innerHTML="";
   try{
-    const res=await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:""});
-    const status=res&&(res.status||(res.data&&"success"));
-    const check=await qeval(USERS+'.ResolveName("'+n+'")');
-    const ok=!check.error&&!check.gnoError&&parseUser(check.data);
-    if(ok){msg.innerHTML='<div class="note info">✓ Registered <b>@'+esc(n)+'</b>. <a href="'+NET.gnoweb+'/u/'+esc(n)+'" target="_blank" rel="noopener">Profile ↗</a></div>';submit.innerHTML="Registered ✓";regsLoaded=false;}
-    else{msg.innerHTML='<div class="err">✕ Tx returned but name isn\'t resolving yet. If Adena showed an error it did not register; else wait a block. (status: '+esc(String(status))+')</div>';submit.disabled=false;submit.innerHTML="Register";}
-  }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"registration failed / rejected")+'</div>';submit.disabled=false;submit.innerHTML="Register";}
+    await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:""});
+  }catch(e){
+    msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"registration failed / rejected")+'</div>';
+    submit.disabled=false;submit.innerHTML="Register";
+    return;
+  }
+  // DoContract resolving without throwing means Adena broadcast the tx and
+  // it landed in a block — but the RPC/indexer read side can lag a block
+  // or two behind the write side, so a single immediate ResolveName right
+  // after was reporting a real success as a red "failed" message. Poll
+  // instead, and only call it stuck (not "failed" — the tx already went
+  // through) after genuinely exhausting retries.
+  pollForRegistration(n,submit,msg,1);
+}
+async function pollForRegistration(n,submit,msg,attempt){
+  const MAX_ATTEMPTS=8,DELAY_MS=1800;
+  submit.innerHTML='<span class="spinner"></span> Confirming…';
+  msg.innerHTML='<div class="note info"><span class="spinner"></span> Registered — waiting for <span class="mono">'+esc(n)+'</span> to appear on-chain ('+attempt+'/'+MAX_ATTEMPTS+')…</div>';
+  const check=await qeval(USERS+'.ResolveName("'+n+'")');
+  const ok=!check.error&&!check.gnoError&&parseUser(check.data);
+  if(ok){
+    msg.innerHTML='<div class="note info">✓ Registered <b>@'+esc(n)+'</b>. <a href="'+NET.gnoweb+'/u/'+esc(n)+'" target="_blank" rel="noopener">Profile ↗</a></div>';
+    submit.innerHTML="Registered ✓";
+    regsLoaded=false;
+    return;
+  }
+  if(attempt>=MAX_ATTEMPTS){
+    msg.innerHTML='<div class="note">Your transaction was accepted, but <span class="mono">'+esc(n)+'</span> still isn\'t showing up after a bit of waiting — that usually just means the read side is lagging behind, not that it failed. <button class="act ghost" id="r-recheck">Check again</button></div>';
+    submit.disabled=false;submit.innerHTML="Register";
+    document.getElementById("r-recheck").onclick=()=>pollForRegistration(n,submit,msg,1);
+    return;
+  }
+  setTimeout(()=>pollForRegistration(n,submit,msg,attempt+1),DELAY_MS);
 }
 
 /* ---------------- PROFILE tab (r/demo/profile) ---------------- */
@@ -544,22 +605,21 @@ const PROFILE_FIELDS=[
 let profileLoaded={};
 function renderProfile(){
   const body=document.getElementById("p-body");
-  body.innerHTML='<p class="hint">Your on-chain profile lives in <code>r/demo/profile</code>, keyed to your <b>wallet address</b> (separate from the name registry — the native system splits them). All fields are optional; changed fields batch into a single Adena signature. Saved values appear in a name\'s detail view.</p>'+
-    '<div id="p-wallet"><button class="act" id="p-connect">Connect Adena</button></div>'+
-    '<div id="p-form" style="display:none;margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
-  document.getElementById("p-connect").onclick=connectProfile;
-}
-async function connectProfile(){
-  const btn=document.getElementById("p-connect"),msg=document.getElementById("p-msg");
-  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Connecting…';
-  const c=await connectWalletCore(msg);
-  if(!c.ok){btn.disabled=false;btn.innerHTML="Connect Adena";return;}
-  document.getElementById("p-wallet").innerHTML=connectedBadge();
-  await loadProfileForm();
+  const w=walletState();
+  const gate=walletGateHTML(w);
+  const hint='<p class="hint">Your on-chain profile lives in <code>r/demo/profile</code>, keyed to your <b>wallet address</b> (separate from the name registry — the native system splits them). All fields are optional; changed fields batch into a single Adena signature. Saved values appear in a name\'s detail view.</p>';
+  if(gate){
+    body.innerHTML=hint+gate;
+    wireSwitchNetworkButton();
+    return;
+  }
+  walletAddr=w.address;
+  body.innerHTML=hint+'<div id="p-form" style="margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
+  loadProfileForm();
 }
 async function loadProfileForm(){
   const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
-  form.style.display="block";form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
+  form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
   profileLoaded={};
   await mapLimit(PROFILE_FIELDS,4,async f=>{
     const r=await qeval(PROFILE+'.GetStringField("'+walletAddr+'","'+f.key+'","")');
@@ -599,9 +659,17 @@ function setNetInfo(){
   document.getElementById("netinfo").innerHTML='<span><span class="dot">●</span> '+esc(NET.label)+'</span><span>rpc: '+esc(NET.rpc.replace("https://",""))+'</span><span>'+(NET.hasNamereg?"registration: open (nym- tier)":"registration: closed")+'</span>';
   document.getElementById("foot-net").textContent="reading "+NET.chainId+(NET.indexer?" + indexer":"");
 }
-document.querySelectorAll(".net button").forEach(b=>b.onclick=()=>{
-  document.querySelectorAll(".net button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  NET=NETWORKS[b.dataset.net];walletAddr=null;REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+// Network control now lives in the shared header (top right) — see the
+// module <script> at the top of <head>, which dispatches this event.
+window.addEventListener("regpage:network",e=>{
+  NET=NETWORKS[e.detail];walletAddr=null;REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+});
+// Wallet is global too (same header) — re-render whichever tab needs it
+// live, so connecting/switching networks there updates this page with no
+// reload and no redundant "Connect Adena" button of its own.
+window.addEventListener("gnotools:wallet",()=>{
+  const t=activeTab();
+  if(t==="register"||t==="profile")refreshActiveTab();
 });
 document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));

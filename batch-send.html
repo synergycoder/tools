@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batch Send — gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<!-- Works around a real bug in Adena's own extension (a window.adena
+     that never gets set on some page-load orderings), not this code —
+     must stay an external <script src>, not inlined. -->
+<script src="adena-compat.js"></script>
+<style>
+  :root{ color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:
+      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
+      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5; font-size:15px;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:980px; margin:0 auto; padding:0 20px 60px}
+  code,.mono{font-family:var(--mono)}
+
+  .page-title{padding:26px 0 4px}
+  .mark{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    border:1px solid var(--accent-line); background:var(--accent-soft);
+    padding:3px 8px; border-radius:6px; letter-spacing:.06em;
+  }
+  h1{font-size:22px; margin:8px 0 4px}
+  h2{font-size:15px; margin:26px 0 4px; padding-top:14px; border-top:1px solid var(--hair)}
+  h2:first-of-type{border-top:none; padding-top:0; margin-top:20px}
+  .sub{color:var(--muted); font-size:13.5px; margin:0; max-width:65ch}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--hair); border-radius:14px;
+    padding:18px 20px; margin:14px 0;
+  }
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
+  .field-label{color:var(--faint); font-size:12.5px; min-width:9rem}
+  .radio-group{display:flex; gap:16px; flex-wrap:wrap}
+  .radio-group label{display:flex; align-items:center; gap:7px; font-size:13.5px; cursor:pointer}
+
+  input[type=text],input[type=number]{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  input[type=text]{flex:1; min-width:0}
+  input[type=number]{flex:none; width:6rem}
+  textarea{
+    width:100%; box-sizing:border-box; min-height:8rem; padding:10px 12px;
+    border-radius:9px; border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+    font-family:var(--mono); font-size:12.5px; resize:vertical;
+  }
+  select{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  button{
+    font-family:var(--sans); font-weight:600; font-size:13.5px; padding:10px 18px;
+    border-radius:9px; border:1px solid var(--accent-line);
+    background:var(--accent-soft); color:var(--accent); cursor:pointer;
+  }
+  button:hover{background:var(--accent-line)}
+  button:disabled{opacity:.5; cursor:default}
+  button.ghost{background:transparent; color:var(--muted); border-color:var(--hair2)}
+  button.ghost:hover{color:var(--ink); border-color:var(--accent-line); background:transparent}
+  button.small{padding:6px 12px; font-size:12px}
+
+  .spinner{display:inline-block; width:.85em; height:.85em; margin-right:.45em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; vertical-align:-.15em; animation:spin .6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .note{font-size:13px; color:var(--muted); margin:10px 0; border-radius:9px; padding:10px 13px}
+  .note.warn{border:1px solid var(--amber-line); background:var(--amber-soft); color:var(--ink)}
+  .note.warn b{color:var(--amber)}
+  .note.error{border:1px solid var(--bad-soft); background:var(--bad-soft); color:var(--ink)}
+
+  .banner{
+    border-left:3px solid var(--amber); background:var(--amber-soft); border-radius:0 10px 10px 0;
+    padding:12px 15px; font-size:13px; color:var(--ink); margin:14px 0;
+  }
+  .banner strong{display:block; margin-bottom:4px; color:var(--amber)}
+
+  .addrbox{
+    font-family:var(--mono); font-size:13px; word-break:break-all;
+    background:var(--panel2); border:1px solid var(--hair2); border-radius:9px;
+    padding:10px 13px; margin:10px 0; color:var(--muted);
+  }
+  .addrbox b{color:var(--ink); font-weight:600}
+  .status{font-size:13px; color:var(--muted)}
+
+  .summary-card{background:var(--panel2); border:1px solid var(--accent-line); border-radius:10px; padding:14px 16px; margin:14px 0; font-size:13.5px}
+
+  .table-wrap{max-height:22rem; overflow:auto; border:1px solid var(--hair); border-radius:10px; margin-top:10px}
+  table{width:100%; border-collapse:collapse; font-size:12.5px}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--hair)}
+  th{color:var(--faint); font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; position:sticky; top:0; background:var(--panel2)}
+  td.addr{font-family:var(--mono)}
+  tr.row-invalid td{color:var(--bad)}
+  tr.row-dup td{color:var(--amber)}
+
+  .batch-list{display:flex; flex-direction:column; gap:8px; margin-top:10px}
+  .batch-row{display:flex; align-items:center; gap:10px; padding:10px 13px; border:1px solid var(--hair); background:var(--panel2); border-radius:9px; font-size:13px; flex-wrap:wrap}
+  .batch-hash{font-family:var(--mono); font-size:12px; color:var(--faint); word-break:break-all}
+  .batch-status{font-weight:700; min-width:6rem}
+  .batch-status.pending{color:var(--faint)}
+  .batch-status.waiting{color:var(--amber)}
+  .batch-status.sent{color:var(--accent)}
+  .batch-status.failed{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="page-title">
+  <span class="mark">⇉ BATCH</span>
+  <h1>Batch Send</h1>
+  <p class="sub">Send a payment to many recipients at once — paste a list, upload a CSV, or pull one from a public Google Sheet. Connect Adena (top right) to approve; nothing is sent until you do.</p>
+</div>
+
+<h2>1. Token</h2>
+<div class="panel">
+  <div class="row">
+    <span class="field-label">Query network</span>
+    <select id="previewNetwork"></select>
+    <span class="status">(only used to look up tokens below — the actual send always uses whatever network your connected wallet is on)</span>
+  </div>
+  <div class="row">
+    <span class="field-label">Token to send</span>
+    <select id="tokenSelect"><option value="native">GNOT (native)</option></select>
+  </div>
+  <p class="status" id="tokenPreview" style="display:none"></p>
+  <div class="note warn">
+    <b>Registered ≠ vetted</b>
+    The token list above comes from gno.land's on-chain registry (<code>grc20reg</code>), but registration is open to anyone — any realm can self-register under any name or symbol, with no approval process. Verify an unfamiliar token independently before sending it to anyone.
+  </div>
+</div>
+
+<h2>2. Recipients</h2>
+<div class="panel">
+  <div class="radio-group">
+    <label><input type="radio" name="inputMethod" value="paste" checked> Paste a list</label>
+    <label><input type="radio" name="inputMethod" value="file"> Upload CSV</label>
+    <label><input type="radio" name="inputMethod" value="sheet"> Google Sheets URL</label>
+  </div>
+
+  <div id="pasteSection" style="margin-top:10px">
+    <textarea id="pasteInput" placeholder="g1..., 1.5&#10;g1..., 2&#10;(one per line — address,amount, or just an address to use the default amount below)" spellcheck="false"></textarea>
+  </div>
+  <div id="fileSection" style="display:none; margin-top:10px">
+    <input type="file" id="fileInput" accept=".csv,text/csv,text/plain">
+  </div>
+  <div id="sheetSection" style="display:none; margin-top:10px">
+    <div class="row" style="margin:0">
+      <input type="text" id="sheetUrlInput" placeholder="https://docs.google.com/spreadsheets/d/..." autocomplete="off" spellcheck="false">
+      <button id="sheetLoadBtn" type="button">Load</button>
+    </div>
+    <p class="status">Sheet must be shared as "Anyone with the link can view".</p>
+  </div>
+  <p class="note error" id="parseError" style="display:none"></p>
+
+  <div class="row">
+    <span class="field-label">Default amount</span>
+    <input type="text" id="defaultAmount" placeholder="used for rows with no amount column" style="max-width:14rem">
+  </div>
+
+  <p class="status" id="previewSummary"></p>
+  <div class="table-wrap" id="previewTableWrap" style="display:none">
+    <table>
+      <thead><tr><th>#</th><th>Address</th><th>Amount</th><th>Status</th></tr></thead>
+      <tbody id="previewTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<h2>3. Send</h2>
+<div class="panel">
+  <div id="noAdenaNote" class="note warn" style="display:none"></div>
+  <div id="connectedBox" class="addrbox" style="display:none">
+    <div><b>Connected:</b> <span id="connectedAddress"></span></div>
+    <div class="status" id="connectedAside" style="margin-top:4px"></div>
+  </div>
+  <p class="status" id="connectStatus"></p>
+  <p class="status" id="balanceNote" style="display:none"></p>
+
+  <div class="row">
+    <span class="field-label">Batch size</span>
+    <input type="number" id="batchSizeInput" value="20" min="1" max="200" step="1">
+    <span class="status">recipients per transaction — reduce this if a transaction fails due to size/gas limits</span>
+  </div>
+
+  <div class="summary-card" id="planSummary" style="display:none"></div>
+
+  <div class="banner">
+    <strong>Before you approve anything</strong>
+    Each transaction below is a separate approval in Adena. Check the recipient count, total amount, and token in the plan above match what you actually intend before approving any of them.
+  </div>
+
+  <div class="row">
+    <button id="sendBtn" disabled>Send</button>
+  </div>
+  <div class="batch-list" id="batchList"></div>
+</div>
+
+</div>
+
+<script type="module">
+import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
+initSiteChrome({
+  networkOptions: [], // this tool's own "query network" select below already covers it
+});
+</script>
+<script type="module">
+import {
+  NETWORKS, networkForChainId, loadFungibleTokens, resolveToken, fetchTokenDecimals,
+  fetchBalance, toBaseUnits, fromBaseUnits,
+} from "./lib/gno-rpc.js";
+import { parseAddressAmountRows, sheetsUrlToCsvExportUrl } from "./lib/csv.js";
+import { doContract } from "./lib/adena-connect.js";
+import { onWalletChange } from "./lib/site-chrome.js";
+
+const GNOT_DECIMALS = 6;
+const NETWORK_STORAGE_KEY = "gnoTools:batchSend:previewNetwork";
+
+const previewNetwork = document.getElementById("previewNetwork");
+const tokenSelect = document.getElementById("tokenSelect");
+const tokenPreview = document.getElementById("tokenPreview");
+const pasteSection = document.getElementById("pasteSection");
+const fileSection = document.getElementById("fileSection");
+const sheetSection = document.getElementById("sheetSection");
+const pasteInput = document.getElementById("pasteInput");
+const fileInput = document.getElementById("fileInput");
+const sheetUrlInput = document.getElementById("sheetUrlInput");
+const sheetLoadBtn = document.getElementById("sheetLoadBtn");
+const parseError = document.getElementById("parseError");
+const defaultAmount = document.getElementById("defaultAmount");
+const previewSummary = document.getElementById("previewSummary");
+const previewTableWrap = document.getElementById("previewTableWrap");
+const previewTableBody = document.getElementById("previewTableBody");
+const noAdenaNote = document.getElementById("noAdenaNote");
+const connectedBox = document.getElementById("connectedBox");
+const connectedAddress = document.getElementById("connectedAddress");
+const connectedAside = document.getElementById("connectedAside");
+const connectStatus = document.getElementById("connectStatus");
+const balanceNote = document.getElementById("balanceNote");
+const batchSizeInput = document.getElementById("batchSizeInput");
+const planSummary = document.getElementById("planSummary");
+const sendBtn = document.getElementById("sendBtn");
+const batchList = document.getElementById("batchList");
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// ---------- state ----------
+
+let parsedRows = [];
+let wallet = null; // { address, chainId, coins }
+let resolvedNetworkKey = null;
+let tokenDecimals = undefined;
+let tokenInfo = null;
+let balanceRaw = null;
+
+function isNativeSelected() {
+  return tokenSelect.value === "native";
+}
+
+// ---------- network + token dropdown (preview only, not the send target) ----------
+
+for (const [key, net] of Object.entries(NETWORKS)) {
+  const opt = document.createElement("option");
+  opt.value = key;
+  opt.textContent = net.label;
+  previewNetwork.appendChild(opt);
+}
+try {
+  const saved = localStorage.getItem(NETWORK_STORAGE_KEY);
+  if (saved && NETWORKS[saved]) previewNetwork.value = saved;
+} catch {}
+
+async function loadTokenDropdown() {
+  const keep = tokenSelect.value;
+  tokenSelect.innerHTML = '<option value="native">GNOT (native)</option>';
+  try {
+    const net = NETWORKS[previewNetwork.value];
+    const tokens = await loadFungibleTokens(net);
+    for (const t of tokens) {
+      const opt = document.createElement("option");
+      opt.value = t.path;
+      opt.textContent = `${t.name} (${t.symbol})`;
+      tokenSelect.appendChild(opt);
+    }
+    if ([...tokenSelect.options].some(o => o.value === keep)) tokenSelect.value = keep;
+  } catch (err) {
+    tokenPreview.style.display = "block";
+    tokenPreview.textContent = "Couldn't load the token registry: " + err.message;
+  }
+}
+
+previewNetwork.addEventListener("change", () => {
+  try { localStorage.setItem(NETWORK_STORAGE_KEY, previewNetwork.value); } catch {}
+  loadTokenDropdown();
+});
+tokenSelect.addEventListener("change", () => {
+  tokenDecimals = undefined;
+  tokenInfo = null;
+  updatePreviewTable();
+  updatePlan();
+  if (wallet) { resolveRealToken().then(checkBalance).then(updatePlan); }
+});
+loadTokenDropdown();
+
+// ---------- recipient input: paste / file / sheet ----------
+
+document.querySelectorAll('input[name="inputMethod"]').forEach(r => r.addEventListener("change", () => {
+  const mode = document.querySelector('input[name="inputMethod"]:checked').value;
+  pasteSection.style.display = mode === "paste" ? "block" : "none";
+  fileSection.style.display = mode === "file" ? "block" : "none";
+  sheetSection.style.display = mode === "sheet" ? "block" : "none";
+}));
+
+function setRowsFromText(text) {
+  parseError.style.display = "none";
+  const { rows } = parseAddressAmountRows(text);
+  parsedRows = rows;
+  updatePreviewTable();
+  updatePlan();
+}
+
+pasteInput.addEventListener("input", () => setRowsFromText(pasteInput.value));
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => setRowsFromText(String(reader.result));
+  reader.onerror = () => {
+    parseError.style.display = "block";
+    parseError.textContent = "Couldn't read that file.";
+  };
+  reader.readAsText(file);
+});
+
+sheetLoadBtn.addEventListener("click", async () => {
+  parseError.style.display = "none";
+  sheetLoadBtn.disabled = true;
+  sheetLoadBtn.innerHTML = '<span class="spinner"></span>Loading…';
+  try {
+    const csvUrl = sheetsUrlToCsvExportUrl(sheetUrlInput.value);
+    const res = await fetch(csvUrl);
+    if (!res.ok) throw new Error(`Sheet fetch failed (HTTP ${res.status}) — make sure it's shared as "Anyone with the link can view".`);
+    const text = await res.text();
+    setRowsFromText(text);
+  } catch (err) {
+    parseError.style.display = "block";
+    parseError.textContent = "Couldn't load that sheet: " + err.message;
+  } finally {
+    sheetLoadBtn.disabled = false;
+    sheetLoadBtn.textContent = "Load";
+  }
+});
+
+defaultAmount.addEventListener("input", () => { updatePreviewTable(); updatePlan(); });
+
+// ---------- preview table ----------
+
+function updatePreviewTable() {
+  const def = defaultAmount.value.trim();
+  const addressCounts = new Map();
+  for (const r of parsedRows) if (r.valid) addressCounts.set(r.address, (addressCounts.get(r.address) || 0) + 1);
+
+  let validCount = 0, invalidCount = 0, dupCount = 0;
+  const html = parsedRows.map((r) => {
+    const amount = r.amount != null ? r.amount : def;
+    const isDup = r.valid && addressCounts.get(r.address) > 1;
+    let error = r.error;
+    let ok = r.valid;
+    if (ok && !amount) { ok = false; error = "No amount, and no default amount set."; }
+
+    if (ok) { validCount++; if (isDup) dupCount++; }
+    else invalidCount++;
+
+    const rowClass = !ok ? "row-invalid" : isDup ? "row-dup" : "";
+    const statusText = !ok ? escapeHtml(error) : isDup ? "duplicate address" : "ok";
+    return `<tr class="${rowClass}"><td>${r.lineNumber}</td><td class="addr">${escapeHtml(r.address)}</td>` +
+      `<td>${escapeHtml(amount || "—")}</td><td>${statusText}</td></tr>`;
+  }).join("");
+
+  previewTableBody.innerHTML = html;
+  previewTableWrap.style.display = parsedRows.length ? "block" : "none";
+  previewSummary.textContent = parsedRows.length
+    ? `${validCount} valid recipient${validCount === 1 ? "" : "s"}${invalidCount ? `, ${invalidCount} skipped (invalid)` : ""}${dupCount ? `, ${dupCount} duplicate address${dupCount === 1 ? "" : "es"}` : ""}.`
+    : "";
+}
+
+function getSendableRecipients() {
+  const def = defaultAmount.value.trim();
+  const decimals = isNativeSelected() ? GNOT_DECIMALS : tokenDecimals;
+  const out = [];
+  for (const r of parsedRows) {
+    if (!r.valid) continue;
+    const amount = r.amount != null ? r.amount : def;
+    if (!amount) continue;
+    if (decimals == null) {
+      if (!/^\d+$/.test(amount)) continue;
+      out.push({ address: r.address, amount, raw: amount });
+    } else {
+      try {
+        out.push({ address: r.address, amount, raw: toBaseUnits(amount, decimals) });
+      } catch {}
+    }
+  }
+  return out;
+}
+
+// ---------- wallet — single global connection owned by the shared header ----------
+
+async function applyConnectedUI(w) {
+  wallet = w;
+  resolvedNetworkKey = networkForChainId(w.chainId);
+
+  noAdenaNote.style.display = "none";
+  connectedBox.style.display = "block";
+  connectedAddress.textContent = w.address;
+  connectedAside.textContent = w.chainId ? `Adena chainId "${w.chainId}".` : "";
+
+  await resolveRealToken();
+  await checkBalance();
+  updatePlan();
+}
+
+function handleDisconnected() {
+  wallet = null;
+  resolvedNetworkKey = null;
+  tokenDecimals = undefined;
+  tokenInfo = null;
+  balanceRaw = null;
+  connectedBox.style.display = "none";
+  balanceNote.style.display = "none";
+  updatePlan();
+}
+
+onWalletChange((w) => {
+  if (w.status === "connected") {
+    applyConnectedUI({ address: w.address, chainId: w.chainId, coins: w.balanceRaw != null ? `${w.balanceRaw}ugnot` : "" });
+  } else {
+    handleDisconnected();
+    connectStatus.textContent = w.status === "connecting" ? "Connecting…" : "";
+  }
+});
+
+// ---------- token resolution (real network) + balance check ----------
+
+async function resolveRealToken() {
+  if (isNativeSelected()) { tokenDecimals = GNOT_DECIMALS; tokenInfo = null; return; }
+
+  if (!resolvedNetworkKey) {
+    tokenDecimals = null;
+    tokenPreview.style.display = "block";
+    tokenPreview.textContent = "Adena is connected to an unrecognized chainId — token decimals can't be looked up; only whole raw-unit amounts can be sent.";
+    return;
+  }
+  const net = NETWORKS[resolvedNetworkKey];
+  const [info, decimals] = await Promise.all([
+    resolveToken(net, tokenSelect.value).catch(() => null),
+    fetchTokenDecimals(net, tokenSelect.value).catch(() => null),
+  ]);
+  tokenInfo = info;
+  tokenDecimals = decimals;
+  tokenPreview.style.display = "block";
+  if (!info) {
+    tokenPreview.textContent = `Not found in the registry on ${net.label} — double-check this is the token you expect.`;
+  } else if (decimals == null) {
+    tokenPreview.textContent = `${info.name} (${info.symbol}) doesn't publish its decimals on-chain — only whole raw-unit amounts can be sent.`;
+  } else {
+    tokenPreview.textContent = `${info.name} (${info.symbol}), ${decimals} decimals.`;
+  }
+}
+
+async function checkBalance() {
+  balanceRaw = null;
+  balanceNote.style.display = "none";
+  if (!wallet) return;
+
+  try {
+    if (isNativeSelected()) {
+      const m = /^(\d+)ugnot$/.exec(wallet.coins || "");
+      balanceRaw = m ? BigInt(m[1]) : 0n;
+      balanceNote.textContent = `Balance: ${fromBaseUnits(balanceRaw.toString(), GNOT_DECIMALS)} GNOT.`;
+    } else if (resolvedNetworkKey) {
+      const net = NETWORKS[resolvedNetworkKey];
+      const bal = await fetchBalance(net, tokenSelect.value, wallet.address);
+      balanceRaw = bal == null ? null : BigInt(Math.trunc(bal));
+      const symbol = tokenInfo ? tokenInfo.symbol : tokenSelect.value;
+      balanceNote.textContent = balanceRaw == null ? "" :
+        tokenDecimals != null ? `Balance: ${fromBaseUnits(balanceRaw.toString(), tokenDecimals)} ${symbol}.`
+        : `Balance: ${balanceRaw} ${symbol} (raw units).`;
+    }
+    if (balanceRaw != null) balanceNote.style.display = "block";
+  } catch (err) {
+    balanceNote.style.display = "block";
+    balanceNote.textContent = "Couldn't check balance: " + err.message;
+  }
+}
+
+// ---------- batch plan + sending ----------
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function updatePlan() {
+  const recipients = getSendableRecipients();
+  const size = Math.max(1, parseInt(batchSizeInput.value, 10) || 20);
+  const batches = chunk(recipients, size);
+  const total = recipients.reduce((sum, r) => sum + BigInt(r.raw), 0n);
+  const symbol = isNativeSelected() ? "GNOT" : (tokenInfo ? tokenInfo.symbol : tokenSelect.value);
+  const decimals = isNativeSelected() ? GNOT_DECIMALS : tokenDecimals;
+  const totalDisplay = decimals != null ? `${fromBaseUnits(total.toString(), decimals)} ${symbol}` : `${total} ${symbol} (raw units)`;
+
+  if (!recipients.length) {
+    planSummary.style.display = "none";
+    sendBtn.disabled = true;
+    return;
+  }
+
+  planSummary.style.display = "block";
+  let html = `<strong>${recipients.length}</strong> recipient${recipients.length === 1 ? "" : "s"} across ` +
+    `<strong>${batches.length}</strong> transaction${batches.length === 1 ? "" : "s"} (batch size ${size}) — total ` +
+    `<strong>${escapeHtml(totalDisplay)}</strong>. You'll approve ${batches.length} time${batches.length === 1 ? "" : "s"} in Adena.`;
+  if (balanceRaw != null && total > balanceRaw) {
+    html += `<br><span style="color:var(--amber)">This exceeds your checked balance — the batch may fail partway through.</span>`;
+  }
+  planSummary.innerHTML = html;
+  sendBtn.disabled = !wallet;
+}
+
+batchSizeInput.addEventListener("input", updatePlan);
+
+sendBtn.addEventListener("click", async () => {
+  const recipients = getSendableRecipients();
+  const size = Math.max(1, parseInt(batchSizeInput.value, 10) || 20);
+  const batches = chunk(recipients, size);
+  if (!batches.length || !wallet) return;
+
+  sendBtn.disabled = true;
+  batchList.innerHTML = "";
+  const rowEls = batches.map((b, i) => {
+    const el = document.createElement("div");
+    el.className = "batch-row";
+    el.innerHTML = `<span class="batch-status pending">Pending</span>` +
+      `<span>Batch ${i + 1}/${batches.length} (${b.length} recipient${b.length === 1 ? "" : "s"})</span>` +
+      `<span class="batch-hash"></span>` +
+      `<button class="ghost small retry-btn" type="button" style="display:none">Retry</button>`;
+    batchList.appendChild(el);
+    return el;
+  });
+
+  async function runBatch(i) {
+    const el = rowEls[i];
+    const statusEl = el.querySelector(".batch-status");
+    const hashEl = el.querySelector(".batch-hash");
+    const retryBtn = el.querySelector(".retry-btn");
+    retryBtn.style.display = "none";
+    statusEl.className = "batch-status waiting";
+    statusEl.textContent = "Waiting…";
+    hashEl.textContent = "";
+    try {
+      const messages = batches[i].map(r => isNativeSelected()
+        ? { type: "/bank.MsgSend", value: { from_address: wallet.address, to_address: r.address, amount: `${r.raw}ugnot` } }
+        : { type: "/vm.m_call", value: { caller: wallet.address, send: "", pkg_path: tokenSelect.value, func: "Transfer", args: [r.address, r.raw] } });
+      const result = await doContract(messages);
+      statusEl.className = "batch-status sent";
+      statusEl.textContent = "Sent";
+      hashEl.textContent = `tx ${result.hash}${result.height ? ` (block ${result.height})` : ""}`;
+    } catch (err) {
+      statusEl.className = "batch-status failed";
+      statusEl.textContent = "Failed";
+      hashEl.textContent = err.message;
+      retryBtn.style.display = "inline-block";
+    }
+  }
+
+  for (let i = 0; i < batches.length; i++) {
+    await runBatch(i);
+    rowEls[i].querySelector(".retry-btn").addEventListener("click", () => runBatch(i));
+  }
+
+  sendBtn.disabled = false;
+});
+</script>
+</body>
+</html>

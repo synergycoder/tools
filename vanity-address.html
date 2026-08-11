@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vanity Address — gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<style>
+  :root{ color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:
+      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
+      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5; font-size:15px;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:900px; margin:0 auto; padding:0 20px 60px}
+  code,.mono{font-family:var(--mono)}
+
+  .page-title{padding:26px 0 4px}
+  .mark{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    border:1px solid var(--accent-line); background:var(--accent-soft);
+    padding:3px 8px; border-radius:6px; letter-spacing:.06em;
+  }
+  h1{font-size:22px; margin:8px 0 4px}
+  h2{font-size:15px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13.5px; margin:0; max-width:65ch}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--hair); border-radius:14px;
+    padding:18px 20px; margin:20px 0;
+  }
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
+  .field-label{color:var(--faint); font-size:12.5px; min-width:9rem}
+
+  fieldset{border:1px solid var(--hair2); border-radius:12px; padding:14px 16px 16px; margin:0}
+  legend{padding:0 6px; color:var(--faint); font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em}
+
+  .radio-group{display:flex; gap:16px; flex-wrap:wrap}
+  .radio-group label{display:flex; align-items:center; gap:7px; font-size:13.5px; cursor:pointer}
+
+  input[type=text],input[type=number]{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  input[type=text]{flex:1; min-width:0}
+  input[type=number]{width:5.5rem}
+  select{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  button{
+    font-family:var(--sans); font-weight:600; font-size:13.5px; padding:10px 18px;
+    border-radius:9px; border:1px solid var(--accent-line);
+    background:var(--accent-soft); color:var(--accent); cursor:pointer;
+  }
+  button:hover{background:var(--accent-line)}
+  button:disabled{opacity:.5; cursor:default}
+  button.ghost{background:transparent; color:var(--muted); border-color:var(--hair2)}
+  button.ghost:hover{color:var(--ink); border-color:var(--accent-line); background:transparent}
+  button.danger{border-color:var(--bad-soft); background:var(--bad-soft); color:var(--bad)}
+  button.danger:hover{opacity:.85; background:var(--bad-soft)}
+  button.small{padding:6px 12px; font-size:12px}
+
+  .note{
+    border-left:3px solid var(--amber); background:var(--amber-soft); border-radius:0 10px 10px 0;
+    padding:12px 15px; font-size:13px; color:var(--ink); margin:14px 0;
+  }
+  .note strong{display:block; margin-bottom:4px; color:var(--amber)}
+  .validation-error{color:var(--bad); font-size:12.5px; margin:4px 0}
+
+  .difficulty{font-size:13px; margin:8px 0}
+  .difficulty.tier-fast{color:var(--muted)}
+  .difficulty.tier-moderate{color:var(--amber)}
+  .difficulty.tier-long{color:var(--bad)}
+
+  .confirm-row{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
+  .confirm-row.shake{animation:shake .4s}
+  @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(3px)}30%,50%,70%{transform:translateX(-5px)}40%,60%{transform:translateX(5px)}}
+
+  .search-progress{display:flex; align-items:center; gap:10px; margin:10px 0}
+  .spinner{display:inline-block; width:.85em; height:.85em; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:spin .6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .elapsed-timer{font-family:var(--mono); font-size:13px}
+  .found-status,.status{font-size:13px; color:var(--muted)}
+  .search-status{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:8px 0}
+
+  .wallet-list{margin-top:6px; display:flex; flex-direction:column; gap:10px}
+  .wallet-row{border:1px solid var(--hair); background:var(--panel2); border-radius:12px; padding:14px 16px; font-size:13px}
+  .wallet-row .addr{font-family:var(--mono); word-break:break-all; color:var(--ink)}
+  .wallet-row .meta{color:var(--faint); font-size:11.5px; margin-top:3px}
+  .wallet-row .secret-line{display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap}
+  .secret-value{font-family:var(--mono); word-break:break-all; flex:1; min-width:0; color:var(--muted)}
+  .secret-value.masked{filter:blur(5px); user-select:none}
+  .wallet-row .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+  .empty{color:var(--faint); font-size:13.5px; padding:14px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="page-title">
+  <span class="mark">⛏ VANITY</span>
+  <h1>Vanity Address Generator</h1>
+  <p class="sub">Generates a real gno.land (<code>g1...</code>) keypair entirely in your browser — secp256k1 + BIP39/BIP44 (<code>m/44'/118'/0'/0/0</code>) + bech32, the same standard <code>gnokey</code> itself uses. Optionally search for an address containing a chosen string.</p>
+</div>
+
+<div class="note">
+  <strong>Read before generating anything you care about</strong>
+  Everything below happens locally — there are no network calls in this tool at all (check your browser's network tab). But results you keep are stored <b>unencrypted in this browser's localStorage</b>: anyone with access to this device, or a malicious script via an XSS bug, could read them. Fine for throwaway/vanity/testnet keys. Don't use this for anything holding real value.
+</div>
+
+<div class="panel">
+  <fieldset>
+    <legend>1. Secret format</legend>
+    <div class="radio-group" id="modeGroup">
+      <label><input type="radio" name="mode" value="12" checked> 12-word mnemonic</label>
+      <label><input type="radio" name="mode" value="24"> 24-word mnemonic</label>
+      <label><input type="radio" name="mode" value="key"> Raw key</label>
+    </div>
+    <p class="status" id="modeNote"></p>
+  </fieldset>
+
+  <fieldset style="margin-top:14px">
+    <legend>2. Vanity target (optional)</legend>
+    <div class="row">
+      <input type="text" id="targetInput" placeholder="e.g. gno (leave empty to just generate)" autocomplete="off" spellcheck="false" maxlength="12">
+      <select id="positionSelect">
+        <option value="start">at the start</option>
+        <option value="end">at the end</option>
+        <option value="anywhere" selected>anywhere</option>
+      </select>
+    </div>
+    <p class="validation-error" id="validationMsg" style="display:none"></p>
+    <div class="row">
+      <label for="countInput" class="status">Addresses to generate:</label>
+      <input type="number" id="countInput" value="1" min="1" max="50" step="1">
+    </div>
+    <p class="difficulty" id="difficultyMsg"></p>
+    <div class="confirm-row" id="confirmRow" style="display:none">
+      <label><input type="checkbox" id="confirmLong"> I understand this may take a while</label>
+    </div>
+  </fieldset>
+
+  <div class="row" style="margin-top:14px">
+    <button id="startBtn">Start</button>
+    <button id="cancelBtn" class="ghost" style="display:none">Cancel</button>
+  </div>
+  <div class="search-progress" id="searchProgress" style="display:none">
+    <span class="spinner"></span>
+    <span class="elapsed-timer" id="elapsedTimer">0:00</span>
+    <span class="found-status" id="foundStatus"></span>
+  </div>
+  <p class="search-status" id="searchStatus"></p>
+</div>
+
+<div class="panel">
+  <h2>Generated wallets</h2>
+  <div class="row">
+    <button class="danger small" id="clearAllBtn">Clear all</button>
+    <button class="ghost small" id="exportCsvBtn">Export CSV</button>
+    <span class="status" id="listStatus"></span>
+  </div>
+  <p class="status">Export writes everything below to a plaintext file, including secrets — handle the downloaded file carefully and delete it once you're done with it.</p>
+  <div class="wallet-list" id="walletList"></div>
+</div>
+
+</div>
+
+<script type="module">
+import { initSiteChrome } from "./lib/site-chrome.js";
+initSiteChrome();
+</script>
+<script type="module">
+import { generateWallet, matchesTarget, validateTarget, estimateAttempts, ADDRESS_CHARSET } from "./lib/gno-address.js";
+
+// ---------- constants ----------
+
+const STORAGE_KEY = "gnoTools:vanityWallets:v1";
+const FAST_SECONDS = 5;
+const LONG_SECONDS = 120;
+const MODE_NOTES = {
+  "12": "Standard BIP39 mnemonic — importable via “gnokey add -recover”.",
+  "24": "Higher-entropy BIP39 mnemonic — importable via “gnokey add -recover”.",
+  "key": "A raw secp256k1 private key (hex), no mnemonic layer. Correctly derives the address shown, but gnokey itself only has a mnemonic “-recover” flow — use this with tools/SDKs that accept a raw secp256k1 key directly.",
+};
+
+// ---------- elements ----------
+
+const targetInput = document.getElementById("targetInput");
+const positionSelect = document.getElementById("positionSelect");
+const countInput = document.getElementById("countInput");
+const validationMsg = document.getElementById("validationMsg");
+const difficultyMsg = document.getElementById("difficultyMsg");
+const confirmRow = document.getElementById("confirmRow");
+const confirmLong = document.getElementById("confirmLong");
+const startBtn = document.getElementById("startBtn");
+const cancelBtn = document.getElementById("cancelBtn");
+const searchProgress = document.getElementById("searchProgress");
+const elapsedTimer = document.getElementById("elapsedTimer");
+const foundStatus = document.getElementById("foundStatus");
+const searchStatus = document.getElementById("searchStatus");
+const modeNote = document.getElementById("modeNote");
+const walletListEl = document.getElementById("walletList");
+const listStatus = document.getElementById("listStatus");
+
+function currentMode() {
+  return document.querySelector('input[name="mode"]:checked').value;
+}
+
+function targetCount() {
+  const n = parseInt(countInput.value, 10);
+  return Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : 1;
+}
+
+// ---------- speed benchmark (lazy, per mode, cached) ----------
+
+const benchCache = new Map();
+
+function benchmark(mode) {
+  if (benchCache.has(mode)) return benchCache.get(mode);
+  const budgetMs = 200;
+  const start = performance.now();
+  let count = 0;
+  while (performance.now() - start < budgetMs) {
+    generateWallet(mode);
+    count++;
+  }
+  const elapsed = (performance.now() - start) / 1000;
+  const keysPerSec = Math.max(1, count / elapsed);
+  benchCache.set(mode, keysPerSec);
+  return keysPerSec;
+}
+
+function workerCount() {
+  const cores = navigator.hardwareConcurrency || 4;
+  return Math.max(1, Math.min(cores - 1, 6));
+}
+
+function formatDuration(seconds) {
+  if (seconds < 1) return "<1s";
+  if (seconds < 60) return `~${Math.ceil(seconds)}s`;
+  if (seconds < 3600) return `~${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `~${Math.round(seconds / 3600)}h`;
+  if (seconds < 86400 * 365) return `~${Math.round(seconds / 86400)}d`;
+  return "an unreasonable amount of time (years+)";
+}
+
+// ---------- live validation + difficulty estimate ----------
+
+function updateDifficulty() {
+  const raw = targetInput.value;
+  const { clean, invalidChars } = validateTarget(raw);
+  if (invalidChars.length > 0) {
+    validationMsg.style.display = "block";
+    validationMsg.textContent =
+      `${invalidChars.map(c => `"${c}"`).join(", ")} ${invalidChars.length === 1 ? "isn't a valid character" : "aren't valid characters"} — ` +
+      `gno.land addresses use bech32, whose alphabet excludes 1, b, i, o. Allowed: ${ADDRESS_CHARSET}`;
+  } else {
+    validationMsg.style.display = "none";
+  }
+
+  const target = clean;
+  const position = positionSelect.value;
+  const mode = currentMode();
+  const count = targetCount();
+
+  if (!target) {
+    difficultyMsg.textContent = count > 1
+      ? `No target set — Start will generate ${count} wallets immediately.`
+      : "No target set — Start will generate a single wallet immediately.";
+    difficultyMsg.className = "difficulty tier-fast";
+    confirmRow.style.display = "none";
+    return { target, position, mode, count, tier: "fast" };
+  }
+
+  const attemptsPerMatch = estimateAttempts(target.length, position);
+  const attempts = attemptsPerMatch * count;
+  const speed = benchmark(mode) * workerCount();
+  const eta = attempts / speed;
+
+  let tier;
+  if (eta <= FAST_SECONDS) tier = "fast";
+  else if (eta <= LONG_SECONDS) tier = "moderate";
+  else tier = "long";
+
+  difficultyMsg.className = `difficulty tier-${tier}`;
+  const forSuffix = count > 1 ? ` for ${count} matches` : "";
+  difficultyMsg.textContent =
+    `~${Math.round(attempts).toLocaleString()} attempts expected${forSuffix}, ` +
+    `~${speed.toLocaleString(undefined, { maximumFractionDigits: 0 })} keys/sec across ${workerCount()} workers → ${formatDuration(eta)}.`;
+
+  confirmRow.style.display = tier === "long" ? "flex" : "none";
+  if (tier !== "long") confirmLong.checked = false;
+
+  return { target, position, mode, count, tier };
+}
+
+targetInput.addEventListener("input", updateDifficulty);
+positionSelect.addEventListener("change", updateDifficulty);
+countInput.addEventListener("input", updateDifficulty);
+document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", () => {
+  modeNote.textContent = MODE_NOTES[currentMode()];
+  updateDifficulty();
+}));
+modeNote.textContent = MODE_NOTES[currentMode()];
+updateDifficulty();
+
+// ---------- search orchestration ----------
+
+let workers = [];
+let searchStartTime = 0;
+let totalAttempts = 0;
+let foundCount = 0;
+let wantedCount = 1;
+let searchDone = false;
+let timerHandle = null;
+
+function stopWorkers() {
+  workers.forEach(w => { try { w.postMessage({ type: "stop" }); } catch {} });
+  setTimeout(() => { workers.forEach(w => w.terminate()); workers = []; }, 300);
+}
+
+function formatElapsed(seconds) {
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function startTimer() {
+  elapsedTimer.textContent = "0:00";
+  timerHandle = setInterval(() => {
+    elapsedTimer.textContent = formatElapsed((performance.now() - searchStartTime) / 1000);
+  }, 250);
+}
+
+function stopTimer() {
+  if (timerHandle) clearInterval(timerHandle);
+  timerHandle = null;
+}
+
+function setSearching(on) {
+  startBtn.style.display = on ? "none" : "inline-block";
+  cancelBtn.style.display = on ? "inline-block" : "none";
+  searchProgress.style.display = on ? "flex" : "none";
+  targetInput.disabled = on;
+  positionSelect.disabled = on;
+  countInput.disabled = on;
+  document.querySelectorAll('input[name="mode"]').forEach(r => r.disabled = on);
+  if (on) startTimer(); else stopTimer();
+}
+
+function startSearch() {
+  const { target, position, mode, count, tier } = updateDifficulty();
+
+  if (target && tier === "long" && !confirmLong.checked) {
+    confirmRow.style.display = "flex";
+    confirmRow.classList.remove("shake");
+    void confirmRow.offsetWidth;
+    confirmRow.classList.add("shake");
+    searchStatus.textContent = "Check the box above to confirm before starting — this search may take a while.";
+    confirmLong.focus();
+    return;
+  }
+
+  if (!target && count <= 1) {
+    addWallet({ ...generateWallet(mode), mode, target, position });
+    return;
+  }
+
+  setSearching(true);
+  totalAttempts = 0;
+  foundCount = 0;
+  wantedCount = count;
+  searchDone = false;
+  searchStartTime = performance.now();
+  foundStatus.textContent = `Found 0 of ${wantedCount}`;
+  searchStatus.textContent = "Starting workers…";
+
+  const n = workerCount();
+  workers = Array.from({ length: n }, () => new Worker("./lib/vanity-worker.js", { type: "module" }));
+
+  workers.forEach(w => {
+    w.onmessage = (e) => {
+      if (searchDone) return;
+      const msg = e.data;
+      if (msg.type === "progress") {
+        totalAttempts += msg.attempts;
+        searchStatus.textContent = `${totalAttempts.toLocaleString()} attempts so far…`;
+      } else if (msg.type === "match") {
+        totalAttempts += msg.attempts;
+        foundCount++;
+        addWallet({ ...msg.wallet, mode, target, position });
+        foundStatus.textContent = `Found ${foundCount} of ${wantedCount}`;
+        if (foundCount >= wantedCount) {
+          searchDone = true;
+          searchStatus.textContent = `Done — found ${foundCount} after ~${totalAttempts.toLocaleString()} attempts.`;
+          stopWorkers();
+          setSearching(false);
+        }
+      }
+    };
+    w.postMessage({ type: "start", mode, target, position });
+  });
+}
+
+startBtn.addEventListener("click", startSearch);
+cancelBtn.addEventListener("click", () => {
+  searchDone = true;
+  stopWorkers();
+  setSearching(false);
+  searchStatus.textContent = `Stopped — found ${foundCount} of ${wantedCount} before cancelling.`;
+});
+
+// ---------- persistence ----------
+
+function loadWallets() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveWallets(list) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+function addWallet(wallet) {
+  const list = loadWallets();
+  list.push({
+    address: wallet.address,
+    secretType: wallet.secretType,
+    secret: wallet.secret,
+    mode: wallet.mode,
+    target: wallet.target || null,
+    position: wallet.target ? wallet.position : null,
+    createdAt: Date.now(),
+  });
+  saveWallets(list);
+  renderWallets();
+}
+
+function deleteWallet(index) {
+  const list = loadWallets();
+  list.splice(index, 1);
+  saveWallets(list);
+  renderWallets();
+}
+
+async function copyText(text, btn) {
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied!";
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+  setTimeout(() => { btn.textContent = original; }, 1200);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function renderWallets() {
+  const list = loadWallets();
+  listStatus.textContent = `${list.length} wallet${list.length === 1 ? "" : "s"} stored in this browser.`;
+
+  if (list.length === 0) {
+    walletListEl.innerHTML = '<p class="empty">Nothing generated yet.</p>';
+    return;
+  }
+
+  walletListEl.innerHTML = "";
+  list.slice().reverse().forEach((w, revIdx) => {
+    const idx = list.length - 1 - revIdx;
+    const row = document.createElement("div");
+    row.className = "wallet-row";
+
+    const when = new Date(w.createdAt).toLocaleString();
+    const targetNote = w.target ? ` — matched "${escapeHtml(w.target)}" (${w.position})` : "";
+    const secretLabel = w.secretType === "mnemonic" ? `${w.mode}-word mnemonic` : "raw key";
+
+    row.innerHTML = `
+      <div class="addr">${escapeHtml(w.address)}</div>
+      <div class="meta">${escapeHtml(secretLabel)} · ${escapeHtml(when)}${targetNote}</div>
+      <div class="secret-line">
+        <span class="secret-value masked" data-secret="${escapeHtml(w.secret)}">${"•".repeat(Math.min(40, w.secret.length))}</span>
+      </div>
+      <div class="actions">
+        <button class="ghost small reveal-btn">Reveal</button>
+        <button class="ghost small copy-addr-btn">Copy address</button>
+        <button class="ghost small copy-secret-btn">Copy secret</button>
+        <button class="danger small delete-btn">Delete</button>
+      </div>
+    `;
+
+    const secretEl = row.querySelector(".secret-value");
+    row.querySelector(".reveal-btn").addEventListener("click", (e) => {
+      const revealed = secretEl.classList.toggle("masked") === false;
+      secretEl.textContent = revealed ? w.secret : "•".repeat(Math.min(40, w.secret.length));
+      e.target.textContent = revealed ? "Hide" : "Reveal";
+    });
+    row.querySelector(".copy-addr-btn").addEventListener("click", (e) => copyText(w.address, e.target));
+    row.querySelector(".copy-secret-btn").addEventListener("click", (e) => copyText(w.secret, e.target));
+    row.querySelector(".delete-btn").addEventListener("click", () => {
+      if (confirm("Delete this wallet from local storage? This can't be undone.")) deleteWallet(idx);
+    });
+
+    walletListEl.appendChild(row);
+  });
+}
+
+// ---------- CSV export ----------
+
+function csvField(value) {
+  const s = String(value ?? "");
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function walletsToCsv(list) {
+  const header = ["address", "secret_type", "secret", "mode", "vanity_target", "vanity_position", "created_at"];
+  const lines = [header.join(",")];
+  for (const w of list) {
+    lines.push([
+      csvField(w.address),
+      csvField(w.secretType),
+      csvField(w.secret),
+      csvField(w.mode),
+      csvField(w.target || ""),
+      csvField(w.position || ""),
+      csvField(new Date(w.createdAt).toISOString()),
+    ].join(","));
+  }
+  return lines.join("\r\n");
+}
+
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  const list = loadWallets();
+  if (list.length === 0) return;
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  downloadTextFile(`gno-vanity-wallets-${stamp}.csv`, walletsToCsv(list), "text/csv");
+});
+
+document.getElementById("clearAllBtn").addEventListener("click", () => {
+  if (loadWallets().length === 0) return;
+  if (confirm("Delete ALL wallets stored in this browser? This can't be undone.")) {
+    saveWallets([]);
+    renderWallets();
+  }
+});
+
+renderWallets();
+</script>
+</body>
+</html>

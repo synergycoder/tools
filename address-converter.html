@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Address Converter — gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<style>
+  :root{ color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:
+      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
+      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5; font-size:15px;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:980px; margin:0 auto; padding:0 20px 60px}
+  code,.mono{font-family:var(--mono)}
+
+  .page-title{padding:26px 0 4px}
+  .mark{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    border:1px solid var(--accent-line); background:var(--accent-soft);
+    padding:3px 8px; border-radius:6px; letter-spacing:.06em;
+  }
+  h1{font-size:22px; margin:8px 0 4px}
+  h2{font-size:15px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13.5px; margin:0; max-width:65ch}
+  .section-hint{color:var(--faint); font-size:12.5px; margin:0 0 14px}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--hair); border-radius:14px;
+    padding:18px 20px; margin:20px 0;
+  }
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
+  .field-label{color:var(--faint); font-size:12.5px; min-width:9rem}
+
+  input[type=text]{
+    flex:1; min-width:0; font-family:var(--mono); font-size:13px; padding:9px 11px;
+    border-radius:9px; border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  input[type=text]:read-only{color:var(--muted)}
+  textarea{
+    width:100%; box-sizing:border-box; min-height:9rem; padding:10px 12px;
+    border-radius:9px; border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+    font-family:var(--mono); font-size:12.5px; resize:vertical;
+  }
+  select{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  button{
+    font-family:var(--sans); font-weight:600; font-size:13.5px; padding:10px 18px;
+    border-radius:9px; border:1px solid var(--accent-line);
+    background:var(--accent-soft); color:var(--accent); cursor:pointer;
+  }
+  button:hover{background:var(--accent-line)}
+  button:disabled{opacity:.5; cursor:default}
+  button.ghost{background:transparent; color:var(--muted); border-color:var(--hair2)}
+  button.ghost:hover{color:var(--ink); border-color:var(--accent-line); background:transparent}
+  button.small{padding:6px 12px; font-size:12px}
+
+  .note{
+    border-left:3px solid var(--amber); background:var(--amber-soft); border-radius:0 10px 10px 0;
+    padding:12px 15px; font-size:13px; color:var(--ink); margin:14px 0;
+  }
+  .note strong{display:block; margin-bottom:4px; color:var(--amber)}
+  .validation-error{color:var(--bad); font-size:12.5px; margin:4px 0}
+  .status{font-size:13px; color:var(--muted)}
+
+  .tabs{display:flex; gap:4px; margin:20px 0 0; border-bottom:1px solid var(--hair); flex-wrap:wrap}
+  .tabs button{
+    background:none; border:none; border-bottom:2px solid transparent; color:var(--muted);
+    font-family:var(--sans); font-weight:600; font-size:13.5px; padding:10px 14px; cursor:pointer; margin-bottom:-1px;
+  }
+  .tabs button.on{color:var(--ink); border-bottom-color:var(--accent)}
+  .tabs button:hover{color:var(--ink)}
+  section.tabpanel{display:none}
+  section.tabpanel.on{display:block}
+
+  .decode-card{background:var(--panel2); border:1px solid var(--hair2); border-radius:10px; padding:14px 16px; margin:14px 0; font-size:13px}
+  .decode-card dl{margin:0; display:grid; grid-template-columns:auto 1fr; gap:6px 14px}
+  .decode-card dt{color:var(--faint); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em}
+  .decode-card dd{margin:0; font-family:var(--mono); word-break:break-all; color:var(--ink)}
+
+  .result-card{background:var(--panel2); border:1px solid var(--accent-line); border-radius:10px; padding:14px 16px; margin:14px 0}
+  .result-card .label{color:var(--faint); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px}
+
+  .table-wrap{max-height:24rem; overflow:auto; border:1px solid var(--hair); border-radius:10px; margin-top:10px}
+  table{width:100%; border-collapse:collapse; font-size:12.5px}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--hair)}
+  th{color:var(--faint); font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; position:sticky; top:0; background:var(--panel2)}
+  td.addr{font-family:var(--mono); word-break:break-all}
+  tr.row-invalid td{color:var(--bad)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="page-title">
+  <span class="mark">⇄ CONVERT</span>
+  <h1>Address Converter</h1>
+  <p class="sub">Re-encode an address's raw bytes under a different bech32 prefix — e.g. see what a gno.land <code>g1...</code> address looks like as a <code>cosmos1...</code>, <code>osmo1...</code>, or any other chain's prefix. Runs entirely in your browser, no network calls for the conversion itself — only the chain list below is fetched live.</p>
+</div>
+
+<div class="note">
+  <strong>This only works between chains that derive addresses the same way</strong>
+  A Cosmos SDK address (gno.land included) is a 20-byte hash bech32-encoded with a chain-specific prefix — converting just swaps that prefix and re-encodes the same bytes. That's correct <em>only</em> if the target chain derives its addresses the same way (secp256k1 keys, <code>RIPEMD160(SHA256(pubkey))</code>, plain bech32) — true for most Cosmos SDK chains, but <b>not all</b> — a few (e.g. some EVM-compatible chains) use a different scheme entirely, and this tool has no way to tell the difference. Verify independently before sending anything to a converted address.
+</div>
+
+<div class="panel">
+  <div class="row" style="margin:0">
+    <span class="field-label">Convert to chain</span>
+    <select id="targetChainSelect"></select>
+    <span class="status" id="registryStatus"></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button data-tab="single" class="on">Single address</button>
+  <button data-tab="batch">Batch list</button>
+</div>
+
+<section class="tabpanel on" id="tab-single">
+  <div class="panel">
+    <div class="row" style="margin:0">
+      <span class="field-label">Address to convert</span>
+      <input type="text" id="sourceInput" placeholder="g1... or any bech32 address" autocomplete="off" spellcheck="false">
+    </div>
+    <p class="validation-error" id="sourceError" style="display:none"></p>
+
+    <div class="decode-card" id="decodeCard" style="display:none">
+      <dl>
+        <dt>Detected prefix</dt><dd id="decodedPrefix"></dd>
+        <dt>Encoding</dt><dd id="decodedVariant"></dd>
+        <dt>Raw bytes (hex)</dt><dd id="decodedHex"></dd>
+      </dl>
+    </div>
+
+    <div class="result-card" id="resultCard" style="display:none">
+      <p class="label">Converted address</p>
+      <div class="row" style="margin:0">
+        <input type="text" id="resultOutput" readonly>
+        <button class="ghost small" id="copyBtn" type="button">Copy</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="tabpanel" id="tab-batch">
+  <div class="panel">
+    <h2>Convert a list of addresses</h2>
+    <p class="section-hint">Paste addresses, one per line — mixed chains are fine, each line's own source prefix is detected automatically. Everything below converts to the one target chain picked above.</p>
+    <textarea id="batchInput" placeholder="cosmos1...&#10;osmo1...&#10;g1...&#10;juno1..."></textarea>
+    <div class="row">
+      <button id="batchConvertBtn">Convert all</button>
+      <button class="ghost" id="batchCsvBtn" disabled>Download CSV</button>
+      <span class="status" id="batchSummary"></span>
+    </div>
+    <div class="table-wrap" id="batchTableWrap" style="display:none">
+      <table>
+        <thead><tr><th>Original</th><th>Detected chain</th><th>Converted</th><th>Status</th></tr></thead>
+        <tbody id="batchTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script type="module">
+import { initSiteChrome } from "./lib/site-chrome.js";
+initSiteChrome();
+</script>
+<script type="module">
+import { decodeBech32, encodeBech32, bytesToHex } from "./lib/bech32-convert.js";
+import { fetchChainRegistry } from "./lib/cosmos-registry.js";
+import { toCsv, downloadCsv } from "./lib/csv.js";
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// ---------- tabs ----------
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.remove("on"));
+  document.querySelectorAll("section.tabpanel").forEach(x => x.classList.remove("on"));
+  b.classList.add("on");
+  document.getElementById(`tab-${b.dataset.tab}`).classList.add("on");
+}));
+
+// ---------- target chain dropdown — gno.land always present, the rest
+// live from cosmos.directory's chain registry (~200 active Cosmos SDK
+// chains, refreshed on every page load). gno.land isn't itself a Cosmos
+// SDK chain in that registry, so it's added unconditionally rather than
+// hoping it shows up. ----------
+
+const GNO_CHAIN = { prefix: "g", label: "gno.land (g)" };
+const targetChainSelect = document.getElementById("targetChainSelect");
+const registryStatus = document.getElementById("registryStatus");
+let chainByPrefix = new Map([[GNO_CHAIN.prefix, GNO_CHAIN]]);
+
+function addOption(select, chain) {
+  const opt = document.createElement("option");
+  opt.value = chain.prefix;
+  opt.textContent = chain.label;
+  select.appendChild(opt);
+}
+
+async function loadChains() {
+  addOption(targetChainSelect, GNO_CHAIN);
+  registryStatus.textContent = "Loading live Cosmos chain registry…";
+  try {
+    const chains = await fetchChainRegistry();
+    const seenPrefixes = new Set([GNO_CHAIN.prefix]);
+    const sorted = chains
+      .filter(c => c.prefix && !seenPrefixes.has(c.prefix) && seenPrefixes.add(c.prefix))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    for (const c of sorted) {
+      const entry = { prefix: c.prefix, label: `${c.label} (${c.prefix})` };
+      chainByPrefix.set(c.prefix, entry);
+      addOption(targetChainSelect, entry);
+    }
+    registryStatus.textContent = `${sorted.length + 1} chains (live registry + gno.land).`;
+  } catch (err) {
+    registryStatus.textContent = `Couldn't load the live chain registry (${err.message}) — gno.land is still available; type any other prefix isn't possible right now, reload to retry.`;
+  }
+}
+loadChains();
+
+function targetPrefix() {
+  return targetChainSelect.value;
+}
+targetChainSelect.addEventListener("change", () => { updateResult(); });
+
+// ---------- single-address mode ----------
+
+const sourceInput = document.getElementById("sourceInput");
+const sourceError = document.getElementById("sourceError");
+const decodeCard = document.getElementById("decodeCard");
+const decodedPrefix = document.getElementById("decodedPrefix");
+const decodedVariant = document.getElementById("decodedVariant");
+const decodedHex = document.getElementById("decodedHex");
+const resultCard = document.getElementById("resultCard");
+const resultOutput = document.getElementById("resultOutput");
+const copyBtn = document.getElementById("copyBtn");
+
+let decoded = null;
+
+function updateDecode() {
+  const raw = sourceInput.value.trim();
+  decoded = null;
+  decodeCard.style.display = "none";
+  sourceError.style.display = "none";
+
+  if (!raw) { updateResult(); return; }
+
+  try {
+    decoded = decodeBech32(raw);
+    decodeCard.style.display = "block";
+    decodedPrefix.textContent = decoded.prefix;
+    decodedVariant.textContent = decoded.variant;
+    decodedHex.textContent = bytesToHex(decoded.bytes);
+  } catch (err) {
+    sourceError.style.display = "block";
+    sourceError.textContent = `Couldn't decode this as bech32: ${err.message}`;
+  }
+  updateResult();
+}
+
+function updateResult() {
+  resultCard.style.display = "none";
+  if (!decoded) return;
+  try {
+    resultOutput.value = encodeBech32(targetPrefix(), decoded.bytes, decoded.variant);
+    resultCard.style.display = "block";
+  } catch (err) {
+    resultCard.style.display = "none";
+  }
+}
+
+sourceInput.addEventListener("input", updateDecode);
+
+copyBtn.addEventListener("click", async () => {
+  const original = copyBtn.textContent;
+  try {
+    await navigator.clipboard.writeText(resultOutput.value);
+    copyBtn.textContent = "Copied!";
+  } catch {
+    copyBtn.textContent = "Copy failed";
+  }
+  setTimeout(() => { copyBtn.textContent = original; }, 1200);
+});
+
+// ---------- batch mode ----------
+
+const batchInput = document.getElementById("batchInput");
+const batchConvertBtn = document.getElementById("batchConvertBtn");
+const batchCsvBtn = document.getElementById("batchCsvBtn");
+const batchSummary = document.getElementById("batchSummary");
+const batchTableWrap = document.getElementById("batchTableWrap");
+const batchTableBody = document.getElementById("batchTableBody");
+
+let batchResults = []; // { original, detectedChain, converted, ok, error }
+
+function convertBatch() {
+  const lines = batchInput.value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const target = targetPrefix();
+  batchResults = lines.map(original => {
+    try {
+      const { prefix, bytes, variant } = decodeBech32(original);
+      const detectedChain = chainByPrefix.get(prefix)?.label || prefix;
+      const converted = encodeBech32(target, bytes, variant);
+      return { original, detectedChain, converted, ok: true, error: null };
+    } catch (err) {
+      return { original, detectedChain: "—", converted: "", ok: false, error: err.message };
+    }
+  });
+  renderBatchTable();
+}
+
+function renderBatchTable() {
+  const okCount = batchResults.filter(r => r.ok).length;
+  const badCount = batchResults.length - okCount;
+  batchSummary.textContent = batchResults.length
+    ? `${okCount} converted${badCount ? `, ${badCount} couldn't be decoded` : ""}.`
+    : "";
+  batchTableWrap.style.display = batchResults.length ? "block" : "none";
+  batchCsvBtn.disabled = okCount === 0;
+  batchTableBody.innerHTML = batchResults.map(r => `
+    <tr class="${r.ok ? "" : "row-invalid"}">
+      <td class="addr">${escapeHtml(r.original)}</td>
+      <td>${escapeHtml(r.detectedChain)}</td>
+      <td class="addr">${r.ok ? escapeHtml(r.converted) : "—"}</td>
+      <td>${r.ok ? "ok" : escapeHtml(r.error)}</td>
+    </tr>
+  `).join("");
+}
+
+batchConvertBtn.addEventListener("click", convertBatch);
+
+batchCsvBtn.addEventListener("click", () => {
+  const rows = batchResults.filter(r => r.ok).map(r => [r.original, r.converted]);
+  if (!rows.length) return;
+  const targetChain = chainByPrefix.get(targetPrefix())?.label || targetPrefix();
+  const csv = toCsv(["original_address", `converted_address (${targetChain})`], rows);
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  downloadCsv(`gno-tools-address-conversion-${stamp}.csv`, csv);
+});
+</script>
+</body>
+</html>

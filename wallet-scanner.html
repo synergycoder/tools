@@ -306,9 +306,15 @@ async function scanNfts(net, netKey) {
       // emit Mint/Transfer/Burn with a tokenId attribute — OwnerOf(id) is
       // part of the standard GRC721 surface and reads live ownership
       // directly, so it finds tokens the event scrape can miss entirely.
+      // Progress text (not a static spinner) so a scan across dozens of
+      // ids doesn't read as a frozen/looping page.
       card.innerHTML = `<span class="unlisted"><span class="spinner"></span>Looking up token IDs…</span>`;
       try {
-        tokenIds = await bruteForceOwnedTokenIds(net, r.path, wallet.address, r.count);
+        tokenIds = await bruteForceOwnedTokenIds(net, r.path, wallet.address, r.count, {
+          onProgress: (checked, total) => {
+            card.innerHTML = `<span class="unlisted"><span class="spinner"></span>Looking up token IDs… (${checked}/${total})</span>`;
+          },
+        });
       } catch {}
     }
     if (!tokenIds.length) {

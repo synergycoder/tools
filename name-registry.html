@@ -5,44 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>gno.land Name Registry — query · names · history · register</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<!-- Applies a stored light/dark choice before first paint, so reloading
+     with an explicit preference never flashes the other theme. A "system"
+     preference (no stored choice) needs no JS — it's handled by a plain
+     @media query in lib/site-chrome.js's injected stylesheet. -->
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <!-- Required for Adena to inject window.adena on an otherwise-inline-only page. Do not remove. -->
 <script src="adena-compat.js"></script>
 <script type="module">
   import { initSiteChrome } from "./lib/site-chrome.js";
-  initSiteChrome();
-
-  // This tool's own "which network to read/write" control — genuinely
-  // different from the wallet pill's network badge (that's just a
-  // read-out of whatever chain your wallet happens to be on), so it lives
-  // in the header's tool-controls slot rather than duplicating the
-  // wallet's display or living in its own separate row on the page.
-  const slot = document.getElementById("gtToolControls");
-  if (slot) {
-    slot.innerHTML = `
-      <button class="gt-net-btn gt-on" data-net="sapphire">Sapphire testnet</button>
-      <button class="gt-net-btn" data-net="betanet">Mainnet-beta</button>
-    `;
-    slot.querySelectorAll(".gt-net-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        slot.querySelectorAll(".gt-net-btn").forEach((b) => b.classList.remove("gt-on"));
-        btn.classList.add("gt-on");
-        window.dispatchEvent(new CustomEvent("regpage:network", { detail: btn.dataset.net }));
-      });
-    });
-  }
+  // This tool's own "which network to read/write" options, rendered
+  // inside the shared wallet bubble's dropdown — one control for
+  // connect + network instead of a separate row duplicating it.
+  initSiteChrome({
+    networkOptions: [
+      { key: "sapphire", chainId: "sapphire-1", label: "Sapphire testnet" },
+      { key: "betanet", chainId: "gnoland1", label: "Mainnet-beta" },
+    ],
+  });
 </script>
 <style>
-  :root{
-    /* Same palette as the shared header + wallet-scanner.html, so
-       navigating between tools doesn't jump between clashing color
-       schemes — only layout/structure varies per tool, not color. */
-    --bg:#070c14; --panel:#0e1826; --panel2:#101b2c; --ink:#e7edf7; --muted:#8fa2bd;
-    --faint:#5b6f8c; --hair:#1c2c4280; --hair2:#25395580;
-    --accent:#5ee6c8; --accent-soft:#5ee6c81a; --accent-line:#5ee6c855;
-    --warn:#f0b357; --warn-soft:#f0b3571a; --bad:#f0687a;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  }
+  /* Palette (--bg, --panel, --accent, --warn, --mono, --sans, etc.) is
+     defined once, globally, by lib/site-chrome.js's injected stylesheet
+     — same tokens across every gno.tools page, light/dark/system aware. */
+  :root{ color-scheme: light dark; }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
   a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
@@ -133,7 +119,7 @@
     <button data-tab="names">Names</button>
     <button data-tab="history">History</button>
     <button data-tab="register">Register</button>
-    <button data-tab="profile">Profile</button>
+    <button data-tab="profile">My Profile</button>
   </div>
 
   <!-- QUERY -->
@@ -176,8 +162,15 @@
 
   <!-- PROFILE -->
   <section class="panel" id="tab-profile">
-    <h2>Edit profile</h2>
+    <h2>My Profile</h2>
     <div id="p-body"></div>
+    <div class="sect">
+      <div class="h">Look up someone else's profile</div>
+      <div class="row">
+        <input type="text" id="op-input" placeholder="nym-alice123  or  g1…" autocomplete="off" spellcheck="false" />
+        <button class="act ghost" id="op-lookup">View profile</button>
+      </div>
+    </div>
   </section>
 
   <div class="reg-footer">
@@ -475,18 +468,38 @@ const RESERVED_PREFIX=["gno","gl","atom","atone","photon","cosmos"];
 // window.gnoToolsWallet on every change (see lib/site-chrome.js).
 function walletState(){return window.gnoToolsWallet||{status:"idle"};}
 
-// Shown instead of a form whenever the connected wallet can't actually
-// submit right now — either not connected, or connected to a different
-// chain than the one this page is currently reading/writing.
-function walletGateHTML(w){
+// Only blocks the form on "no wallet at all" — reading/browsing (and even
+// filling out the form) never needs the wallet's own chain to match the
+// page's selected network, only *signing* does. Gating the whole tab on a
+// chain match was the actual bug behind "I'm on the Profile tab, it says
+// I'm connected to sapphire-1 — which is exactly what I picked — so why
+// is this blocked?": a stale mismatch could show even when things lined
+// up, and even a real mismatch shouldn't hide a profile you're just
+// trying to look at.
+function connectGateHTML(w){
   if(w.status!=="connected"){
     return '<div class="note info">Connect your wallet at the top right to continue.</div>';
   }
-  if(w.chainId!==NET.chainId){
-    return '<div class="note">Your connected wallet is on <code>'+esc(w.chainId)+'</code>. Switch it to <b>'+esc(NET.chainId)+'</b> to continue — '+
-      '<button class="act ghost" id="switch-net-btn" style="margin-top:8px">Switch network</button></div>';
-  }
   return null;
+}
+// Non-blocking heads-up shown alongside the form when the wallet's chain
+// doesn't match — browsing/editing still works, only the final signed
+// submit needs them aligned (enforced separately, right before signing).
+function mismatchNoticeHTML(w){
+  if(!w.chainId||w.chainId===NET.chainId)return "";
+  return '<div class="note" style="margin-bottom:14px">Your wallet is connected to <code>'+esc(w.chainId)+'</code>, you\'re viewing <b>'+esc(NET.chainId)+'</b> — browsing is fine, but saving needs them to match. '+
+    '<button class="act ghost" id="switch-net-btn" style="margin-left:6px">Switch wallet to '+esc(NET.chainId)+'</button></div>';
+}
+// Called right before signing anything — the one place a chain mismatch
+// actually has to block, since Adena would otherwise sign for whatever
+// chain it's currently on regardless of which one this page is showing.
+function requireMatchingChain(msg){
+  const w=walletState();
+  if(w.chainId!==NET.chainId){
+    msg.innerHTML='<div class="err">✕ Your wallet is on <code>'+esc(w.chainId)+'</code> — switch it to <b>'+esc(NET.chainId)+'</b> first (see the note above).</div>';
+    return false;
+  }
+  return true;
 }
 function wireSwitchNetworkButton(){
   const btn=document.getElementById("switch-net-btn");
@@ -509,15 +522,15 @@ function renderRegister(){
     return;
   }
   const w=walletState();
-  const gate=walletGateHTML(w);
+  const gate=connectGateHTML(w);
   const hint='<p class="hint">Register a name for <b>your own wallet</b> on '+esc(NET.chainId)+' — a lowercase word 5 to 13 letters long, prefixed with <code>nym-</code> and followed by 3 digits (for example <code>nym-alice123</code>). Signed by Adena — one name per address.</p>';
   if(gate){
     body.innerHTML=hint+gate;
-    wireSwitchNetworkButton();
     return;
   }
   walletAddr=w.address;
-  body.innerHTML=hint+'<div id="r-form" style="margin-top:18px"></div><div id="r-msg" style="margin-top:14px"></div>';
+  body.innerHTML=hint+mismatchNoticeHTML(w)+'<div id="r-form" style="margin-top:18px"></div><div id="r-msg" style="margin-top:14px"></div>';
+  wireSwitchNetworkButton();
   showRegisterForm();
 }
 async function showRegisterForm(){
@@ -552,7 +565,9 @@ async function showRegisterForm(){
   document.getElementById("r-submit").onclick=()=>doRegister(name(),submit,msg);
 }
 async function doRegister(n,submit,msg){
-  if(!NYM_RE.test(n))return;submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Registering…';
+  if(!NYM_RE.test(n))return;
+  if(!requireMatchingChain(msg))return;
+  submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Registering…';
   msg.innerHTML="";
   try{
     await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:""});
@@ -606,17 +621,19 @@ let profileLoaded={};
 function renderProfile(){
   const body=document.getElementById("p-body");
   const w=walletState();
-  const gate=walletGateHTML(w);
+  const gate=connectGateHTML(w);
   const hint='<p class="hint">Your on-chain profile lives in <code>r/demo/profile</code>, keyed to your <b>wallet address</b> (separate from the name registry — the native system splits them). All fields are optional; changed fields batch into a single Adena signature. Saved values appear in a name\'s detail view.</p>';
   if(gate){
     body.innerHTML=hint+gate;
-    wireSwitchNetworkButton();
     return;
   }
   walletAddr=w.address;
-  body.innerHTML=hint+'<div id="p-form" style="margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
+  body.innerHTML=hint+mismatchNoticeHTML(w)+'<div id="p-form" style="margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
+  wireSwitchNetworkButton();
   loadProfileForm();
 }
+document.getElementById("op-lookup").onclick=()=>{const v=document.getElementById("op-input").value.trim();if(v)openDetail(v);};
+document.getElementById("op-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
 async function loadProfileForm(){
   const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
   form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
@@ -647,6 +664,7 @@ async function saveProfile(){
     if(v!==(profileLoaded[f.key]||""))msgs.push({type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:PROFILE,func:"SetStringField",args:[f.key,v]}});
   });
   if(!msgs.length){msg.innerHTML='<div class="muted">No changes to save.</div>';return;}
+  if(!requireMatchingChain(msg))return;
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
   try{
     await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:""});
@@ -659,10 +677,12 @@ function setNetInfo(){
   document.getElementById("netinfo").innerHTML='<span><span class="dot">●</span> '+esc(NET.label)+'</span><span>rpc: '+esc(NET.rpc.replace("https://",""))+'</span><span>'+(NET.hasNamereg?"registration: open (nym- tier)":"registration: closed")+'</span>';
   document.getElementById("foot-net").textContent="reading "+NET.chainId+(NET.indexer?" + indexer":"");
 }
-// Network control now lives in the shared header (top right) — see the
-// module <script> at the top of <head>, which dispatches this event.
-window.addEventListener("regpage:network",e=>{
-  NET=NETWORKS[e.detail];walletAddr=null;REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+// Network control now lives inside the shared wallet bubble — see the
+// module <script> at the top of <head>, which dispatches this event
+// (detail is the selected {key,chainId,label} option, or null).
+window.addEventListener("gnotools:activenetwork",e=>{
+  if(!e.detail)return;
+  NET=NETWORKS[e.detail.key];REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
 });
 // Wallet is global too (same header) — re-render whichever tab needs it
 // live, so connecting/switching networks there updates this page with no

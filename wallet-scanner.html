@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wallet Scanner — gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <!-- Works around a real bug in Adena's own extension (a window.adena
      that never gets set on some page-load orderings), not this code —
      must stay an external <script src>, not inlined. -->
@@ -31,18 +33,14 @@
   .wrap{max-width:980px; margin:0 auto; padding:0 20px 60px}
   code,.mono{font-family:var(--mono)}
 
-  header{border-bottom:1px solid var(--hair); padding:22px 0}
-  .brand{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
-  .brand .mark{
+  .page-title{padding:26px 0 4px}
+  .mark{
     font-family:var(--mono); font-size:12px; color:var(--accent);
     border:1px solid var(--accent-line); background:var(--accent-soft);
     padding:3px 8px; border-radius:6px; letter-spacing:.06em;
   }
   h1{font-size:22px; margin:8px 0 4px}
   .sub{color:var(--muted); font-size:13.5px; margin:0; max-width:60ch}
-  nav.site{margin-top:14px; display:flex; gap:14px; font-size:13px}
-  nav.site a{color:var(--faint)}
-  nav.site a.on{color:var(--accent); font-weight:600}
 
   .panel{
     background:var(--panel); border:1px solid var(--hair); border-radius:14px;
@@ -53,21 +51,12 @@
     font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
     border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
   }
-  button.scan{
-    font-family:var(--sans); font-weight:700; font-size:14px; padding:11px 20px;
-    border-radius:10px; border:1px solid var(--accent-line);
-    background:linear-gradient(180deg,var(--accent-soft),transparent);
-    color:var(--accent); cursor:pointer;
-  }
-  button.scan:hover{background:var(--accent-soft)}
-  button.scan:disabled{opacity:.5; cursor:default}
-  button.scan.on{color:var(--bad); border-color:var(--bad-soft)}
-  button.scan.on:hover{background:var(--bad-soft)}
   button.ghost{
     font-family:var(--sans); font-size:13px; padding:9px 14px; border-radius:9px;
     border:1px solid var(--hair2); background:transparent; color:var(--muted); cursor:pointer;
   }
   button.ghost:hover{color:var(--ink); border-color:var(--hair2)}
+  button.ghost:disabled{opacity:.5; cursor:default}
 
   .pulse{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:8px; animation:pulse 1.1s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.35; transform:scale(.85)}50%{opacity:1; transform:scale(1)}}
@@ -75,16 +64,11 @@
   .addrbox{
     font-family:var(--mono); font-size:13px; word-break:break-all;
     background:var(--panel2); border:1px solid var(--hair2); border-radius:9px;
-    padding:10px 13px; margin-top:12px; color:var(--muted);
+    padding:10px 13px; margin-top:0; color:var(--muted);
   }
   .addrbox b{color:var(--ink); font-weight:600}
 
   .note{font-size:13px; color:var(--muted); margin:14px 0}
-  .note.warn{
-    border:1px solid var(--amber-line); background:var(--amber-soft);
-    border-radius:9px; padding:10px 13px; color:var(--ink);
-  }
-  .note.warn b{color:var(--amber)}
 
   h2{font-size:15px; margin:0 0 4px; display:flex; align-items:center; gap:8px}
   h2 .count{font-family:var(--mono); font-size:12px; color:var(--faint); font-weight:400}
@@ -120,28 +104,25 @@
 <body>
 <div class="wrap">
 
-<header>
-  <div class="brand"><span class="mark">◎ SCAN</span><span style="color:var(--faint);font-family:var(--mono);font-size:12px">gno.land · read-only</span></div>
+<div class="page-title">
+  <span class="mark">◎ SCAN</span>
   <h1>Wallet Scanner</h1>
   <p class="sub">Connect Adena and see everything one address holds — native GNOT, every GRC20 token, and every NFT collection this scanner knows about. Read-only: no keys, no signing, nothing leaves your browser except the on-chain queries themselves.</p>
-  <nav class="site"><a href="index.html">Home</a><a href="name-registry.html">Name Registry</a><a class="on" href="wallet-scanner.html">Wallet Scanner</a></nav>
-</header>
+</div>
 
 <div class="panel">
   <div class="row">
     <select id="networkSelect"></select>
-    <button class="scan" id="connectBtn">Connect Adena</button>
     <button class="ghost" id="rescanBtn" style="display:none">Rescan</button>
     <span class="note" id="connectStatus" style="margin:0"></span>
   </div>
-  <div class="note warn" id="noAdenaNote" style="display:none"></div>
-  <div class="addrbox" id="addrBox" style="display:none"></div>
+  <div class="addrbox" id="addrBox" style="display:none; margin-top:12px"></div>
 </div>
 
 <div class="panel">
   <h2>Native &amp; GRC20 tokens <span class="count" id="tokenCount"></span></h2>
   <p class="section-hint">Every fungible token registered on this network, checked for a balance &gt; 0.</p>
-  <p class="empty" id="tokenEmpty">Connect a wallet to scan.</p>
+  <p class="empty" id="tokenEmpty">Connect a wallet (top right) to scan.</p>
   <table id="tokenTable" style="display:none">
     <thead><tr><th>Name</th><th>Symbol</th><th>Balance</th><th>Realm</th></tr></thead>
     <tbody id="tokenBody"></tbody>
@@ -151,7 +132,7 @@
 <div class="panel">
   <h2>NFTs <span class="count" id="nftCount"></span></h2>
   <p class="section-hint">Checked against every NFT-standard collection this scanner currently knows about — see the note below if that list needs a specific collection added.</p>
-  <p class="empty" id="nftEmpty">Connect a wallet to scan.</p>
+  <p class="empty" id="nftEmpty">Connect a wallet (top right) to scan.</p>
   <div class="nft-grid" id="nftGrid"></div>
   <p class="note" id="nftCoverageNote" style="display:none"></p>
 </div>
@@ -160,17 +141,16 @@
 
 <script type="module">
 import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit } from "./lib/gno-rpc.js";
-import { isAvailable, connect, onAccountChange, waitForAdena, markConnected, clearConnected, hasStoredConnection, SILENT_FAILURE_NOTE, INSTALL_URL } from "./lib/adena-connect.js";
 import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata } from "./lib/gno-nft.js";
+import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
 
-const APP_NAME = "gno.tools Wallet Scanner";
+initSiteChrome();
+
 const MAX_THUMBS_PER_COLLECTION = 8;
 
 const networkSelect = document.getElementById("networkSelect");
-const connectBtn = document.getElementById("connectBtn");
 const rescanBtn = document.getElementById("rescanBtn");
 const connectStatus = document.getElementById("connectStatus");
-const noAdenaNote = document.getElementById("noAdenaNote");
 const addrBox = document.getElementById("addrBox");
 const tokenCount = document.getElementById("tokenCount");
 const tokenEmpty = document.getElementById("tokenEmpty");
@@ -204,94 +184,20 @@ async function loadNftRealms() {
 }
 
 let wallet = null;
-let accountChangeRegistered = false;
 
-if (!isAvailable()) {
-  noAdenaNote.style.display = "block";
-  noAdenaNote.innerHTML = `<b>Adena not detected.</b> Install it from <a href="${INSTALL_URL}" target="_blank" rel="noopener">adena.app</a>. ${escapeHtml(SILENT_FAILURE_NOTE)}`;
-  waitForAdena().then((ok) => { if (ok) noAdenaNote.style.display = "none"; });
-}
-
-function isConnectedUi() { return connectBtn.classList.contains("on"); }
-
-networkSelect.addEventListener("change", () => { if (wallet) scan(); });
-
-function applyConnectedUI(w) {
-  wallet = w;
-  noAdenaNote.style.display = "none";
-  addrBox.style.display = "block";
-  addrBox.innerHTML = `<b>Connected:</b> ${escapeHtml(wallet.address)}`;
-  rescanBtn.style.display = "inline-block";
-  connectBtn.textContent = "● Connected";
-  connectBtn.classList.add("on");
-  connectBtn.title = "Click to disconnect";
-
-  if (!accountChangeRegistered) {
-    onAccountChange((address) => {
-      if (!address || !isConnectedUi()) return;
-      wallet = { ...wallet, address };
-      addrBox.innerHTML = `<b>Connected:</b> ${escapeHtml(address)}`;
-      scan();
-    });
-    accountChangeRegistered = true;
-  }
-  markConnected();
-}
-
-function handleDisconnect() {
-  wallet = null;
-  connectBtn.textContent = "Connect Adena";
-  connectBtn.title = "";
-  connectBtn.classList.remove("on");
-  connectStatus.textContent = "Disconnected.";
-  addrBox.style.display = "none";
-  rescanBtn.style.display = "none";
+function resetPanels(message) {
   tokenTable.style.display = "none";
   tokenEmpty.style.display = "block";
-  tokenEmpty.textContent = "Connect a wallet to scan.";
+  tokenEmpty.textContent = message;
   tokenCount.textContent = "";
   nftGrid.innerHTML = "";
   nftEmpty.style.display = "block";
-  nftEmpty.textContent = "Connect a wallet to scan.";
+  nftEmpty.textContent = message;
   nftCount.textContent = "";
   nftCoverageNote.style.display = "none";
-  clearConnected();
 }
 
-async function handleConnect() {
-  connectBtn.disabled = true;
-  connectBtn.classList.remove("on");
-  connectBtn.innerHTML = '<span class="spinner"></span>Connecting…';
-  connectStatus.textContent = "";
-  try {
-    applyConnectedUI(await connect(APP_NAME));
-    await scan();
-  } catch (err) {
-    connectStatus.textContent = "Connect failed: " + err.message;
-    connectBtn.textContent = "Connect Adena";
-    connectBtn.classList.remove("on");
-    clearConnected();
-  } finally {
-    connectBtn.disabled = false;
-  }
-}
-
-async function tryAutoReconnect() {
-  if (!hasStoredConnection()) return;
-  if (!(await waitForAdena())) return;
-  connectBtn.disabled = true;
-  connectBtn.innerHTML = '<span class="spinner"></span>Connecting…';
-  try {
-    applyConnectedUI(await connect(APP_NAME));
-    await scan();
-  } catch {
-    connectBtn.textContent = "Connect Adena";
-    connectBtn.classList.remove("on");
-    clearConnected();
-  } finally {
-    connectBtn.disabled = false;
-  }
-}
+networkSelect.addEventListener("change", () => { if (wallet) scan(); });
 
 async function scanTokens(net) {
   tokenTable.style.display = "none";
@@ -421,12 +327,26 @@ async function scan() {
   }
 }
 
-connectBtn.addEventListener("click", () => { if (isConnectedUi()) handleDisconnect(); else handleConnect(); });
-connectBtn.addEventListener("mouseenter", () => { if (isConnectedUi()) connectBtn.textContent = "Disconnect"; });
-connectBtn.addEventListener("mouseleave", () => { if (isConnectedUi()) connectBtn.textContent = "● Connected"; });
 rescanBtn.addEventListener("click", scan);
 
-loadNftRealms().then(tryAutoReconnect);
+onWalletChange((w) => {
+  if (w.status === "connected") {
+    wallet = { address: w.address };
+    addrBox.style.display = "block";
+    addrBox.innerHTML = `<b>Connected:</b> ${escapeHtml(w.address)}`;
+    rescanBtn.style.display = "inline-block";
+    connectStatus.textContent = "";
+    scan();
+  } else {
+    wallet = null;
+    addrBox.style.display = "none";
+    rescanBtn.style.display = "none";
+    connectStatus.textContent = w.status === "connecting" ? "Connecting…" : "";
+    resetPanels("Connect a wallet (top right) to scan.");
+  }
+});
+
+loadNftRealms();
 </script>
 </body>
 </html>

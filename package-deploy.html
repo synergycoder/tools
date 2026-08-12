@@ -50,6 +50,11 @@
     border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
   .pkg-head .remove-pkg{background:none;border:none;color:var(--faint);cursor:pointer;font-size:16px;padding:2px 6px}
   .pkg-head .remove-pkg:hover{color:#e0596d}
+  .deploy-check{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:99px;white-space:nowrap;flex:none}
+  .deploy-check.checking{color:var(--muted);background:var(--panel2)}
+  .deploy-check.deployed{color:#7fd88f;background:#7fd88f18;border:1px solid #7fd88f40}
+  .deploy-check.pending{color:var(--muted);background:var(--panel2);border:1px solid var(--hair)}
+  .deploy-check.unknown{color:var(--amber);background:var(--amber-soft)}
 
   .file-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--hair)}
   .file-row:last-of-type{border-bottom:none}
@@ -102,10 +107,46 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
+import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 let packages = []; // [{pkgpath, deposit, files: [{name, body}]}]
 let preset = null;
+
+// Reported back with "Already deployed" instead of leaving someone to
+// guess after a page refresh loses the in-memory deploy results --
+// vm/qfile on an existing package returns its file listing; on a path
+// that doesn't exist yet, abciQuery's own null-on-error return tells us so.
+async function checkDeployed(pkgpath) {
+  try {
+    const result = await abciQuery(NETWORKS.testnet, "vm/qfile", pkgpath, 8000);
+    return result !== null && result !== "";
+  } catch {
+    return null; // network/RPC hiccup -- distinct from a confirmed "not deployed"
+  }
+}
+
+function renderDeployBadge(pi, state) {
+  const el = document.querySelector(`.deploy-check[data-pi="${pi}"]`);
+  if (!el) return;
+  if (state === "checking") { el.textContent = "checking…"; el.className = "deploy-check checking"; }
+  else if (state === "deployed") { el.textContent = "✓ already deployed"; el.className = "deploy-check deployed"; }
+  else if (state === "not-deployed") { el.textContent = "not yet deployed"; el.className = "deploy-check pending"; }
+  else { el.textContent = "status unknown (RPC error)"; el.className = "deploy-check unknown"; }
+  const btn = document.querySelector(`.deploy-btn[data-pi="${pi}"]`);
+  if (btn) {
+    btn.disabled = state === "deployed";
+    btn.textContent = state === "deployed" ? `Package ${+pi + 1} already deployed` : `Deploy package ${+pi + 1}`;
+  }
+}
+
+async function checkAllDeployed() {
+  packages.forEach((_, pi) => renderDeployBadge(pi, "checking"));
+  await Promise.all(packages.map(async (pkg, pi) => {
+    const deployed = await checkDeployed(pkg.pkgpath);
+    renderDeployBadge(pi, deployed === null ? "unknown" : deployed ? "deployed" : "not-deployed");
+  }));
+}
 
 function renderWalletGate() {
   const w = getWallet();
@@ -150,6 +191,7 @@ function renderPkgList() {
       <div class="pkg-head">
         <span class="num">${pi + 1}</span>
         <input class="pkgpath" data-pi="${pi}" value="${pkg.pkgpath.replace(/"/g, "&quot;")}" placeholder="gno.land/r/g1.../name">
+        <span class="deploy-check checking" data-pi="${pi}">checking…</span>
         <button class="remove-pkg" data-pi="${pi}" title="Remove package">&times;</button>
       </div>
       <div class="files" data-pi="${pi}">
@@ -177,12 +219,22 @@ function renderPkgList() {
     </div>
   `).join("");
   wireList();
+  checkAllDeployed();
 }
 
 function wireList() {
-  document.querySelectorAll(".pkgpath").forEach(el => el.addEventListener("input", e => {
-    packages[+e.target.dataset.pi].pkgpath = e.target.value;
-  }));
+  document.querySelectorAll(".pkgpath").forEach(el => {
+    el.addEventListener("input", e => {
+      packages[+e.target.dataset.pi].pkgpath = e.target.value;
+    });
+    // Re-check on blur, not every keystroke -- an RPC call per input
+    // event would spam the node while someone's still mid-edit.
+    el.addEventListener("blur", e => {
+      const pi = +e.target.dataset.pi;
+      renderDeployBadge(pi, "checking");
+      checkDeployed(packages[pi].pkgpath).then(d => renderDeployBadge(pi, d === null ? "unknown" : d ? "deployed" : "not-deployed"));
+    });
+  });
   document.querySelectorAll(".deposit").forEach(el => el.addEventListener("input", e => {
     packages[+e.target.dataset.pi].deposit = e.target.value;
   }));
@@ -261,6 +313,7 @@ async function deployPackage(pi) {
     };
     const { hash, height } = await doContract([msg], `deploy ${pkg.pkgpath}`);
     setStatus(pi, "success", `Deployed at block ${height} — tx ${hash}`);
+    renderDeployBadge(pi, "deployed");
   } catch (err) {
     setStatus(pi, "error", err.message || String(err));
   }

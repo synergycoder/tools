@@ -32,6 +32,11 @@
       {
         "path": "gno.land/r/gnoswap/staker",
         "name": "Gnoswap Staker"
+      },
+      {
+        "path": "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g1",
+        "name": "Gems",
+        "symbol": "GEMS"
       }
     ]
   }

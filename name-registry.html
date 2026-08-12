@@ -669,7 +669,7 @@ async function pollForRegistration(n,submit,msg,attempt){
   const check=await qeval(USERS+'.ResolveName("'+n+'")');
   const ok=!check.error&&!check.gnoError&&parseUser(check.data);
   if(ok){
-    msg.innerHTML='<div class="note info">✓ Registered <b>@'+esc(n)+'</b>. <a href="'+NET.gnoweb+'/u/'+esc(n)+'" target="_blank" rel="noopener">Profile ↗</a></div>';
+    msg.innerHTML='<div class="note info">✓ Registered <b>@'+esc(n)+'</b>. <a href="?profile='+encodeURIComponent(n)+'">View your profile ↗</a></div>';
     submit.innerHTML="Registered ✓";
     regsLoaded=false;
     return;
@@ -805,11 +805,36 @@ async function renderProfileCard(container,addr,opts){
     h+=rest.map(f=>kv(f.label,f.set?f.display:blank,true)).join("");
     h+='<div class="kv"><span class="k">address</span><span class="v">'+esc(addr)+'</span></div>';
   }
+  // Name-based, not address-based — sharing a profile implies the person
+  // already has a registry name, and it makes for a much shorter link.
+  // Skipped entirely when there's no name to build it from.
+  if(name){
+    const shareUrl=location.origin+location.pathname+"?profile="+encodeURIComponent(name);
+    h+='<div class="sect"><div class="h">Share this profile</div>'+
+       '<div class="row" style="align-items:center">'+
+       '<input type="text" readonly value="'+esc(shareUrl)+'" id="p-share-url" onclick="this.select()" />'+
+       '<button class="act ghost" id="p-share-copy">Copy</button>'+
+       '</div></div>';
+  }
   if(editable)h+='<div class="row" style="margin-top:18px"><button class="act ghost" id="p-edit">Edit profile</button></div>';
   container.innerHTML=h;
   if(editable)document.getElementById("p-edit").onclick=showProfileEditForm;
   const av=document.getElementById("pv-avatar");
   if(av&&prof.avatar)av.onclick=()=>openImageLightbox(prof.avatar);
+  const shareCopyBtn=document.getElementById("p-share-copy");
+  if(shareCopyBtn){
+    shareCopyBtn.onclick=async()=>{
+      const input=document.getElementById("p-share-url");
+      try{
+        await navigator.clipboard.writeText(input.value);
+        shareCopyBtn.textContent="Copied ✓";
+      }catch{
+        input.select();
+        shareCopyBtn.textContent="Select & copy";
+      }
+      setTimeout(()=>{shareCopyBtn.textContent="Copy";},1500);
+    };
+  }
 }
 
 async function showProfileEditForm(){

@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Address Converter — gno.tools</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
+     gno-observer, which Adena does pick up) fetch /favicon.ico at the site
+     root directly instead of parsing the <link rel="icon"> tags above, so
+     both need to exist and agree. -->
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
 <script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <style>
   :root{ color-scheme: light dark; }

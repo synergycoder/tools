@@ -96,9 +96,9 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g1</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g2</p>
     <h1>Mint a Gem</h1>
-    <p class="sub">Every mint draws uniformly at random from the owner's queued trait pool — no picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
+    <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
 
   <div class="wallet-gate" id="walletGate">Checking wallet…</div>
@@ -116,8 +116,8 @@
     </div>
 
     <div class="panel">
-      <h2>Mint from the current pool</h2>
-      <p class="desc">Connect your wallet to mint. The realm assigns each piece at random from what's currently queued — you can't choose traits.</p>
+      <h2>Mint a randomly assembled piece</h2>
+      <p class="desc">Connect your wallet to mint. The realm assembles each piece at random from the on-chain trait rosters — you can't choose traits, and no two Gems ever share an exact combination.</p>
 
       <div class="price-row">
         <span class="lbl">Price (per piece)</span>
@@ -125,16 +125,18 @@
       </div>
 
       <ul class="facts" id="factsList">
-        <li><span class="k">Queued &amp; unminted</span><span class="v" id="factQueue">…</span></li>
+        <li><span class="k">Max possible combinations</span><span class="v" id="factMaxCombos">…</span></li>
         <li><span class="k">Ever minted</span><span class="v" id="factSupply">…</span></li>
         <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
+        <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
+        <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
         <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
       </ul>
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
         <input type="number" id="qtyInput" value="1" min="1" max="10">
-        <span class="qty-note">up to 10 in one transaction</span>
+        <span class="qty-note" id="qtyNote">up to 10 in one transaction</span>
       </div>
 
       <div class="to-row">
@@ -151,10 +153,10 @@
   <div class="howitworks">
     <h2>How minting works</h2>
     <div class="steps">
-      <div class="step"><div class="n">01</div><h3>Random draw</h3><p>Your mint pulls one entry uniformly at random from whatever the owner has queued — never first-come-first-served, never previewable.</p></div>
+      <div class="step"><div class="n">01</div><h3>Assembled on the fly</h3><p>Your mint randomly draws a chain, shape, color, and metal from the on-chain rosters at the moment you mint — never previewable, never pre-curated.</p></div>
       <div class="step"><div class="n">02</div><h3>Sealed reveal</h3><p>You receive a real token immediately, but its art and traits stay behind a shared placeholder for a short delay — long enough that no one can snipe based on the outcome.</p></div>
-      <div class="step"><div class="n">03</div><h3>Guaranteed unique</h3><p>No two Gems ever share an exact (chain, shape, color, metal, status) combination — enforced on-chain, permanently, across the whole collection.</p></div>
-      <div class="step"><div class="n">04</div><h3>Multiple in one transaction</h3><p>Minting more than one queues that many <code>MintAssembled</code> calls into a single signed transaction — one Adena approval, not one per piece. Since messages in a transaction are atomic, if any one call fails (e.g. the pool runs dry mid-batch) none of them commit.</p></div>
+      <div class="step"><div class="n">03</div><h3>Guaranteed unique</h3><p>If the random draw collides with a combination that's already been minted, the contract automatically retries with a new draw — no two Gems ever share an exact (chain, shape, color, metal, status) combination, enforced on-chain, permanently, across the whole collection.</p></div>
+      <div class="step"><div class="n">04</div><h3>Multiple in one transaction</h3><p>Minting more than one queues that many <code>MintAssembled</code> calls into a single signed transaction — one Adena approval, not one per piece. Since messages in a transaction are atomic, if any one call fails (e.g. you'd exceed the per-wallet limit partway through) none of them commit.</p></div>
     </div>
   </div>
 </div>
@@ -165,7 +167,7 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g1";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g2";
 
 function parseBool(raw) { return raw != null && /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
@@ -174,30 +176,63 @@ async function qeval(expr) {
   return abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
 }
 
-let stats = { mintingOpen: null, price: null, queueLen: null, supply: null };
+let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null };
+
+// The per-wallet cap applies to the mint's RECIPIENT (`to`), not
+// whoever signs -- so the count shown/enforced tracks whatever address
+// is currently in the "mint to" field, defaulting to the connected
+// wallet, not always the connected wallet itself.
+function currentRecipient() {
+  const v = document.getElementById("toInput").value.trim();
+  if (v) return v;
+  const w = getWallet();
+  return w.address || null;
+}
 
 async function loadStats() {
-  const [openR, priceR, queueR, supplyR] = await Promise.all([
+  const recipient = currentRecipient();
+  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
     qeval("MintingOpen()").catch(() => null),
     qeval("MintPrice()").catch(() => null),
-    qeval("TraitPresetQueueLength()").catch(() => null),
+    qeval("MaxUniqueTraitCombos()").catch(() => null),
     qeval("TokenCount()").catch(() => null),
+    qeval("MaxMintsPerWallet()").catch(() => null),
+    recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
   ]);
   stats = {
     mintingOpen: parseBool(openR),
     price: parseInt64(priceR),
-    queueLen: parseInt64(queueR),
+    maxCombos: parseInt64(maxCombosR),
     supply: parseInt64(supplyR),
+    walletCap: parseInt64(walletCapR),
+    mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
   };
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
     : stats.price != null ? `${(stats.price / 1e6).toFixed(6)}<span class="unit">GNOT</span>` : "unknown";
-  document.getElementById("factQueue").textContent = stats.queueLen != null ? stats.queueLen : "unknown";
+  document.getElementById("factMaxCombos").textContent = stats.maxCombos != null ? stats.maxCombos.toLocaleString() : "unknown";
   document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
   const openEl = document.getElementById("factOpen");
   openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
   openEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
+  document.getElementById("factWalletCap").textContent = stats.walletCap == null ? "unknown" : stats.walletCap === 0 ? "unlimited" : stats.walletCap;
+  const youMintedRow = document.getElementById("factYouMintedRow");
+  if (recipient && stats.mintedByWallet != null) {
+    youMintedRow.style.display = "";
+    document.getElementById("factYouMinted").textContent = stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
+  } else {
+    youMintedRow.style.display = "none";
+  }
   updateMintButton();
+}
+
+// how many more pieces the current recipient (the "mint to" address) is
+// still allowed to receive -- null means "no cap info yet" (assume
+// unrestricted rather than blocking the button on a slow/failed query).
+function remainingWalletAllowance() {
+  if (stats.walletCap == null || stats.walletCap === 0) return null;
+  if (stats.mintedByWallet == null) return null;
+  return Math.max(0, stats.walletCap - stats.mintedByWallet);
 }
 
 function renderWalletGate() {
@@ -213,7 +248,7 @@ function renderWalletGate() {
       ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
       : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
     const toInput = document.getElementById("toInput");
-    if (!toInput.value) toInput.value = w.address;
+    if (!toInput.value) { toInput.value = w.address; loadStats(); }
   }
   updateMintButton();
 }
@@ -222,15 +257,32 @@ onWalletChange(renderWalletGate);
 function updateMintButton() {
   const w = getWallet();
   const btn = document.getElementById("mintBtn");
+  const qtyInput = document.getElementById("qtyInput");
   if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
   if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
-  if (stats.queueLen === 0) { btn.disabled = true; btn.textContent = "Nothing Queued Yet"; return; }
+
+  const remaining = remainingWalletAllowance();
+  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  qtyInput.max = String(Math.max(1, hardMax));
+  document.getElementById("qtyNote").textContent = remaining != null
+    ? `up to ${hardMax} in one transaction — this wallet's remaining allowance`
+    : "up to 10 in one transaction";
+
+  if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; return; }
+
+  let qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+  if (hardMax >= 1 && qty > hardMax) { qty = hardMax; qtyInput.value = String(qty); }
   btn.disabled = false;
-  const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
   btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
 }
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
+
+let toInputDebounce = null;
+document.getElementById("toInput").addEventListener("input", () => {
+  clearTimeout(toInputDebounce);
+  toInputDebounce = setTimeout(loadStats, 400);
+});
 
 function setStatus(cls, text) {
   document.getElementById("statusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
@@ -238,8 +290,10 @@ function setStatus(cls, text) {
 
 document.getElementById("mintBtn").addEventListener("click", async () => {
   const w = getWallet();
-  const qty = Math.max(1, Math.min(10, parseInt(document.getElementById("qtyInput").value, 10) || 1));
-  const to = document.getElementById("toInput").value.trim() || w.address;
+  const remaining = remainingWalletAllowance();
+  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  const qty = Math.max(1, Math.min(hardMax, parseInt(document.getElementById("qtyInput").value, 10) || 1));
+  const to = currentRecipient();
   const btn = document.getElementById("mintBtn");
   btn.disabled = true;
   setStatus("pending", `Waiting for Adena approval — minting ${qty}…`);

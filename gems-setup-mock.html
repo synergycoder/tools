@@ -74,7 +74,7 @@
   <div class="hero">
     <p class="eyebrow">Gno.land · GRC721 · owner console</p>
     <h1>Gems — Collection Setup</h1>
-    <p class="sub">Deploy, queue trait presets, and manage minting for the Gems collection. Every write here is enforced owner-only on-chain (<code>assertOwner()</code>) regardless of what this page shows — this UI is just a convenience, not the access control.</p>
+    <p class="sub">Deploy and manage minting for the Gems collection. Every write here is enforced owner-only on-chain (<code>assertOwner()</code>) regardless of what this page shows — this UI is just a convenience, not the access control.</p>
   </div>
 
   <div class="owner-gate">
@@ -95,7 +95,7 @@
 
   <div class="section">
     <h2>Minting controls</h2>
-    <p class="desc"><code>SetMintingOpen</code> / <code>SetMintPrice</code> — owner-only.</p>
+    <p class="desc"><code>SetMintingOpen</code> / <code>SetMintPrice</code> / <code>SetMaxMintsPerWallet</code> — owner-only.</p>
     <div class="toggle-row">
       <span>Minting open</span>
       <label class="switch"><input type="checkbox" checked disabled><span class="slider"></span></label>
@@ -104,20 +104,20 @@
       <div class="field"><label>Mint price (ugnot)</label><input type="number" value="0" disabled></div>
       <button class="btn ghost" type="button" disabled>Update price</button>
     </form>
+    <form class="inline" style="margin-top:10px">
+      <div class="field"><label>Max mints per wallet (0 = unlimited)</label><input type="number" value="5" disabled></div>
+      <button class="btn ghost" type="button" disabled>Update cap</button>
+    </form>
   </div>
 
   <div class="section">
-    <h2>Trait preset queue</h2>
-    <p class="desc"><code>AddTraitPreset</code> — queue a (chain, shape, color, metal, active) combination for the next random mint to draw from. Duplicate or already-minted combinations are rejected on-chain.</p>
+    <h2>Chain roster</h2>
+    <p class="desc"><code>AddChain</code> — extend the roster <code>MintAssembled</code> draws from at mint time. There's no preset queue to manage: every mint assembles a fresh (chain, shape, color, metal, active) combination on the fly, retrying automatically if it collides with one already minted.</p>
     <form class="inline" style="margin-bottom:16px">
-      <div class="field"><label>Chain</label><select disabled><option>SAPPHIRE-1</option></select></div>
-      <div class="field"><label>Shape</label><select disabled><option>Round Brilliant</option></select></div>
-      <div class="field"><label>Color</label><select disabled><option>Blue</option></select></div>
-      <div class="field"><label>Metal</label><select disabled><option>Gold</option></select></div>
-      <div class="field"><label>Active</label><select disabled><option>true</option></select></div>
-      <button class="btn" type="button" disabled>Queue preset</button>
+      <div class="field"><label>New chain</label><input placeholder="TEST-16" disabled></div>
+      <button class="btn" type="button" disabled>Add to roster</button>
     </form>
-    <table class="queue" id="queueTable"></table>
+    <table class="queue" id="rosterTable"></table>
   </div>
 
   <div class="section">
@@ -148,16 +148,17 @@ initSiteChrome();
 async function boot() {
   const res = await fetch("gems-collection-data.json");
   const pieces = await res.json();
-  const queued = pieces.slice(0, 12);
-  document.getElementById("queueTable").innerHTML = `
-    <tr><th>Chain</th><th>Shape</th><th>Color</th><th>Metal</th><th>Active</th><th></th></tr>
-    ${queued.map(p => `
+  const chains = [...new Set(pieces.map(p => p.chain))];
+  document.getElementById("rosterTable").innerHTML = `
+    <tr><th>Chain</th><th>Stone</th><th></th></tr>
+    ${chains.map(c => {
+      const stone = pieces.find(p => p.chain === c)?.stone || "Not Set";
+      return `
       <tr>
-        <td>${p.chain}</td><td>${p.shape}</td>
-        <td><span class="swatch" style="background:${p.colorHex}"></span>${p.color}</td>
-        <td>${p.metal}</td><td>${p.status === "Active" ? "true" : "false"}</td>
+        <td>${c}</td><td>${stone}</td>
         <td><button class="btn ghost" type="button" disabled style="padding:4px 9px;font-size:11px">Remove</button></td>
-      </tr>`).join("")}
+      </tr>`;
+    }).join("")}
   `;
 }
 boot();

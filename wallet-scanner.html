@@ -152,11 +152,10 @@ import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForc
 import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
 import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
 
-// Network is picked from the shared wallet bubble now, not a separate
-// <select> easy to forget was even there — same control used to connect.
-initSiteChrome({
-  networkOptions: Object.entries(NETWORKS).map(([key, net]) => ({ key, chainId: net.chainId, label: net.label })),
-});
+// Network is a site-wide control now (the header's own always-visible
+// pill, driven by the same NETWORKS this page imports) — nothing to pass
+// in here anymore.
+initSiteChrome();
 let activeNetKey = Object.keys(NETWORKS)[0];
 
 const MAX_THUMBS_PER_COLLECTION = 8;

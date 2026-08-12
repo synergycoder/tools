@@ -51,8 +51,12 @@
   .tool-card:hover .tool-icon{ transform:scale(1.04); }
   .tool-icon{ width:52px; height:52px; flex:none; transition:transform .15s; }
   .tool-icon img{ width:100%; height:100%; display:block; }
-  .tool-card h2 { margin: 0 0 5px; font-size: 15.5px; color:var(--ink) }
+  .tool-card h2 { margin: 0 0 5px; font-size: 15.5px; color:var(--ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap }
   .tool-card p { margin: 0; color: var(--muted); font-size: 13px; line-height:1.5 }
+  .tool-soon{display:inline-block;padding:2px 6px;border-radius:5px;font-family:var(--mono);
+    background:var(--amber-soft);color:var(--amber);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .tool-card.gt-gated{opacity:.6}
+  .tool-card.gt-gated:hover{opacity:.85}
 </style>
 </head>
 <body>
@@ -64,38 +68,38 @@
   </div>
 
   <div class="tools">
-    <a class="tool-card" href="wallet-scanner.html">
+    <a class="tool-card" href="wallet-scanner.html" data-page="wallet-scanner.html">
       <span class="tool-icon"><img src="icons/wallet-scanner.svg" alt=""></span>
       <div>
         <h2>Wallet Scanner</h2>
         <p>Connect Adena and see everything one address holds — native GNOT, every GRC20 token, and every NFT collection this scanner knows about.</p>
       </div>
     </a>
-    <a class="tool-card" href="name-registry.html">
+    <a class="tool-card" href="name-registry.html" data-page="name-registry.html">
       <span class="tool-icon"><img src="icons/name-registry.svg" alt=""></span>
       <div>
-        <h2>Name Registry</h2>
+        <h2>Gnoland Name Registry</h2>
         <p>Explore the on-chain user registry — query, browse, view registration history, and register a name.</p>
       </div>
     </a>
-    <a class="tool-card" href="vanity-address.html">
+    <a class="tool-card" href="vanity-address.html" data-page="vanity-address.html">
       <span class="tool-icon"><img src="icons/vanity-address.svg" alt=""></span>
       <div>
-        <h2>Vanity Address</h2>
+        <h2>Vanity Address (Custom Address Generator)</h2>
         <p>Generate a real gno.land keypair entirely in your browser, optionally searching for an address containing a chosen string.</p>
       </div>
     </a>
-    <a class="tool-card" href="address-converter.html">
+    <a class="tool-card" href="address-converter.html" data-page="address-converter.html">
       <span class="tool-icon"><img src="icons/address-converter.svg" alt=""></span>
       <div>
-        <h2>Address Converter</h2>
+        <h2>Cosmos Address Converter</h2>
         <p>Re-encode an address under any live Cosmos chain's prefix — one at a time, or a whole mixed-chain list at once with CSV export.</p>
       </div>
     </a>
-    <a class="tool-card" href="batch-send.html">
+    <a class="tool-card" href="batch-send.html" data-page="batch-send.html">
       <span class="tool-icon"><img src="icons/batch-send.svg" alt=""></span>
       <div>
-        <h2>Batch Send</h2>
+        <h2>Batch Send Tokens</h2>
         <p>Send a payment to many recipients at once — paste a list, upload a CSV, or pull one from a public Google Sheet.</p>
       </div>
     </a>
@@ -103,8 +107,29 @@
 </div>
 
 <script type="module">
-  import { initSiteChrome } from "./lib/site-chrome.js";
+  import { initSiteChrome, onWalletChange, isCurrentWalletWhitelisted, GATED_PAGES } from "./lib/site-chrome.js";
   initSiteChrome();
+
+  // Mirrors the hamburger nav's own "soon" dimming so a gated tool reads
+  // the same way everywhere on the site, not just inside the menu.
+  function renderGateBadges() {
+    const unlocked = isCurrentWalletWhitelisted();
+    document.querySelectorAll(".tool-card[data-page]").forEach((card) => {
+      const gated = GATED_PAGES.has(card.dataset.page) && !unlocked;
+      card.classList.toggle("gt-gated", gated);
+      let badge = card.querySelector(".tool-soon");
+      if (gated && !badge) {
+        badge = document.createElement("span");
+        badge.className = "tool-soon";
+        badge.textContent = "soon";
+        card.querySelector("h2").appendChild(badge);
+      } else if (!gated && badge) {
+        badge.remove();
+      }
+    });
+  }
+  renderGateBadges();
+  onWalletChange(renderGateBadges);
 </script>
 
 </body>

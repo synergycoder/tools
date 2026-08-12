@@ -142,6 +142,20 @@ import { initSiteChrome } from "./lib/site-chrome.js";
 initSiteChrome();
 
 const FILTER_KEYS = ["chain", "stone", "shape", "metal", "status"];
+// Chronological launch order, not alphabetical -- alphabetical sort put
+// TEST-10/11/12/13 right after TEST-1, before TEST-2, which reads as
+// disorganized for a trait that is inherently a timeline.
+const CHAIN_ORDER = ["TEST-1","TEST-2","TEST-3","TEST-4","TEST-5","TEST-6","TEST-7","TEST-8","TEST-9","TEST-10","TEST-11","TEST-12","TEST-13","TOPAZ-1","SAPPHIRE-1","BETANET"];
+function sortFilterValues(key, values) {
+  if (key !== "chain") return values.slice().sort();
+  return values.slice().sort((a, b) => {
+    const ia = CHAIN_ORDER.indexOf(a), ib = CHAIN_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+}
 const FILTER_LABELS = { chain: "Chain", stone: "Stone", shape: "Shape", metal: "Metal", status: "Status" };
 
 let pieces = [];
@@ -194,7 +208,7 @@ function renderSidebar() {
   let html = anyActive ? `<button class="clear-filters" id="clearBtn">Clear all filters</button><div style="height:10px"></div>` : "";
   FILTER_KEYS.forEach(key => {
     const cmap = counts(key);
-    const values = [...new Set(pieces.map(p => p[key]))].sort();
+    const values = sortFilterValues(key, [...new Set(pieces.map(p => p[key]))]);
     html += `<div class="filter-group"><h3>${FILTER_LABELS[key]}</h3>`;
     values.forEach(v => {
       const c = cmap.get(v) || 0;

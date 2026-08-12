@@ -135,6 +135,14 @@
   .sect .h{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;border-bottom:1px solid var(--hair);padding-bottom:5px}
   .avatar{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1px solid var(--hair2);background:var(--panel2)}
   .reg-footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--hair);color:var(--faint);font-size:12px;font-family:var(--mono)}
+  /* profile view + avatar preview/lightbox */
+  .avatar-preview{width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--hair2);background:var(--panel2);cursor:pointer;flex:none}
+  .avatar-preview:hover{border-color:var(--accent)}
+  .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:4px}
+  .profile-avatar{width:84px;height:84px;border-radius:14px;cursor:pointer;flex:none}
+  .profile-name{font-family:var(--mono);font-size:20px;font-weight:600}
+  .profile-displayname{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .profile-bio{margin:16px 0 6px;font-size:14px;line-height:1.6;color:var(--ink)}
 </style>
 </head>
 <body>
@@ -696,12 +704,56 @@ function renderProfile(){
   walletAddr=w.address;
   body.innerHTML=hint+mismatchNoticeHTML(w)+'<div id="p-form" style="margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
   wireSwitchNetworkButton();
-  loadProfileForm();
+  showProfileView();
 }
 document.getElementById("op-lookup").onclick=()=>{const v=document.getElementById("op-input").value.trim();if(v)openDetail(v);};
 document.getElementById("op-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
-async function loadProfileForm(){
+
+// Read-only landing view for the Profile tab — avatar, registry name,
+// display name, bio, and the remaining fields, with an Edit link into
+// showProfileEditForm(). savedNote (optional) surfaces a one-line success
+// banner right after saveProfile() lands back here.
+async function showProfileView(savedNote){
   const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
+  msg.innerHTML="";
+  form.innerHTML='<span class="spinner"></span> <span class="faint">loading profile…</span>';
+  const [nr,prof]=await Promise.all([
+    qeval(USERS+'.ResolveAddress("'+walletAddr+'")'),
+    loadProfile(walletAddr),
+  ]);
+  const nu=(!nr.error&&!nr.gnoError)?parseUser(nr.data):null;
+  const name=nu&&nu.name?nu.name:null;
+
+  let h="";
+  if(savedNote)h+='<div class="note info" style="margin-bottom:14px">'+esc(savedNote)+'</div>';
+  if(prof.error){
+    h+='<div class="err">✕ '+esc(prof.error)+'</div>';
+  }else{
+    const byKey={};prof.fields.forEach(f=>byKey[f.key]=f);
+    const displayName=byKey.DisplayName&&byKey.DisplayName.set?byKey.DisplayName.display:"";
+    const bio=byKey.Bio&&byKey.Bio.set?byKey.Bio.display:"";
+    const rest=["Homepage","Location","com.twitter","com.github","com.discord","org.telegram","Age","AvailableForHiring"]
+      .map(k=>byKey[k]).filter(f=>f&&f.set);
+    h+='<div class="profile-head">'+
+      (prof.avatar?'<img class="avatar profile-avatar" id="pv-avatar" src="'+esc(prof.avatar)+'" alt="" onerror="this.style.display=\'none\'"/>':'')+
+      '<div><div class="profile-name">'+(name?'@'+esc(name):'<span class="faint">No registry name</span>')+'</div>'+
+      (displayName?'<div class="profile-displayname">'+displayName+'</div>':'')+
+      '</div></div>';
+    if(bio)h+='<p class="profile-bio">'+bio+'</p>';
+    if(rest.length)h+=rest.map(f=>kv(f.label,f.display,true)).join("");
+    if(!name&&!displayName&&!bio&&!rest.length&&!prof.avatar)
+      h+='<div class="muted" style="font-size:13px;margin-top:10px">No profile details set yet.</div>';
+  }
+  h+='<div class="row" style="margin-top:18px"><button class="act ghost" id="p-edit">Edit profile</button></div>';
+  form.innerHTML=h;
+  document.getElementById("p-edit").onclick=showProfileEditForm;
+  const av=document.getElementById("pv-avatar");
+  if(av)av.onclick=()=>openImageLightbox(prof.avatar);
+}
+
+async function showProfileEditForm(){
+  const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
+  msg.innerHTML="";
   form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
   profileLoaded={};
   await mapLimit(PROFILE_FIELDS,4,async f=>{
@@ -713,13 +765,32 @@ async function loadProfileForm(){
   form.innerHTML=(nm?'<div class="note info" style="margin-bottom:14px">Editing profile for <b>@'+esc(nm)+'</b> · '+esc(walletAddr)+'</div>':'<div class="note" style="margin-bottom:14px">This wallet has no registry name yet — the profile still attaches to your address '+esc(walletAddr)+'.</div>')+
     PROFILE_FIELDS.map(f=>{
       const v=profileLoaded[f.key]||"";
+      if(f.key==="Avatar"){
+        return '<div class="field"><label>'+esc(f.label)+'</label>'+
+          '<div class="row" style="flex-wrap:nowrap;align-items:center">'+
+          '<input type="text" id="pf-Avatar" placeholder="'+esc(f.ph)+'" value="'+esc(v)+'" autocomplete="off" spellcheck="false" style="flex:1;min-width:0" />'+
+          '<img id="pf-avatar-preview" class="avatar-preview" src="'+esc(v)+'" alt="avatar preview" style="'+(v?"":"display:none")+'" />'+
+          '</div></div>';
+      }
       const input=f.area?'<textarea id="pf-'+esc(f.key)+'" rows="3" placeholder="'+esc(f.ph)+'">'+esc(v)+'</textarea>'
         :'<input type="text" id="pf-'+esc(f.key)+'" placeholder="'+esc(f.ph)+'" value="'+esc(v)+'" autocomplete="off" spellcheck="false" />';
       return '<div class="field"><label>'+esc(f.label)+'</label>'+input+'</div>';
     }).join("")+
-    '<div class="row"><button class="act" id="p-save">Save changes</button><button class="act ghost" id="p-reload">Reload</button></div>';
+    '<div class="row"><button class="act" id="p-save">Save changes</button><button class="act ghost" id="p-cancel">Cancel</button></div>';
   document.getElementById("p-save").onclick=saveProfile;
-  document.getElementById("p-reload").onclick=loadProfileForm;
+  document.getElementById("p-cancel").onclick=()=>showProfileView();
+
+  const avatarInput=document.getElementById("pf-Avatar"),avatarPreview=document.getElementById("pf-avatar-preview");
+  if(avatarInput&&avatarPreview){
+    const updatePreview=()=>{
+      const v=avatarInput.value.trim();
+      if(v){avatarPreview.src=v;avatarPreview.style.display="";}
+      else{avatarPreview.style.display="none";avatarPreview.removeAttribute("src");}
+    };
+    avatarInput.addEventListener("input",updatePreview);
+    avatarPreview.onerror=()=>{avatarPreview.style.display="none";};
+    avatarPreview.onclick=()=>openImageLightbox(avatarInput.value.trim());
+  }
 }
 async function saveProfile(){
   const msg=document.getElementById("p-msg"),btn=document.getElementById("p-save");
@@ -734,9 +805,30 @@ async function saveProfile(){
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
   try{
     await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools"});
-    await loadProfileForm();
-    document.getElementById("p-msg").innerHTML='<div class="note info">✓ Saved '+msgs.length+' field(s) in one transaction. Open your name in the Names tab to see them in its detail view.</div>';
+    await showProfileView("✓ Saved "+msgs.length+" field(s). Open your name in the Names tab to see them in its detail view.");
   }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";}
+}
+
+// Reuses the shared name-detail overlay/modal for a simple full-size image
+// popup — mutually exclusive with openDetail's own use of the same overlay,
+// so there's no conflict, and Escape/click-outside already close it via the
+// existing overlay wiring below.
+function openImageLightbox(url){
+  if(!url)return;
+  overlay.classList.add("on");
+  modal.innerHTML="";
+  const head=document.createElement("div");
+  head.className="modal-head";
+  head.innerHTML="<h3>Avatar preview</h3>";
+  const closeBtn=document.createElement("button");
+  closeBtn.className="x";closeBtn.textContent="×";closeBtn.onclick=closeDetail;
+  head.appendChild(closeBtn);
+  modal.appendChild(head);
+  const img=document.createElement("img");
+  img.src=url;img.alt="";
+  img.style.cssText="max-width:100%;max-height:70vh;border-radius:10px;display:block;margin:8px auto 0";
+  img.onerror=()=>{img.replaceWith(Object.assign(document.createElement("div"),{className:"err",textContent:"Image failed to load."}));};
+  modal.appendChild(img);
 }
 /* ---------------- chrome ---------------- */
 function setNetInfo(){

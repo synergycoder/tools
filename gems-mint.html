@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems — Mint</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 70px}
+  .unlinked-banner{background:var(--amber-soft);border-bottom:1px solid var(--amber-line);color:var(--amber);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+  .hero{padding:44px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{margin:0 0 8px;font-size:32px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:var(--muted);margin:0;max-width:60ch;font-size:14.5px}
+
+  .wallet-gate{display:flex;align-items:center;gap:12px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:12px;padding:14px 18px;margin:22px 0;font-size:13.5px}
+  .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
+  .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
+  .wallet-gate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate.ok .dot{background:#7fd88f}
+  .wallet-gate.warn .dot{background:var(--amber)}
+  .wallet-gate code{font-family:var(--mono)}
+
+  .mint-layout{display:grid;grid-template-columns:300px 1fr;gap:36px;margin:20px 0 60px;align-items:start}
+  @media (max-width:760px){.mint-layout{grid-template-columns:1fr}}
+
+  .preview{border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden;position:sticky;top:80px}
+  .preview .art{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .preview .art svg{width:70%;height:70%}
+  .preview .cap{padding:12px 16px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
+
+  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:22px 24px}
+  .panel h2{margin:0 0 4px;font-size:16px}
+  .panel .desc{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+
+  .price-row{display:flex;align-items:baseline;justify-content:space-between;padding:14px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+  .price-row .lbl{font-size:13px;color:var(--muted)}
+  .price-row .val{font-family:var(--mono);font-size:20px;font-weight:700}
+  .price-row .val .unit{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+
+  .facts{list-style:none;margin:16px 0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .facts li{display:flex;justify-content:space-between;font-size:13px}
+  .facts .k{color:var(--muted)}
+  .facts .v{font-family:var(--mono);color:var(--ink)}
+
+  .qty-row{display:flex;align-items:center;gap:10px;margin:16px 0}
+  .qty-row label{font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .qty-row input{width:70px;font-family:var(--mono);font-size:14px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+  .qty-row .qty-note{font-size:11.5px;color:var(--faint)}
+
+  .to-row{margin:12px 0}
+  .to-row label{font-size:12px;color:var(--muted);font-family:var(--mono);display:block;margin-bottom:5px}
+  .to-row input{width:100%;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+
+  .mint-btn{width:100%;padding:15px;border-radius:10px;border:none;background:var(--accent);color:#fff;
+    font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px}
+  .mint-btn:hover:not(:disabled){filter:brightness(1.08)}
+  .mint-btn:disabled{background:var(--panel2);color:var(--faint);cursor:not-allowed;border:1px solid var(--hair)}
+
+  .status-line{font-family:var(--mono);font-size:12px;margin-top:12px;padding:9px 11px;border-radius:8px;word-break:break-word}
+  .status-line.pending{background:var(--accent-soft);color:var(--accent)}
+  .status-line.success{background:#7fd88f1a;color:#7fd88f}
+  .status-line.error{background:#e0596d1a;color:#e0596d}
+
+  .results{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+  .results .rcard{border:1px solid var(--hair);border-radius:8px;padding:6px;font-family:var(--mono);font-size:10.5px;
+    color:var(--muted);background:var(--panel2);text-align:center}
+
+  .howitworks{margin:50px 0 20px}
+  .howitworks h2{font-size:18px;margin:0 0 18px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .step{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:16px 18px}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:6px}
+  .step h3{margin:0 0 6px;font-size:14px}
+  .step p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="unlinked-banner">Unlinked utility page — reachable only by direct URL, not in the site nav</div>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g1</p>
+    <h1>Mint a Gem</h1>
+    <p class="sub">Every mint draws uniformly at random from the owner's queued trait pool — no picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
+  </div>
+
+  <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+
+  <div class="mint-layout">
+    <div class="preview">
+      <div class="art" id="sealedArt">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="#5a5f6b" stroke-width="2" opacity="0.5"/>
+          <circle cx="50" cy="50" r="30" fill="none" stroke="#5a5f6b" stroke-width="1" opacity="0.3"/>
+          <path d="M50 32 v10 M50 58 v10 M32 50 h10 M58 50 h10" stroke="#5a5f6b" stroke-width="2" opacity="0.5"/>
+        </svg>
+      </div>
+      <div class="cap">Sealed — revealed 10 blocks after mint</div>
+    </div>
+
+    <div class="panel">
+      <h2>Mint from the current pool</h2>
+      <p class="desc">Connect your wallet to mint. The realm assigns each piece at random from what's currently queued — you can't choose traits.</p>
+
+      <div class="price-row">
+        <span class="lbl">Price (per piece)</span>
+        <span class="val" id="priceVal">…</span>
+      </div>
+
+      <ul class="facts" id="factsList">
+        <li><span class="k">Queued &amp; unminted</span><span class="v" id="factQueue">…</span></li>
+        <li><span class="k">Ever minted</span><span class="v" id="factSupply">…</span></li>
+        <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
+        <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
+      </ul>
+
+      <div class="qty-row">
+        <label for="qtyInput">Quantity</label>
+        <input type="number" id="qtyInput" value="1" min="1" max="10">
+        <span class="qty-note">up to 10 in one transaction</span>
+      </div>
+
+      <div class="to-row">
+        <label for="toInput">Mint to (defaults to your connected wallet)</label>
+        <input type="text" id="toInput" placeholder="g1…">
+      </div>
+
+      <button class="mint-btn" id="mintBtn" type="button" disabled>Connect Wallet to Mint</button>
+      <div id="statusHolder"></div>
+      <div class="results" id="resultsGrid"></div>
+    </div>
+  </div>
+
+  <div class="howitworks">
+    <h2>How minting works</h2>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Random draw</h3><p>Your mint pulls one entry uniformly at random from whatever the owner has queued — never first-come-first-served, never previewable.</p></div>
+      <div class="step"><div class="n">02</div><h3>Sealed reveal</h3><p>You receive a real token immediately, but its art and traits stay behind a shared placeholder for a short delay — long enough that no one can snipe based on the outcome.</p></div>
+      <div class="step"><div class="n">03</div><h3>Guaranteed unique</h3><p>No two Gems ever share an exact (chain, shape, color, metal, status) combination — enforced on-chain, permanently, across the whole collection.</p></div>
+      <div class="step"><div class="n">04</div><h3>Multiple in one transaction</h3><p>Minting more than one queues that many <code>MintAssembled</code> calls into a single signed transaction — one Adena approval, not one per piece. Since messages in a transaction are atomic, if any one call fails (e.g. the pool runs dry mid-batch) none of them commit.</p></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
+import { doContract } from "./lib/adena-connect.js";
+import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
+initSiteChrome();
+
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g1";
+
+function parseBool(raw) { return raw != null && /^\(true/.test(raw); }
+function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+
+async function qeval(expr) {
+  return abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+}
+
+let stats = { mintingOpen: null, price: null, queueLen: null, supply: null };
+
+async function loadStats() {
+  const [openR, priceR, queueR, supplyR] = await Promise.all([
+    qeval("MintingOpen()").catch(() => null),
+    qeval("MintPrice()").catch(() => null),
+    qeval("TraitPresetQueueLength()").catch(() => null),
+    qeval("TokenCount()").catch(() => null),
+  ]);
+  stats = {
+    mintingOpen: parseBool(openR),
+    price: parseInt64(priceR),
+    queueLen: parseInt64(queueR),
+    supply: parseInt64(supplyR),
+  };
+  document.getElementById("priceVal").innerHTML = stats.price === 0
+    ? `0<span class="unit">GNOT (free)</span>`
+    : stats.price != null ? `${(stats.price / 1e6).toFixed(6)}<span class="unit">GNOT</span>` : "unknown";
+  document.getElementById("factQueue").textContent = stats.queueLen != null ? stats.queueLen : "unknown";
+  document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
+  const openEl = document.getElementById("factOpen");
+  openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
+  openEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
+  updateMintButton();
+}
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.className = "wallet-gate warn";
+    gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) to mint.`;
+  } else {
+    const onSapphire = w.chainId === "sapphire-1";
+    gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
+    gate.innerHTML = onSapphire
+      ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
+      : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+    const toInput = document.getElementById("toInput");
+    if (!toInput.value) toInput.value = w.address;
+  }
+  updateMintButton();
+}
+onWalletChange(renderWalletGate);
+
+function updateMintButton() {
+  const w = getWallet();
+  const btn = document.getElementById("mintBtn");
+  if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
+  if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
+  if (stats.queueLen === 0) { btn.disabled = true; btn.textContent = "Nothing Queued Yet"; return; }
+  btn.disabled = false;
+  const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
+  btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
+}
+document.getElementById("qtyInput").addEventListener("input", updateMintButton);
+
+function setStatus(cls, text) {
+  document.getElementById("statusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+document.getElementById("mintBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  const qty = Math.max(1, Math.min(10, parseInt(document.getElementById("qtyInput").value, 10) || 1));
+  const to = document.getElementById("toInput").value.trim() || w.address;
+  const btn = document.getElementById("mintBtn");
+  btn.disabled = true;
+  setStatus("pending", `Waiting for Adena approval — minting ${qty}…`);
+  try {
+    const send = stats.price ? `${stats.price}ugnot` : "";
+    const messages = Array.from({ length: qty }, () => ({
+      type: "/vm.m_call",
+      value: { caller: w.address, send, pkg_path: REALM_PATH, func: "MintAssembled", args: [to] },
+    }));
+    const { hash, height } = await doContract(messages, `mint ${qty} Gem${qty > 1 ? "s" : ""}`);
+    setStatus("success", `Minted at block ${height} — tx ${hash}. Sealed for 10 blocks, then check TokenURI to see what you got.`);
+    document.getElementById("resultsGrid").innerHTML = Array.from({ length: qty }, (_, i) =>
+      `<div class="rcard">piece ${i + 1}<br>sealed</div>`).join("");
+    loadStats();
+  } catch (err) {
+    setStatus("error", err.message || String(err));
+  } finally {
+    updateMintButton();
+  }
+});
+
+renderWalletGate();
+loadStats();
+setInterval(loadStats, 20000);
+</script>
+
+</body>
+</html>

@@ -77,9 +77,18 @@
   .status-line.success{background:#7fd88f1a;color:#7fd88f}
   .status-line.error{background:#e0596d1a;color:#e0596d}
 
-  .results{margin-top:18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
-  .results .rcard{border:1px solid var(--hair);border-radius:8px;padding:6px;font-family:var(--mono);font-size:10.5px;
-    color:var(--muted);background:var(--panel2);text-align:center}
+  .gallery{margin:50px 0 20px}
+  .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+  .gallery-head h2{font-size:18px;margin:0}
+  .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden}
+  .gcard .thumb{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .gcard .thumb img{width:78%;height:78%}
+  .gcard .meta{padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gcard .meta .tid{color:var(--ink);font-weight:700;display:block}
+  .gcard.sealed .meta{color:var(--faint)}
+  .gallery-empty{color:var(--muted);font-size:13.5px;padding:20px 0}
 
   .howitworks{margin:50px 0 20px}
   .howitworks h2{font-size:18px;margin:0 0 18px}
@@ -96,7 +105,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g2</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g3</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -146,8 +155,15 @@
 
       <button class="mint-btn" id="mintBtn" type="button" disabled>Connect Wallet to Mint</button>
       <div id="statusHolder"></div>
-      <div class="results" id="resultsGrid"></div>
     </div>
+  </div>
+
+  <div class="gallery">
+    <div class="gallery-head">
+      <h2>Recently minted</h2>
+      <span class="note" id="galleryNote"></span>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"><div class="gallery-empty">Loading…</div></div>
   </div>
 
   <div class="howitworks">
@@ -167,9 +183,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g2";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
 
-function parseBool(raw) { return raw != null && /^\(true/.test(raw); }
+// Returns null (not false) when the query itself failed -- e.g. the
+// realm isn't deployed yet -- so callers can tell "unknown" apart from
+// a real on-chain false. Collapsing both to false previously made an
+// undeployed/unreachable realm show as "Minting Closed", which reads
+// as a real active-collection state instead of "nothing to query yet".
+function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
 
 async function qeval(expr) {
@@ -260,6 +281,7 @@ function updateMintButton() {
   const qtyInput = document.getElementById("qtyInput");
   if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
   if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (stats.mintingOpen === null) { btn.disabled = true; btn.textContent = "Contract Not Reachable Yet"; return; }
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
 
   const remaining = remainingWalletAllowance();
@@ -284,6 +306,58 @@ document.getElementById("toInput").addEventListener("input", () => {
   toInputDebounce = setTimeout(loadStats, 400);
 });
 
+// CollectionSummary() has no pagination -- it returns every existing
+// token in one call, which is fine at today's scale but would grow
+// unbounded as the collection does. Cap what's actually rendered and
+// say so, rather than silently truncating.
+const GALLERY_LIMIT = 24;
+
+// CollectionSummary()'s qeval result is one gno string literal
+// containing newline-separated "tid|owner|b64(name)|b64(desc)|b64(image)|
+// b64(url)|b64(traits)|b64(bg)" lines (TokenSummary's own format) --
+// confirmed live against the real deployed realm before writing this
+// parser, not guessed from the .gno source alone. The textual literal
+// escapes real newlines as literal backslash-n.
+function parseCollectionSummary(raw) {
+  if (!raw) return [];
+  const m = raw.match(/^\("([\s\S]*)" string\)$/);
+  const body = (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  if (!body.trim()) return [];
+  return body.split("\n").filter(Boolean).map(line => {
+    const parts = line.split("|");
+    if (parts.length !== 8) return null;
+    const [tid, owner, nameB64, , imageB64] = parts;
+    try {
+      const name = atob(nameB64);
+      return { tid, owner, name, image: atob(imageB64), sealed: name === "Sealed" };
+    } catch (e) {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+async function loadGallery() {
+  const raw = await qeval("CollectionSummary()").catch(() => null);
+  const tokens = parseCollectionSummary(raw);
+  const grid = document.getElementById("galleryGrid");
+  const note = document.getElementById("galleryNote");
+  if (!tokens.length) {
+    grid.innerHTML = `<div class="gallery-empty">${raw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
+    note.textContent = "";
+    return;
+  }
+  const ordered = tokens.slice().reverse(); // most recently minted first
+  const shown = ordered.slice(0, GALLERY_LIMIT);
+  note.textContent = tokens.length > GALLERY_LIMIT
+    ? `showing latest ${GALLERY_LIMIT} of ${tokens.length}`
+    : `${tokens.length} minted so far`;
+  grid.innerHTML = shown.map(t => `
+    <div class="gcard${t.sealed ? " sealed" : ""}">
+      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : t.name.replace(/"/g, "&quot;")}"></div>
+      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : t.name}</div>
+    </div>`).join("");
+}
+
 function setStatus(cls, text) {
   document.getElementById("statusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
 }
@@ -305,9 +379,8 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
     }));
     const { hash, height } = await doContract(messages, `mint ${qty} Gem${qty > 1 ? "s" : ""}`);
     setStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}. Sealed for 10 blocks, then check TokenURI to see what you got.`);
-    document.getElementById("resultsGrid").innerHTML = Array.from({ length: qty }, (_, i) =>
-      `<div class="rcard">piece ${i + 1}<br>sealed</div>`).join("");
     loadStats();
+    loadGallery();
   } catch (err) {
     setStatus("error", err.message || String(err));
   } finally {
@@ -317,7 +390,9 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
 
 renderWalletGate();
 loadStats();
+loadGallery();
 setInterval(loadStats, 20000);
+setInterval(loadGallery, 20000);
 </script>
 
 </body>

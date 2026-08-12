@@ -4,26 +4,26 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>gno.land Name Registry — query · names · history · register</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
      gno-observer, which Adena does pick up) fetch /favicon.ico at the site
      root directly instead of parsing the <link rel="icon"> tags above, so
      both need to exist and agree. -->
 <link rel="shortcut icon" href="/favicon.ico">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
 <!-- Applies a stored light/dark choice before first paint, so reloading
      with an explicit preference never flashes the other theme. A "system"
      preference (no stored choice) needs no JS — it's handled by a plain
      @media query in lib/site-chrome.js's injected stylesheet. -->
 <script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
 <!-- Required for Adena to inject window.adena on an otherwise-inline-only page. Do not remove. -->
-<script src="adena-compat.js"></script>
-<script src="donate-widget.js"></script>
-<script src="suggestions-widget.js"></script>
+<script src="/adena-compat.js"></script>
+<script src="/donate-widget.js"></script>
+<script src="/suggestions-widget.js"></script>
 <script type="module">
-  import { initSiteChrome, getActiveNetworkKey } from "./lib/site-chrome.js";
+  import { initSiteChrome, getActiveNetworkKey } from "/lib/site-chrome.js";
   // Network is a site-wide control now (the header's own always-visible
   // pill) — this page's own NETWORKS object below (keyed "testnet"/
   // "betanet" to match) still supplies the richer per-network data
@@ -33,7 +33,7 @@
   // The rest of this page's logic is a plain (non-module) <script> further
   // down — mirrored onto window here so it can reuse the same cache helper
   // every other tool uses without converting this whole file to a module.
-  import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
+  import { saveCache, loadCache, formatAgo } from "/lib/local-cache.js";
   window.gtCache = { saveCache, loadCache, formatAgo };
   // NET below defaults to "testnet" and otherwise only ever updates by
   // catching the "gnotools:activenetwork" event — which only fires on an

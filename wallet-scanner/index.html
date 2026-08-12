@@ -4,15 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wallet Scanner — gno.tools</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
      gno-observer, which Adena does pick up) fetch /favicon.ico at the site
      root directly instead of parsing the <link rel="icon"> tags above, so
      both need to exist and agree. -->
 <link rel="shortcut icon" href="/favicon.ico">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
 <!-- Applies a stored light/dark choice before first paint, so reloading
      with an explicit preference never flashes the other theme. A "system"
      preference (no stored choice) needs no JS — it's handled by a plain
@@ -21,9 +21,9 @@
 <!-- Works around a real bug in Adena's own extension (a window.adena
      that never gets set on some page-load orderings), not this code —
      must stay an external <script src>, not inlined. -->
-<script src="adena-compat.js"></script>
-<script src="donate-widget.js"></script>
-<script src="suggestions-widget.js"></script>
+<script src="/adena-compat.js"></script>
+<script src="/donate-widget.js"></script>
+<script src="/suggestions-widget.js"></script>
 <style>
   /* Palette (--bg, --panel, --accent, --mono, --sans, etc.) is defined
      once, globally, by lib/site-chrome.js's injected stylesheet — same
@@ -179,10 +179,10 @@
 </div>
 
 <script type="module">
-import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, abciQuery } from "./lib/gno-rpc.js";
-import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "./lib/gno-nft.js";
-import { initSiteChrome, onWalletChange, getActiveNetworkKey } from "./lib/site-chrome.js";
-import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
+import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, abciQuery } from "/lib/gno-rpc.js";
+import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "/lib/gno-nft.js";
+import { initSiteChrome, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
+import { saveCache, loadCache, formatAgo } from "/lib/local-cache.js";
 
 // Network is a site-wide control now (the header's own always-visible
 // pill, driven by the same NETWORKS this page imports) — nothing to pass
@@ -238,7 +238,7 @@ function escapeHtml(s) {
 let nftRealmsByNetwork = {};
 async function loadNftRealms() {
   try {
-    const res = await fetch("data/nft-realms.json");
+    const res = await fetch("/data/nft-realms.json");
     const data = await res.json();
     nftRealmsByNetwork = data.networks || {};
   } catch {

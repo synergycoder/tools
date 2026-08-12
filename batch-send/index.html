@@ -4,22 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Batch Send — gno.tools</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
      gno-observer, which Adena does pick up) fetch /favicon.ico at the site
      root directly instead of parsing the <link rel="icon"> tags above, so
      both need to exist and agree. -->
 <link rel="shortcut icon" href="/favicon.ico">
-<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
 <script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
 <!-- Works around a real bug in Adena's own extension (a window.adena
      that never gets set on some page-load orderings), not this code —
      must stay an external <script src>, not inlined. -->
-<script src="adena-compat.js"></script>
-<script src="donate-widget.js"></script>
-<script src="suggestions-widget.js"></script>
+<script src="/adena-compat.js"></script>
+<script src="/donate-widget.js"></script>
+<script src="/suggestions-widget.js"></script>
 <style>
   :root{ color-scheme: light dark; }
   *{box-sizing:border-box}
@@ -219,7 +219,7 @@
 </div>
 
 <script type="module">
-import { initSiteChrome, onWalletChange, gateIfLocked } from "./lib/site-chrome.js";
+import { initSiteChrome, onWalletChange, gateIfLocked } from "/lib/site-chrome.js";
 initSiteChrome();
 gateIfLocked(document.getElementById("toolBody"));
 </script>
@@ -227,11 +227,11 @@ gateIfLocked(document.getElementById("toolBody"));
 import {
   NETWORKS, networkForChainId, loadFungibleTokens, resolveToken, fetchTokenDecimals,
   fetchBalance, fetchNativeBalance, toBaseUnits, fromBaseUnits,
-} from "./lib/gno-rpc.js";
-import { parseAddressAmountRows, sheetsUrlToCsvExportUrl } from "./lib/csv.js";
-import { doContract } from "./lib/adena-connect.js";
-import { onWalletChange, getWallet, getActiveNetworkKey } from "./lib/site-chrome.js";
-import { saveCache, loadCache } from "./lib/local-cache.js";
+} from "/lib/gno-rpc.js";
+import { parseAddressAmountRows, sheetsUrlToCsvExportUrl } from "/lib/csv.js";
+import { doContract } from "/lib/adena-connect.js";
+import { onWalletChange, getWallet, getActiveNetworkKey } from "/lib/site-chrome.js";
+import { saveCache, loadCache } from "/lib/local-cache.js";
 
 const GNOT_DECIMALS = 6;
 

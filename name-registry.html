@@ -17,7 +17,7 @@
      with an explicit preference never flashes the other theme. A "system"
      preference (no stored choice) needs no JS — it's handled by a plain
      @media query in lib/site-chrome.js's injected stylesheet. -->
-<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
 <!-- Required for Adena to inject window.adena on an otherwise-inline-only page. Do not remove. -->
 <script src="adena-compat.js"></script>
 <script src="donate-widget.js"></script>

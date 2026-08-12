@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFT Minter — gno.tools</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
+     gno-observer, which Adena does pick up) fetch /favicon.ico at the site
+     root directly instead of parsing the <link rel="icon"> tags above, so
+     both need to exist and agree. -->
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<!-- Works around a real bug in Adena's own extension (a window.adena that
+     never gets set on some page-load orderings), not this code — must
+     stay an external <script src>, not inlined. -->
+<script src="/adena-compat.js"></script>
+<script src="/donate-widget.js"></script>
+<script src="/suggestions-widget.js"></script>
+<style>
+  :root{ color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background: var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5; font-size:15px;
+  }
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:980px; margin:0 auto; padding:0 20px 60px}
+  code,.mono{font-family:var(--mono)}
+
+  .page-title{padding:26px 0 4px}
+  .mark{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    border:1px solid var(--accent-line); background:var(--accent-soft);
+    padding:3px 8px; border-radius:6px; letter-spacing:.06em;
+  }
+  h1{font-size:22px; margin:8px 0 4px}
+  h2{font-size:15px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13.5px; margin:0; max-width:65ch}
+  .section-hint{color:var(--faint); font-size:12.5px; margin:0 0 14px}
+
+  .panel{
+    background:var(--panel); border:1px solid var(--hair); border-radius:9px;
+    padding:18px 20px; margin:20px 0;
+  }
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
+  .field-label{color:var(--faint); font-size:12.5px; min-width:9rem}
+
+  input[type=number]{
+    font-family:var(--mono); font-size:13px; padding:8px 10px;
+    border-radius:9px; border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  input[type=range]{ flex:1; min-width:8rem; accent-color:var(--accent); }
+  select{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+  }
+  textarea{
+    width:100%; box-sizing:border-box; min-height:5rem; padding:10px 12px;
+    border-radius:9px; border:1px solid var(--hair2); background:var(--panel2); color:var(--ink);
+    font-family:var(--mono); font-size:12px; resize:vertical;
+  }
+  button{
+    font-family:var(--sans); font-weight:600; font-size:13.5px; padding:10px 18px;
+    border-radius:9px; border:1px solid var(--accent-line);
+    background:var(--accent-soft); color:var(--accent); cursor:pointer;
+  }
+  button:hover{background:var(--accent-line)}
+  button:disabled{opacity:.5; cursor:default}
+  button.ghost{background:transparent; color:var(--muted); border-color:var(--hair2)}
+  button.ghost:hover{color:var(--ink); border-color:var(--accent-line); background:transparent}
+  button.small{padding:6px 12px; font-size:12px}
+  button.ghost.on{color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft)}
+
+  .note{
+    border-left:3px solid var(--amber); background:var(--amber-soft); border-radius:0 10px 10px 0;
+    padding:12px 15px; font-size:13px; color:var(--ink); margin:14px 0;
+  }
+  .note strong{display:block; margin-bottom:4px; color:var(--amber)}
+  .validation-error{color:var(--bad); font-size:12.5px; margin:4px 0}
+
+  /* dark-first --good token (not defined site-wide), mirrors the site's
+     own --amber/--bad token-block structure one level narrower in scope. */
+  :root{ --good:#3ecf6e; --good-soft:#3ecf6e1a; --good-line:#3ecf6e55; }
+  @media (prefers-color-scheme: light){ :root:not([data-theme]){ --good:#1a8f45; --good-soft:#1a8f4512; --good-line:#1a8f4550; } }
+  :root[data-theme="light"]{ --good:#1a8f45; --good-soft:#1a8f4512; --good-line:#1a8f4550; }
+
+  .dropzone{
+    border:2px dashed var(--hair2); border-radius:10px; padding:32px 20px;
+    text-align:center; cursor:pointer; display:block; transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.drag{ border-color:var(--accent-line); background:var(--panel2); }
+  .dropzone input{ position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+  .dropzone-icon{ font-size:30px; margin-bottom:6px; }
+  .dropzone p{ margin:4px 0; }
+  .link-btn{ background:none; border:none; padding:0; color:var(--accent); font:inherit; font-weight:600; cursor:pointer; }
+  .link-btn:hover{ text-decoration:underline; background:none; }
+
+  .compare-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:16px 0; }
+  @media (max-width:640px){ .compare-grid{ grid-template-columns:1fr; } }
+  .compare-card{ background:var(--panel2); border:1px solid var(--hair2); border-radius:10px; padding:14px; }
+  .compare-card.good{ border-color:var(--good-line); }
+  .compare-card.bad{ border-color:var(--bad); }
+  .compare-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px; }
+  .compare-label{ font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); }
+  .compare-dims{ font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+  .compare-imgwrap{
+    background:
+      linear-gradient(45deg, var(--hair) 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(-45deg, var(--hair) 25%, transparent 25%) -8px 0/16px 16px,
+      linear-gradient(45deg, transparent 75%, var(--hair) 75%) 0 0/16px 16px,
+      linear-gradient(-45deg, transparent 75%, var(--hair) 75%) 0 0/16px 16px;
+    background-color:var(--panel); border-radius:8px; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; min-height:10rem; max-height:16rem;
+  }
+  .compare-imgwrap img{ max-width:100%; max-height:16rem; display:block; cursor:zoom-in; }
+  .compare-stats{ margin-top:10px; font-size:12.5px; color:var(--muted); display:flex; flex-direction:column; gap:3px; }
+  .compare-stats b{ color:var(--ink); }
+  .pct-badge{ font-family:var(--mono); font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px; }
+  .pct-badge.good{ background:var(--good-soft); color:var(--good); }
+  .pct-badge.bad{ background:var(--bad-soft); color:var(--bad); }
+  .pct-badge.flat{ background:var(--hair); color:var(--muted); }
+
+  .report-grid{ margin:6px 0 0; display:grid; grid-template-columns:auto 1fr; gap:9px 16px; font-size:13.5px; }
+  .report-grid dt{ color:var(--faint); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; padding-top:2px; }
+  .report-grid dd{ margin:0; color:var(--ink); }
+  .report-grid dd .mono{ color:var(--ink); }
+  .cost-figure{ font-family:var(--mono); font-size:16px; font-weight:700; color:var(--accent); }
+  .cost-figure.warn{ color:var(--warn); }
+  .cost-figure.bad{ color:var(--bad); }
+
+  .lightbox{
+    position:fixed; inset:0; z-index:400; background:#04060af0; backdrop-filter:blur(4px);
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .lightbox.on{ display:flex; }
+  .lightbox img{ max-width:92vw; max-height:88vh; border-radius:8px; box-shadow:0 20px 60px #000000aa; }
+  .lightbox-close{
+    position:absolute; top:18px; right:22px; width:36px; height:36px; border-radius:50%;
+    background:var(--panel); border:1px solid var(--hair2); color:var(--ink); font-size:20px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;
+  }
+  .lightbox-caption{ position:absolute; bottom:20px; left:0; right:0; text-align:center; color:var(--muted); font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="page-title">
+  <span class="mark">⛓ MINT</span>
+  <h1>NFT Minter — image prep</h1>
+  <p class="sub">Upload an image, then compress and resize it entirely in your browser so you can see exactly what it will cost to store on-chain as base64 text — no server, no IPFS. This step doesn't touch the blockchain: nothing is minted or uploaded anywhere yet.</p>
+</div>
+
+<div class="note">
+  <strong>Why size matters here</strong>
+  A minted NFT on gno.land with no IPFS/server backing it stores the image as a base64-encoded string directly in the realm's own on-chain storage — and storage is billed by the byte (confirmed identical on both gno.land testnet and Beta Mainnet: <code>100 ugnot</code> per byte, i.e. <code>0.0001 GNOT</code>/byte). Base64 also inflates the raw file by about a third. A full-resolution photo can easily cost tens of GNOT to mint this way — resizing and re-compressing first is the difference between a mint that's affordable and one that isn't.
+</div>
+
+<div class="panel">
+  <label class="dropzone" id="dropzone" for="fileInput">
+    <input type="file" id="fileInput" accept="image/*">
+    <div class="dropzone-icon">🖼</div>
+    <p><strong>Drop an image here</strong>, or <span class="link-btn">browse a file</span></p>
+    <p class="section-hint" style="margin:0">PNG, JPEG, WebP, GIF — stays entirely in your browser.</p>
+  </label>
+  <p class="validation-error" id="uploadError" style="display:none"></p>
+</div>
+
+<div class="panel" id="controlsPanel" style="display:none">
+  <h2>Compress &amp; resize</h2>
+  <p class="section-hint">Changes apply live to the preview below.</p>
+  <div class="row">
+    <span class="field-label">Max width/height</span>
+    <input type="number" id="maxDimInput" min="0" step="1" value="512" style="width:6rem">
+    <span class="section-hint" style="margin:0">px, longest side (0 = don't resize)</span>
+  </div>
+  <div class="row" id="dimPresets">
+    <button type="button" class="ghost small" data-dim="128">128px</button>
+    <button type="button" class="ghost small" data-dim="256">256px</button>
+    <button type="button" class="ghost small" data-dim="512">512px</button>
+    <button type="button" class="ghost small" data-dim="1024">1024px</button>
+    <button type="button" class="ghost small" data-dim="0">Original size</button>
+  </div>
+  <div class="row">
+    <span class="field-label">Output format</span>
+    <select id="formatSelect">
+      <option value="keep">Keep original format</option>
+      <option value="image/jpeg">JPEG</option>
+      <option value="image/webp">WebP</option>
+      <option value="image/png">PNG</option>
+    </select>
+  </div>
+  <div class="row" id="qualityRow">
+    <span class="field-label">Quality</span>
+    <input type="range" id="qualityInput" min="1" max="100" value="80">
+    <span class="mono" id="qualityValue">80</span>
+  </div>
+  <p class="validation-error" id="webpFallbackNote" style="display:none; color:var(--warn)"></p>
+  <div class="row">
+    <button type="button" class="ghost small" id="resetBtn">Reset to defaults</button>
+  </div>
+</div>
+
+<div class="compare-grid" id="compareGrid" style="display:none">
+  <div class="compare-card" id="origCard">
+    <div class="compare-head"><span class="compare-label">Original</span><span class="compare-dims" id="origDims"></span></div>
+    <div class="compare-imgwrap"><img id="origImg" alt="Original upload"></div>
+    <div class="compare-stats" id="origStats"></div>
+  </div>
+  <div class="compare-card" id="compCard">
+    <div class="compare-head"><span class="compare-label">Compressed preview</span><span class="compare-dims" id="compDims"></span></div>
+    <div class="compare-imgwrap"><img id="compImg" alt="Compressed preview"></div>
+    <div class="compare-stats" id="compStats"></div>
+  </div>
+</div>
+
+<div class="panel" id="reportPanel" style="display:none">
+  <h2>Size &amp; estimated mint cost</h2>
+  <dl class="report-grid">
+    <dt>Original file</dt><dd id="repOrig"></dd>
+    <dt>Compressed file</dt><dd id="repComp"></dd>
+    <dt>On-chain payload</dt><dd id="repDataUri"></dd>
+    <dt>Estimated storage cost</dt><dd id="repCost"></dd>
+  </dl>
+  <p class="section-hint" style="margin-top:12px">Storage rate (100 ugnot/byte) is a confirmed on-chain parameter, but the exact byte count a real mint transaction bills can differ slightly from this string's raw length depending on the realm's own storage layout — treat this as a close estimate, not a quoted price. Nothing here has touched the blockchain.</p>
+</div>
+
+<div class="panel" id="dataUriPanel" style="display:none">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">Data URI</h2>
+    <button type="button" class="ghost small" id="copyDataUriBtn">Copy</button>
+  </div>
+  <p class="section-hint">This exact string is what a mint transaction would eventually store as the token's image field. Copy it if you want to inspect or test it elsewhere — minting itself isn't wired up yet.</p>
+  <textarea id="dataUriOutput" readonly rows="4"></textarea>
+</div>
+
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightboxClose" aria-label="Close" type="button">×</button>
+  <img id="lightboxImg" alt="">
+  <div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+
+<script type="module">
+import { initSiteChrome } from "/lib/site-chrome.js";
+initSiteChrome();
+</script>
+<script type="module">
+// Confirmed via a real deploy + the /tm.StorageDepositEvent read on both
+// gno.land testnet (sapphire-1) and Beta Mainnet -- see ~/gno-land-dev-notes.md,
+// 2026-08-05 "gno-nft-minter/gno-token-minter" entry. The *rate* is solid;
+// the exact byte count a given realm bills for a string value can drift a
+// little from raw length depending on how it stores it, which is why the
+// report below calls this an estimate, not a quote.
+const STORAGE_UGNOT_PER_BYTE = 100;
+
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+const uploadError = document.getElementById("uploadError");
+const controlsPanel = document.getElementById("controlsPanel");
+const maxDimInput = document.getElementById("maxDimInput");
+const dimPresets = document.getElementById("dimPresets");
+const formatSelect = document.getElementById("formatSelect");
+const qualityRow = document.getElementById("qualityRow");
+const qualityInput = document.getElementById("qualityInput");
+const qualityValue = document.getElementById("qualityValue");
+const webpFallbackNote = document.getElementById("webpFallbackNote");
+const resetBtn = document.getElementById("resetBtn");
+const compareGrid = document.getElementById("compareGrid");
+const origImg = document.getElementById("origImg");
+const origDims = document.getElementById("origDims");
+const origStats = document.getElementById("origStats");
+const origCard = document.getElementById("origCard");
+const compImg = document.getElementById("compImg");
+const compDims = document.getElementById("compDims");
+const compStats = document.getElementById("compStats");
+const compCard = document.getElementById("compCard");
+const reportPanel = document.getElementById("reportPanel");
+const repOrig = document.getElementById("repOrig");
+const repComp = document.getElementById("repComp");
+const repDataUri = document.getElementById("repDataUri");
+const repCost = document.getElementById("repCost");
+const dataUriPanel = document.getElementById("dataUriPanel");
+const dataUriOutput = document.getElementById("dataUriOutput");
+const copyDataUriBtn = document.getElementById("copyDataUriBtn");
+const lightbox = document.getElementById("lightbox");
+const lightboxImg = document.getElementById("lightboxImg");
+const lightboxCaption = document.getElementById("lightboxCaption");
+const lightboxClose = document.getElementById("lightboxClose");
+
+let originalImg = null, originalBytes = 0, originalW = 0, originalH = 0, originalType = "";
+let compressedDataUrl = "", compressedBinaryBytes = 0, compressedDataUriBytes = 0, compressedW = 0, compressedH = 0;
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(2) + " MB";
+}
+
+function pctBadge(from, to) {
+  if (!from) return "";
+  const pct = ((to - from) / from) * 100;
+  if (Math.abs(pct) < 1) return `<span class="pct-badge flat">≈ same</span>`;
+  const cls = pct < 0 ? "good" : "bad";
+  const sign = pct < 0 ? "−" : "+";
+  return `<span class="pct-badge ${cls}">${sign}${Math.abs(pct).toFixed(0)}%</span>`;
+}
+
+function showError(msg) {
+  uploadError.textContent = msg;
+  uploadError.style.display = "block";
+}
+function clearError() {
+  uploadError.style.display = "none";
+}
+
+// ---------- upload ----------
+
+["dragover", "dragenter"].forEach((evt) =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("drag"); })
+);
+["dragleave", "drop"].forEach((evt) =>
+  dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove("drag"); })
+);
+dropzone.addEventListener("drop", (e) => {
+  const file = e.dataTransfer?.files?.[0];
+  if (file) handleFile(file);
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files[0]) handleFile(fileInput.files[0]);
+});
+
+function handleFile(file) {
+  if (!file.type || !file.type.startsWith("image/")) {
+    showError("That doesn't look like an image file — try a PNG, JPEG, WebP, or GIF.");
+    return;
+  }
+  clearError();
+  const reader = new FileReader();
+  reader.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      originalImg = img;
+      originalBytes = file.size;
+      originalW = img.naturalWidth;
+      originalH = img.naturalHeight;
+      originalType = file.type || "image/png";
+      origImg.src = reader.result;
+      origDims.textContent = `${originalW}×${originalH}`;
+      controlsPanel.style.display = "block";
+      compareGrid.style.display = "grid";
+      reportPanel.style.display = "block";
+      dataUriPanel.style.display = "block";
+      recompute();
+    };
+    img.onerror = () => showError("Couldn't decode that file as an image.");
+    img.src = reader.result;
+  };
+  reader.onerror = () => showError("Couldn't read that file.");
+  reader.readAsDataURL(file);
+}
+
+// ---------- controls ----------
+
+let recomputeTimer = null;
+function scheduleRecompute() {
+  clearTimeout(recomputeTimer);
+  recomputeTimer = setTimeout(recompute, 120);
+}
+
+maxDimInput.addEventListener("input", scheduleRecompute);
+formatSelect.addEventListener("change", scheduleRecompute);
+qualityInput.addEventListener("input", () => { qualityValue.textContent = qualityInput.value; scheduleRecompute(); });
+dimPresets.addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-dim]");
+  if (!btn) return;
+  maxDimInput.value = btn.dataset.dim;
+  recompute();
+});
+resetBtn.addEventListener("click", () => {
+  maxDimInput.value = "512";
+  formatSelect.value = "keep";
+  qualityInput.value = "80";
+  qualityValue.textContent = "80";
+  if (originalImg) recompute();
+});
+
+function recompute() {
+  if (!originalImg) return;
+
+  const maxDim = Math.max(0, parseInt(maxDimInput.value, 10) || 0);
+  let targetW = originalW, targetH = originalH;
+  if (maxDim > 0 && (originalW > maxDim || originalH > maxDim)) {
+    const scale = maxDim / Math.max(originalW, originalH);
+    targetW = Math.max(1, Math.round(originalW * scale));
+    targetH = Math.max(1, Math.round(originalH * scale));
+  }
+
+  const chosen = formatSelect.value;
+  const knownFormats = ["image/jpeg", "image/png", "image/webp"];
+  let effectiveFormat = chosen === "keep"
+    ? (knownFormats.includes(originalType) ? originalType : "image/png")
+    : chosen;
+  const lossy = effectiveFormat === "image/jpeg" || effectiveFormat === "image/webp";
+  qualityRow.style.display = lossy ? "flex" : "none";
+  const quality = lossy ? (parseInt(qualityInput.value, 10) || 80) / 100 : undefined;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  if (effectiveFormat === "image/jpeg") {
+    // JPEG has no alpha channel -- fill white first so a transparent PNG
+    // source doesn't silently turn black where it used to be transparent.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, targetW, targetH);
+  }
+  ctx.drawImage(originalImg, 0, 0, targetW, targetH);
+
+  let dataUrl = canvas.toDataURL(effectiveFormat, quality);
+  let fellBack = false;
+  if (effectiveFormat === "image/webp" && !dataUrl.startsWith("data:image/webp")) {
+    // Not every browser can encode WebP via canvas -- it silently falls
+    // back to PNG instead of throwing, so this has to be detected, not assumed.
+    fellBack = true;
+    effectiveFormat = "image/png";
+  }
+  webpFallbackNote.style.display = fellBack ? "block" : "none";
+  webpFallbackNote.textContent = fellBack ? "This browser can't export WebP — showing a PNG instead." : "";
+
+  compressedDataUrl = dataUrl;
+  compressedW = targetW;
+  compressedH = targetH;
+  const base64Payload = dataUrl.slice(dataUrl.indexOf(",") + 1);
+  let padding = 0;
+  if (base64Payload.endsWith("==")) padding = 2;
+  else if (base64Payload.endsWith("=")) padding = 1;
+  compressedBinaryBytes = Math.floor((base64Payload.length * 3) / 4) - padding;
+  compressedDataUriBytes = dataUrl.length;
+
+  renderCompare(effectiveFormat, quality);
+  renderReport();
+
+  compImg.src = compressedDataUrl;
+  dataUriOutput.value = compressedDataUrl;
+}
+
+function formatLabel(mime) {
+  return { "image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WebP" }[mime] || mime;
+}
+
+function renderCompare(effectiveFormat, quality) {
+  compDims.textContent = `${compressedW}×${compressedH}`;
+  origStats.innerHTML = `<div><b>${fmtBytes(originalBytes)}</b> · ${formatLabel(originalType)}</div>`;
+  const q = quality !== undefined ? ` · quality ${Math.round(quality * 100)}` : "";
+  compStats.innerHTML = `<div><b>${fmtBytes(compressedBinaryBytes)}</b> · ${formatLabel(effectiveFormat)}${q} ${pctBadge(originalBytes, compressedBinaryBytes)}</div>`;
+  compCard.classList.remove("good", "bad");
+  if (compressedBinaryBytes < originalBytes * 0.98) compCard.classList.add("good");
+  else if (compressedBinaryBytes > originalBytes * 1.02) compCard.classList.add("bad");
+}
+
+function renderReport() {
+  repOrig.innerHTML = `<span class="mono">${fmtBytes(originalBytes)}</span> — ${originalW}×${originalH}, ${formatLabel(originalType)}`;
+  repComp.innerHTML = `<span class="mono">${fmtBytes(compressedBinaryBytes)}</span> — ${compressedW}×${compressedH} ${pctBadge(originalBytes, compressedBinaryBytes)}`;
+  repDataUri.innerHTML = `<span class="mono">${fmtBytes(compressedDataUriBytes)}</span> <span class="section-hint" style="margin:0">(${compressedDataUriBytes.toLocaleString()} characters — base64 payload plus the data-URI prefix)</span>`;
+
+  const costUgnot = compressedDataUriBytes * STORAGE_UGNOT_PER_BYTE;
+  const costGnot = costUgnot / 1e6;
+  let cls = "";
+  if (costGnot >= 5) cls = "bad";
+  else if (costGnot >= 0.5) cls = "warn";
+  repCost.innerHTML = `<span class="cost-figure ${cls}">${costGnot.toLocaleString(undefined, { maximumFractionDigits: 4 })} GNOT</span> <span class="section-hint" style="margin:0">(${costUgnot.toLocaleString()} ugnot, at 100 ugnot/byte)</span>`;
+}
+
+// ---------- lightbox ----------
+
+function openLightbox(src, caption) {
+  if (!src) return;
+  lightboxImg.src = src;
+  lightboxCaption.textContent = caption || "";
+  lightbox.classList.add("on");
+}
+function closeLightbox() {
+  lightbox.classList.remove("on");
+  lightboxImg.src = "";
+}
+origImg.addEventListener("click", () => openLightbox(origImg.src, `Original — ${originalW}×${originalH}, ${fmtBytes(originalBytes)}`));
+compImg.addEventListener("click", () => openLightbox(compImg.src, `Compressed preview — ${compressedW}×${compressedH}, ${fmtBytes(compressedBinaryBytes)}`));
+lightboxClose.addEventListener("click", closeLightbox);
+lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+window.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+
+// ---------- copy ----------
+
+copyDataUriBtn.addEventListener("click", async () => {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(dataUriOutput.value);
+    } else {
+      dataUriOutput.select();
+      document.execCommand("copy");
+    }
+    copyDataUriBtn.textContent = "Copied";
+    copyDataUriBtn.classList.add("on");
+    setTimeout(() => { copyDataUriBtn.textContent = "Copy"; copyDataUriBtn.classList.remove("on"); }, 1400);
+  } catch {
+    copyDataUriBtn.textContent = "Copy failed";
+    setTimeout(() => { copyDataUriBtn.textContent = "Copy"; }, 1400);
+  }
+});
+</script>
+</body>
+</html>

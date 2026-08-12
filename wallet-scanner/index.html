@@ -69,6 +69,15 @@
   }
   button.rescan:hover{background:var(--accent-line)}
   button.rescan:disabled{opacity:.5; cursor:default}
+  .sec-rescan{
+    margin-left:auto; width:26px; height:26px; padding:0; flex:none; font-size:14px;
+    display:none; align-items:center; justify-content:center; border-radius:7px;
+    border:1px solid var(--hair2); background:transparent; color:var(--muted); cursor:pointer;
+  }
+  .sec-rescan:hover{color:var(--ink); border-color:var(--accent-line)}
+  .sec-rescan:disabled{opacity:.5; cursor:default}
+  .sec-rescan.spinning{animation:spin .7s linear infinite}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
   .scan-tabs{display:inline-flex; border:1px solid var(--hair2); border-radius:10px; padding:3px; gap:2px; background:var(--panel2)}
   .scan-tab{font-family:var(--sans); font-size:13px; padding:7px 14px; border-radius:7px; border:none; background:transparent; color:var(--muted); cursor:pointer}
@@ -152,7 +161,7 @@
 </div>
 
 <div class="panel">
-  <h2>Native &amp; GRC20 tokens <span class="count" id="tokenCount"></span></h2>
+  <h2>Native &amp; GRC20 tokens <span class="count" id="tokenCount"></span><button class="sec-rescan" id="tokensRescanBtn" title="Refresh just this section">↻</button></h2>
   <p class="section-hint">Every fungible token registered on this network, checked for a balance &gt; 0.</p>
   <p class="empty" id="tokenEmpty">Connect a wallet (top right) to scan.</p>
   <table id="tokenTable" style="display:none">
@@ -162,7 +171,7 @@
 </div>
 
 <div class="panel">
-  <h2>NFTs <span class="count" id="nftCount"></span></h2>
+  <h2>NFTs <span class="count" id="nftCount"></span><button class="sec-rescan" id="nftsRescanBtn" title="Refresh just this section">↻</button></h2>
   <p class="section-hint">Checked against every NFT-standard collection this scanner can find by walking the whole chain — no fixed list to fall behind, see the note below for how fresh it is.</p>
   <p class="empty" id="nftEmpty">Connect a wallet (top right) to scan.</p>
   <div class="nft-grid" id="nftGrid"></div>
@@ -170,7 +179,7 @@
 </div>
 
 <div class="panel">
-  <h2>Names</h2>
+  <h2>Names<button class="sec-rescan" id="namesRescanBtn" title="Refresh just this section">↻</button></h2>
   <p class="section-hint">The registered gno.land name for this address, if it has one — from <code>r/sys/users</code> on the currently selected network.</p>
   <p class="empty" id="nameEmpty">Connect a wallet (top right) to scan.</p>
   <div class="addrbox" id="nameResult" style="display:none"></div>
@@ -201,6 +210,9 @@ let activeNetKey = getActiveNetworkKey() || Object.keys(NETWORKS)[0];
 const MAX_THUMBS_PER_COLLECTION = 8;
 
 const rescanBtn = document.getElementById("rescanBtn");
+const tokensRescanBtn = document.getElementById("tokensRescanBtn");
+const nftsRescanBtn = document.getElementById("nftsRescanBtn");
+const namesRescanBtn = document.getElementById("namesRescanBtn");
 const connectStatus = document.getElementById("connectStatus");
 const addrBox = document.getElementById("addrBox");
 const tokenCount = document.getElementById("tokenCount");
@@ -273,7 +285,15 @@ async function ensureNftCollections(netKey, { force = false } = {}) {
   }
   const stale = force || !cached || (Date.now() - cached.cachedAt) > NFT_COLLECTIONS_REFRESH_COOLDOWN_MS;
   if (stale && !nftCollectionsInFlight[netKey]) {
-    nftCollectionsInFlight[netKey] = refreshNftCollections(netKey, net).finally(() => {
+    // .catch(() => {}) is load-bearing, not defensive filler: a transient
+    // RPC hiccup mid-walk (confirmed live — an intermittent CORS/network
+    // blip on vm/qpaths) would otherwise reject this promise with nothing
+    // downstream ever attached to catch it, surfacing as an unhandled
+    // promise rejection that silently aborts the *caller's* whole scan
+    // (scanNfts awaits this). A failed background refresh should just
+    // mean "keep using whatever's already cached", the same best-effort
+    // philosophy every other RPC call in this file already follows.
+    nftCollectionsInFlight[netKey] = refreshNftCollections(netKey, net).catch(() => {}).finally(() => {
       delete nftCollectionsInFlight[netKey];
     });
   }
@@ -332,6 +352,7 @@ function updateAddressDisplay() {
   if (!addr) {
     addrBox.style.display = "none";
     rescanBtn.style.display = "none";
+    [tokensRescanBtn, nftsRescanBtn, namesRescanBtn].forEach((b) => (b.style.display = "none"));
     return;
   }
   addrBox.style.display = "block";
@@ -339,6 +360,7 @@ function updateAddressDisplay() {
     ? `<b>Connected:</b> ${escapeHtml(addr)}`
     : `<b>Scanning:</b> ${escapeHtml(addr)}`;
   rescanBtn.style.display = "inline-block";
+  [tokensRescanBtn, nftsRescanBtn, namesRescanBtn].forEach((b) => (b.style.display = "inline-flex"));
 }
 
 // Scan results (token balances + NFT holdings, including fetched thumbs)
@@ -353,6 +375,14 @@ const SCAN_CACHE_PREFIX = "gnoTools:walletScan:v2:";
 function scanCacheKey(netKey, address) { return `${SCAN_CACHE_PREFIX}${netKey}:${address}`; }
 function saveScanCache(netKey, address, data) { saveCache(scanCacheKey(netKey, address), data); }
 function loadScanCache(netKey, address) { return loadCache(scanCacheKey(netKey, address)); }
+// Updates just the given fields of the cached scan result, leaving
+// whatever the other sections already had untouched — what a per-section
+// Rescan button needs, since re-running e.g. just the NFT scan shouldn't
+// blow away already-cached token/name data for the same address.
+function patchScanCache(netKey, address, patch) {
+  const existing = loadScanCache(netKey, address) || {};
+  saveScanCache(netKey, address, { ...existing, ...patch });
+}
 
 window.addEventListener("gnotools:activenetwork", (e) => {
   if (!e.detail) return;
@@ -612,6 +642,48 @@ async function scan({ forceCollectionsRefresh = false } = {}) {
     rescanBtn.disabled = false;
   }
 }
+
+// Per-section rescans — same idea as scan() above but touching only one
+// section's RPC calls and cache fields, for when e.g. a fresh NFT mint
+// needs checking without re-fetching every GRC20 token balance too.
+async function rescanSection(btn, run) {
+  const address = currentTargetAddress();
+  if (!address) return;
+  const netKey = activeNetKey;
+  const net = NETWORKS[netKey];
+  btn.disabled = true;
+  btn.classList.add("spinning");
+  cacheStatus.textContent = "";
+  try {
+    await run(net, netKey, address);
+    cacheStatus.textContent = "Updated just now";
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("spinning");
+  }
+}
+
+tokensRescanBtn.addEventListener("click", () => rescanSection(tokensRescanBtn, async (net, netKey, address) => {
+  const tokens = await scanTokens(net, address);
+  patchScanCache(netKey, address, { tokens });
+}));
+
+nftsRescanBtn.addEventListener("click", () => rescanSection(nftsRescanBtn, async (net, netKey, address) => {
+  // Forces a fresh collections walk too — the whole point of a dedicated
+  // NFT rescan button is "I just minted/moved something, show me now",
+  // not "wait up to 10 more minutes for the background refresh."
+  const nftResult = await scanNfts(net, netKey, address, { forceCollectionsRefresh: true });
+  patchScanCache(netKey, address, {
+    nfts: nftResult.held,
+    nftCheckedCount: nftResult.checkedCount,
+    nftErrorCount: nftResult.errorCount,
+  });
+}));
+
+namesRescanBtn.addEventListener("click", () => rescanSection(namesRescanBtn, async (net, netKey, address) => {
+  const name = await scanName(net, address);
+  patchScanCache(netKey, address, { name });
+}));
 
 // Shows a cached result instantly (if there is one for this address on
 // the currently-selected network) with no RPC calls, then falls back to

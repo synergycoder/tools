@@ -73,6 +73,17 @@
   button.rescan:hover{background:var(--accent-line)}
   button.rescan:disabled{opacity:.5; cursor:default}
 
+  .scan-tabs{display:inline-flex; border:1px solid var(--hair2); border-radius:10px; padding:3px; gap:2px; background:var(--panel2)}
+  .scan-tab{font-family:var(--sans); font-size:13px; padding:7px 14px; border-radius:7px; border:none; background:transparent; color:var(--muted); cursor:pointer}
+  .scan-tab.on{background:var(--accent-soft); color:var(--accent); font-weight:600}
+  .scan-tab:hover:not(.on){color:var(--ink)}
+  #otherAddrRow{margin-top:12px}
+  #otherAddrRow input{
+    font-family:var(--mono); font-size:13px; padding:9px 11px; border-radius:9px;
+    border:1px solid var(--hair2); background:var(--panel2); color:var(--ink); flex:1; min-width:220px;
+  }
+  .addr-err{font-size:12.5px; color:var(--bad, #e0685f); margin:6px 0 0}
+
   .pulse{display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-right:8px; animation:pulse 1.1s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.35; transform:scale(.85)}50%{opacity:1; transform:scale(1)}}
 
@@ -126,7 +137,16 @@
 </div>
 
 <div class="panel">
-  <div class="row">
+  <div class="scan-tabs" id="scanTabs">
+    <button class="scan-tab on" data-mode="mine">My Wallet</button>
+    <button class="scan-tab" data-mode="other">Someone Else's Wallet</button>
+  </div>
+  <div class="row" id="otherAddrRow" style="display:none">
+    <input type="text" id="otherAddrInput" placeholder="g1…" autocomplete="off" spellcheck="false">
+    <button class="rescan" id="otherScanBtn">Scan</button>
+  </div>
+  <p class="addr-err" id="otherAddrErr" style="display:none"></p>
+  <div class="row" style="margin-top:14px">
     <button class="rescan" id="rescanBtn" style="display:none">↻ Rescan</button>
     <span class="note" id="connectStatus" style="margin:0"></span>
     <span class="note" id="cacheStatus" style="margin:0"></span>
@@ -152,10 +172,17 @@
   <p class="note" id="nftCoverageNote" style="display:none"></p>
 </div>
 
+<div class="panel">
+  <h2>Names</h2>
+  <p class="section-hint">The registered gno.land name for this address, if it has one — from <code>r/sys/users</code> on the currently selected network.</p>
+  <p class="empty" id="nameEmpty">Connect a wallet (top right) to scan.</p>
+  <div class="addrbox" id="nameResult" style="display:none"></div>
+</div>
+
 </div>
 
 <script type="module">
-import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit } from "./lib/gno-rpc.js";
+import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, abciQuery } from "./lib/gno-rpc.js";
 import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "./lib/gno-nft.js";
 import { initSiteChrome, onWalletChange, getActiveNetworkKey } from "./lib/site-chrome.js";
 import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
@@ -186,6 +213,26 @@ const nftCount = document.getElementById("nftCount");
 const nftEmpty = document.getElementById("nftEmpty");
 const nftGrid = document.getElementById("nftGrid");
 const nftCoverageNote = document.getElementById("nftCoverageNote");
+const nameEmpty = document.getElementById("nameEmpty");
+const nameResult = document.getElementById("nameResult");
+const scanTabs = document.getElementById("scanTabs");
+const otherAddrRow = document.getElementById("otherAddrRow");
+const otherAddrInput = document.getElementById("otherAddrInput");
+const otherScanBtn = document.getElementById("otherScanBtn");
+const otherAddrErr = document.getElementById("otherAddrErr");
+
+const ADDR_RE = /^g1[a-z0-9]{38}$/;
+let scanMode = "mine"; // "mine" | "other"
+let otherAddress = null;
+
+// The single address any given scan/render targets, resolved from whichever
+// sub-tab is active — "mine" follows the connected wallet, "other" follows
+// whatever address was submitted in the input box. Read-only lookups don't
+// need a connected wallet at all, so "other" mode works with nothing
+// connected.
+function currentTargetAddress() {
+  return scanMode === "mine" ? (wallet && wallet.address) : otherAddress;
+}
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -215,7 +262,27 @@ function resetPanels(message) {
   nftEmpty.textContent = message;
   nftCount.textContent = "";
   nftCoverageNote.style.display = "none";
+  nameResult.style.display = "none";
+  nameEmpty.style.display = "block";
+  nameEmpty.textContent = message;
   cacheStatus.textContent = "";
+}
+
+// Mirrors the connected-wallet addrbox for "mine" mode, or shows the
+// submitted address for "other" mode — same box, different label so it's
+// never ambiguous which wallet is actually being scanned.
+function updateAddressDisplay() {
+  const addr = currentTargetAddress();
+  if (!addr) {
+    addrBox.style.display = "none";
+    rescanBtn.style.display = "none";
+    return;
+  }
+  addrBox.style.display = "block";
+  addrBox.innerHTML = scanMode === "mine"
+    ? `<b>Connected:</b> ${escapeHtml(addr)}`
+    : `<b>Scanning:</b> ${escapeHtml(addr)}`;
+  rescanBtn.style.display = "inline-block";
 }
 
 // Scan results (token balances + NFT holdings, including fetched thumbs)
@@ -234,8 +301,41 @@ function loadScanCache(netKey, address) { return loadCache(scanCacheKey(netKey, 
 window.addEventListener("gnotools:activenetwork", (e) => {
   if (!e.detail) return;
   activeNetKey = e.detail.key;
-  if (wallet) loadForCurrentNetwork();
+  if (currentTargetAddress()) loadForCurrentNetwork();
 });
+
+scanTabs.querySelectorAll(".scan-tab").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (btn.classList.contains("on")) return;
+    scanTabs.querySelectorAll(".scan-tab").forEach((b) => b.classList.remove("on"));
+    btn.classList.add("on");
+    scanMode = btn.dataset.mode;
+    otherAddrRow.style.display = scanMode === "other" ? "flex" : "none";
+    otherAddrErr.style.display = "none";
+    if (scanMode === "other") connectStatus.textContent = "";
+    updateAddressDisplay();
+    if (currentTargetAddress()) {
+      loadForCurrentNetwork();
+    } else {
+      resetPanels(scanMode === "mine" ? "Connect a wallet (top right) to scan." : "Enter an address above and click Scan.");
+    }
+  });
+});
+
+function submitOtherAddress() {
+  const v = otherAddrInput.value.trim();
+  if (!ADDR_RE.test(v)) {
+    otherAddrErr.textContent = "Enter a valid g1… address.";
+    otherAddrErr.style.display = "block";
+    return;
+  }
+  otherAddrErr.style.display = "none";
+  otherAddress = v;
+  updateAddressDisplay();
+  loadForCurrentNetwork();
+}
+otherScanBtn.addEventListener("click", submitOtherAddress);
+otherAddrInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitOtherAddress(); });
 
 function renderTokenRows(rows) {
   tokenBody.innerHTML = rows.map(r => `
@@ -252,7 +352,7 @@ function renderTokenRows(rows) {
   tokenCount.textContent = `${rows.length} held`;
 }
 
-async function scanTokens(net) {
+async function scanTokens(net, address) {
   tokenTable.style.display = "none";
   tokenEmpty.style.display = "block";
   tokenEmpty.innerHTML = '<span class="pulse"></span>Loading token registry…';
@@ -260,7 +360,7 @@ async function scanTokens(net) {
 
   const rows = [];
   try {
-    const nativeRaw = await fetchNativeBalance(net, wallet.address);
+    const nativeRaw = await fetchNativeBalance(net, address);
     if (nativeRaw !== "0") {
       rows.push({ name: "Native GNOT", symbol: "GNOT", balance: fromBaseUnits(nativeRaw, 6), path: "—" });
     }
@@ -271,7 +371,7 @@ async function scanTokens(net) {
   const results = await mapLimit(tokens, 8, async (t) => {
     try {
       const [balance, decimals] = await Promise.all([
-        fetchBalance(net, t.path, wallet.address),
+        fetchBalance(net, t.path, address),
         fetchTokenDecimals(net, t.path).catch(() => 6),
       ]);
       return { ...t, balance, decimals };
@@ -327,7 +427,7 @@ function renderNftFromCache(held, net, checkedCount, errorCount) {
   renderNftShell(held, net, checkedCount ?? held.length, errorCount ?? 0);
 }
 
-async function scanNfts(net, netKey) {
+async function scanNfts(net, netKey, address) {
   nftGrid.innerHTML = "";
   nftEmpty.style.display = "block";
   nftEmpty.innerHTML = '<span class="pulse"></span>Checking known NFT collections…';
@@ -342,7 +442,7 @@ async function scanNfts(net, netKey) {
 
   const balances = await mapLimit(realms, 6, async (r) => {
     try {
-      const count = await checkNftBalance(net, r.path, wallet.address);
+      const count = await checkNftBalance(net, r.path, address);
       return { ...r, count };
     } catch {
       return { ...r, count: null, error: true };
@@ -364,7 +464,7 @@ async function scanNfts(net, netKey) {
     const card = nftGrid.querySelector(`[data-path="${CSS.escape(r.path)}"] [data-thumbs]`);
     let tokenIds = [];
     try {
-      tokenIds = await fetchOwnedTokenIds(net, r.path, wallet.address);
+      tokenIds = await fetchOwnedTokenIds(net, r.path, address);
     } catch {}
     if (!tokenIds.length) {
       // Event-log replay is best-effort and misses collections that don't
@@ -376,7 +476,7 @@ async function scanNfts(net, netKey) {
       r.loading = "Looking up token IDs…";
       if (card) card.innerHTML = nftThumbsHTML(r);
       try {
-        tokenIds = await bruteForceOwnedTokenIds(net, r.path, wallet.address, r.count, {
+        tokenIds = await bruteForceOwnedTokenIds(net, r.path, address, r.count, {
           onProgress: (checked, total) => {
             r.loading = `Looking up token IDs… (${checked}/${total})`;
             if (card) card.innerHTML = nftThumbsHTML(r);
@@ -395,19 +495,56 @@ async function scanNfts(net, netKey) {
   return { held, checkedCount, errorCount };
 }
 
+// Only the current default name is shown (matching Name Registry's own
+// address lookup) — r/sys/users.ResolveAddress returns exactly that, not
+// every alias an address might hold.
+function renderNameResult(name, net) {
+  if (name) {
+    nameEmpty.style.display = "none";
+    nameResult.style.display = "block";
+    nameResult.innerHTML = `<b>@${escapeHtml(name)}</b> on ${escapeHtml(net.label)}`;
+  } else {
+    nameResult.style.display = "none";
+    nameEmpty.style.display = "block";
+    nameEmpty.textContent = `No registered name found for this address on ${net.label}.`;
+  }
+}
+
+async function scanName(net, address) {
+  nameResult.style.display = "none";
+  nameEmpty.style.display = "block";
+  nameEmpty.innerHTML = '<span class="pulse"></span>Checking name registry…';
+  let name = null;
+  try {
+    const raw = await abciQuery(net, "vm/qeval", `gno.land/r/sys/users.ResolveAddress("${address}")`);
+    if (raw && !/^\(nil\b/.test(raw.split("\n")[0])) {
+      const m = raw.match(/"([^"]*)"\s+string\)/);
+      name = m ? m[1] : null;
+    }
+  } catch {}
+  renderNameResult(name, net);
+  return name;
+}
+
 async function scan() {
-  if (!wallet) return;
+  const address = currentTargetAddress();
+  if (!address) return;
   const netKey = activeNetKey;
   const net = NETWORKS[netKey];
   rescanBtn.disabled = true;
   cacheStatus.textContent = "";
   try {
-    const [tokens, nftResult] = await Promise.all([scanTokens(net), scanNfts(net, netKey)]);
-    saveScanCache(netKey, wallet.address, {
+    const [tokens, nftResult, name] = await Promise.all([
+      scanTokens(net, address),
+      scanNfts(net, netKey, address),
+      scanName(net, address),
+    ]);
+    saveScanCache(netKey, address, {
       tokens,
       nfts: nftResult.held,
       nftCheckedCount: nftResult.checkedCount,
       nftErrorCount: nftResult.errorCount,
+      name,
     });
     cacheStatus.textContent = "Updated just now";
   } finally {
@@ -419,11 +556,13 @@ async function scan() {
 // the currently-selected network) with no RPC calls, then falls back to
 // a live scan when there's nothing cached yet.
 function loadForCurrentNetwork() {
-  if (!wallet) return;
-  const cached = loadScanCache(activeNetKey, wallet.address);
+  const address = currentTargetAddress();
+  if (!address) return;
+  const cached = loadScanCache(activeNetKey, address);
   if (cached) {
     renderTokenRows(cached.tokens || []);
     renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], cached.nftCheckedCount, cached.nftErrorCount);
+    renderNameResult(cached.name ?? null, NETWORKS[activeNetKey]);
     cacheStatus.textContent = `Cached · ${formatAgo(cached.cachedAt ?? cached.scannedAt)} — click Rescan for the latest`;
   } else {
     scan();
@@ -433,17 +572,13 @@ function loadForCurrentNetwork() {
 rescanBtn.addEventListener("click", scan);
 
 onWalletChange((w) => {
-  if (w.status === "connected") {
-    wallet = { address: w.address };
-    addrBox.style.display = "block";
-    addrBox.innerHTML = `<b>Connected:</b> ${escapeHtml(w.address)}`;
-    rescanBtn.style.display = "inline-block";
+  wallet = w.status === "connected" ? { address: w.address } : null;
+  if (scanMode !== "mine") return; // "other" mode tracks its own address, independent of the wallet
+  updateAddressDisplay();
+  if (wallet) {
     connectStatus.textContent = "";
     loadForCurrentNetwork();
   } else {
-    wallet = null;
-    addrBox.style.display = "none";
-    rescanBtn.style.display = "none";
     connectStatus.textContent = w.status === "connecting" ? "Connecting…" : "";
     resetPanels("Connect a wallet (top right) to scan.");
   }

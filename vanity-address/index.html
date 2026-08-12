@@ -122,6 +122,13 @@
   .wallet-row{border:1px solid var(--hair); background:var(--panel2); border-radius:12px; padding:14px 16px; font-size:13px}
   .wallet-row .addr{font-family:var(--mono); word-break:break-all; color:var(--ink)}
   .wallet-row .meta{color:var(--faint); font-size:11.5px; margin-top:3px}
+  .info-badge{
+    display:inline-flex; align-items:center; justify-content:center; vertical-align:middle;
+    width:14px; height:14px; margin-left:6px; border-radius:50%; border:1px solid var(--hair2);
+    color:var(--muted); font-family:Georgia,"Times New Roman",serif; font-style:italic; font-weight:700;
+    font-size:10px; line-height:1; cursor:help;
+  }
+  .info-badge:hover{ color:var(--accent); border-color:var(--accent-line); }
   .wallet-row .secret-line{display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap}
   .secret-value{font-family:var(--mono); word-break:break-all; flex:1; min-width:0; color:var(--muted)}
   .secret-value.masked{filter:blur(5px); user-select:none}
@@ -419,6 +426,13 @@ let searchDone = false;
 let timerHandle = null;
 let lastCheckpointWriteAt = 0;
 let activeTarget = "", activePosition = "anywhere", activeMode = "12";
+// Baseline each found wallet's own attempts/time is measured against —
+// reset to the search start on a fresh search and advanced after every
+// match, so a multi-wallet search attributes each wallet only the
+// attempts/time spent since the previous one was found, not the whole
+// search's running total.
+let lastMatchAttempts = 0;
+let lastMatchAt = 0;
 
 function stopWorkers() {
   workers.forEach(w => { try { w.postMessage({ type: "stop" }); } catch {} });
@@ -478,7 +492,7 @@ function writeCheckpoint(force) {
 // either way.
 function spinUpWorkers() {
   const n = workerCount();
-  workers = Array.from({ length: n }, () => new Worker("./lib/vanity-worker.js", { type: "module" }));
+  workers = Array.from({ length: n }, () => new Worker("/lib/vanity-worker.js", { type: "module" }));
 
   workers.forEach(w => {
     w.onmessage = (e) => {
@@ -491,7 +505,14 @@ function spinUpWorkers() {
       } else if (msg.type === "match") {
         totalAttempts += msg.attempts;
         foundCount++;
-        addWallet({ ...msg.wallet, mode: activeMode, target: activeTarget, position: activePosition });
+        const attemptsForThisWallet = totalAttempts - lastMatchAttempts;
+        const elapsedMsForThisWallet = Date.now() - lastMatchAt;
+        lastMatchAttempts = totalAttempts;
+        lastMatchAt = Date.now();
+        addWallet({
+          ...msg.wallet, mode: activeMode, target: activeTarget, position: activePosition,
+          attempts: attemptsForThisWallet, elapsedMs: elapsedMsForThisWallet,
+        });
         foundStatus.textContent = `Found ${foundCount} of ${wantedCount}`;
         writeCheckpoint(true);
         if (foundCount >= wantedCount) {
@@ -521,7 +542,9 @@ function startSearch() {
   }
 
   if (!target && count <= 1) {
-    addWallet({ ...generateWallet(mode), mode, target, position });
+    const genStart = performance.now();
+    const wallet = generateWallet(mode);
+    addWallet({ ...wallet, mode, target, position, attempts: 1, elapsedMs: performance.now() - genStart });
     return;
   }
 
@@ -534,6 +557,8 @@ function startSearch() {
   wantedCount = count;
   searchDone = false;
   searchStartedAt = Date.now();
+  lastMatchAttempts = 0;
+  lastMatchAt = searchStartedAt;
   foundStatus.textContent = `Found 0 of ${wantedCount}`;
   searchStatus.textContent = "Starting workers…";
   writeCheckpoint(true); // overwrite any stale leftover from an unrelated prior search
@@ -554,6 +579,12 @@ function resumeSearch(checkpoint) {
   totalAttempts = checkpoint.totalAttempts;
   searchStartedAt = checkpoint.startedAt || Date.now();
   searchDone = false;
+  // The exact attempts/time split leading up to this resume point wasn't
+  // preserved across the page reload, so the next wallet found after a
+  // resume is attributed everything from "now" rather than understating
+  // it against the pre-pause portion of the search.
+  lastMatchAttempts = totalAttempts;
+  lastMatchAt = Date.now();
 
   // Reflect the resumed search in the form for visual continuity — the
   // actual worker parameters come from the checkpoint above, not these.
@@ -633,6 +664,8 @@ function addWallet(wallet) {
     mode: wallet.mode,
     target: wallet.target || null,
     position: wallet.target ? wallet.position : null,
+    attempts: wallet.attempts ?? null,
+    elapsedMs: wallet.elapsedMs ?? null,
     createdAt: Date.now(),
   });
   saveWallets(list);
@@ -679,10 +712,16 @@ function renderWallets() {
     const when = new Date(w.createdAt).toLocaleString();
     const targetNote = w.target ? ` — matched "${escapeHtml(w.target)}" (${w.position})` : "";
     const secretLabel = w.secretType === "mnemonic" ? `${w.mode}-word mnemonic` : "raw key";
+    const statsNote = w.attempts != null && w.elapsedMs != null
+      ? (w.target
+          ? `Took ${formatElapsed(w.elapsedMs / 1000)} and ${w.attempts.toLocaleString()} attempt${w.attempts === 1 ? "" : "s"} to find this address.`
+          : "Generated instantly — no vanity target was set.")
+      : "";
+    const infoBadge = statsNote ? `<span class="info-badge" title="${escapeHtml(statsNote)}">i</span>` : "";
 
     row.innerHTML = `
       <div class="addr">${escapeHtml(w.address)}</div>
-      <div class="meta">${escapeHtml(secretLabel)} · ${escapeHtml(when)}${targetNote}</div>
+      <div class="meta">${escapeHtml(secretLabel)} · ${escapeHtml(when)}${targetNote}${infoBadge}</div>
       <div class="secret-line">
         <span class="secret-value masked" data-secret="${escapeHtml(w.secret)}">${"•".repeat(Math.min(40, w.secret.length))}</span>
       </div>
@@ -718,7 +757,7 @@ function csvField(value) {
 }
 
 function walletsToCsv(list) {
-  const header = ["address", "secret_type", "secret", "mode", "vanity_target", "vanity_position", "created_at"];
+  const header = ["address", "secret_type", "secret", "mode", "vanity_target", "vanity_position", "attempts", "elapsed_seconds", "created_at"];
   const lines = [header.join(",")];
   for (const w of list) {
     lines.push([
@@ -728,6 +767,8 @@ function walletsToCsv(list) {
       csvField(w.mode),
       csvField(w.target || ""),
       csvField(w.position || ""),
+      csvField(w.attempts ?? ""),
+      csvField(w.elapsedMs != null ? (w.elapsedMs / 1000).toFixed(2) : ""),
       csvField(new Date(w.createdAt).toISOString()),
     ].join(","));
   }

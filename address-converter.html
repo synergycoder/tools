@@ -24,10 +24,7 @@
   :root{ color-scheme: light dark; }
   *{box-sizing:border-box}
   body{
-    margin:0; background:
-      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
-      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
-      var(--bg);
+    margin:0; background: var(--bg);
     color:var(--ink); font-family:var(--sans); line-height:1.5; font-size:15px;
   }
   a{color:var(--accent); text-decoration:none}
@@ -47,7 +44,7 @@
   .section-hint{color:var(--faint); font-size:12.5px; margin:0 0 14px}
 
   .panel{
-    background:var(--panel); border:1px solid var(--hair); border-radius:14px;
+    background:var(--panel); border:1px solid var(--hair); border-radius:9px;
     padding:18px 20px; margin:20px 0;
   }
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
@@ -119,7 +116,7 @@
   .gate-overlay{position:fixed; inset:0; z-index:400; background:#04060ae6; backdrop-filter:blur(6px);
     display:flex; align-items:center; justify-content:center; padding:24px}
   .gate-box{max-width:520px; width:100%; background:var(--panel); border:2px solid var(--bad);
-    border-radius:16px; padding:28px 30px; box-shadow:0 20px 60px #000000aa}
+    border-radius:12px; padding:28px 30px; box-shadow:0 20px 60px #000000aa}
   .gate-box h2{color:var(--bad); font-size:19px; margin:0 0 14px}
   .gate-box p{font-size:13.5px; color:var(--ink); margin:0 0 12px; line-height:1.55}
   .gate-box p strong{color:var(--bad)}

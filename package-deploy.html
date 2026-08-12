@@ -251,7 +251,11 @@ async function deployPackage(pi) {
         package: {
           name: pkg.pkgpath.split("/").pop(),
           path: pkg.pkgpath,
-          files: pkg.files.map(f => ({ name: f.name, body: f.body })),
+          // The chain rejects a MemPackage whose files aren't sorted by
+          // name ("mempackage has unsorted files") -- sort here instead
+          // of requiring whoever uses this tool to paste/upload files in
+          // exactly the right order themselves.
+          files: pkg.files.map(f => ({ name: f.name, body: f.body })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
         },
       },
     };

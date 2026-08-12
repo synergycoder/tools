@@ -286,7 +286,10 @@ try {
   if (saved && NETWORKS[saved]) previewNetwork.value = saved;
 } catch {}
 
-const TOKEN_CACHE_PREFIX = "gnoTools:fungibleTokens:v1:";
+// v2: bumped alongside NETWORKS.testnet's topaz-1 -> sapphire-1 repoint —
+// see wallet-scanner.html's SCAN_CACHE_PREFIX comment for why a stale v1
+// entry keyed "testnet" needed invalidating, not just leaving in place.
+const TOKEN_CACHE_PREFIX = "gnoTools:fungibleTokens:v2:";
 
 function renderTokenOptions(tokens) {
   const keep = tokenSelect.value;

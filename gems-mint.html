@@ -195,16 +195,22 @@ const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
 // writes, not just for the code deployed initially -- each MintAssembled
 // call creates several new records (token ownership, provenance, sealed
 // trait tuple, combo-uniqueness entry, wallet mint count), so minting
-// itself costs GNOT beyond gas, separate from MintPrice. This baseline is
-// the OBSERVED real cost of this collection's own first live mint (tx
-// 1caXoZBpgYe3KEfDQOszIf63OQ6c6OYLW3fYbvYrADg, block 116096 on g2):
-// 1,287,700 ugnot storage deposit (12,877 bytes @ 100ugnot/byte, the
-// chain's live storage_price) + ~15,800 ugnot gas. Storage deposit is
-// ~99% of it and should be roughly constant per mint (same shape of new
-// records every time); gas can drift with network conditions. Padded
-// ~15% rather than quoting the bare observed number as a guarantee.
-const OBSERVED_MINT_COST_UGNOT = 1_303_500;
-const ESTIMATED_UGNOT_PER_MINT = Math.ceil(OBSERVED_MINT_COST_UGNOT * 1.15);
+// itself costs GNOT beyond gas, separate from MintPrice. No SVG/image
+// data is ever stored -- TokenURI renders it fresh from the small trait
+// tuple on every read, by design (see gems.gno).
+//
+// Calibrated from a real 5-piece batch mint on this exact realm (block
+// 117573, one transaction, 5 StorageDepositEvents): the FIRST mint to a
+// wallet that's never minted here before cost 21,207 bytes (2,120,700
+// ugnot) -- it also creates that wallet's first mintCountByWallet entry,
+// a new AVL node on top of the usual per-token records. The 4 repeat
+// mints to the same already-tracked wallet cost 16,690-16,719 bytes
+// (~1,669,800 ugnot avg) -- cheaper, no new wallet-count entry. Gas for
+// that batch was ~7,725 ugnot/mint. Both tiers padded 12% for variance
+// (trait-string length differs by draw; gas price can drift) rather than
+// quoting the bare observed numbers as a guarantee.
+const FIRST_MINT_UGNOT = 2_383_836; // this recipient's very first mint on this realm
+const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 
 // Returns null (not false) when the query itself failed -- e.g. the
 // realm isn't deployed yet -- so callers can tell "unknown" apart from
@@ -296,15 +302,32 @@ function renderWalletGate() {
 }
 onWalletChange(renderWalletGate);
 
-// Total network cost (storage deposit + gas, per ESTIMATED_UGNOT_PER_MINT
-// above) plus MintPrice if one's set -- shown regardless of connection
-// state so even a not-yet-connected visitor can see what to expect.
-// Compares against the connected wallet's own balance when available and
-// warns if it looks short, rather than letting the mint fail silently.
+// Total network cost (storage deposit + gas, per FIRST_MINT_UGNOT/
+// REPEAT_MINT_UGNOT above) plus MintPrice if one's set -- shown
+// regardless of connection state so even a not-yet-connected visitor can
+// see what to expect. Compares against the connected wallet's own
+// balance when available and warns if it looks short, rather than
+// letting the mint fail silently.
+// stats.mintedByWallet (already fetched for the wallet-cap display) tells
+// us whether the current recipient has ever minted here before -- only
+// the very first mint of their whole history costs the higher tier, so
+// within one batch to a never-minted recipient, piece 1 is FIRST_MINT_UGNOT
+// and pieces 2+ are REPEAT_MINT_UGNOT. Unknown (null, e.g. no wallet
+// connected yet) defaults to the conservative "first mint" assumption.
+function estimateMintCostUgnot(qty, recipientAlreadyMinted) {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    const isRecipientsFirstEver = !recipientAlreadyMinted && i === 0;
+    total += isRecipientsFirstEver ? FIRST_MINT_UGNOT : REPEAT_MINT_UGNOT;
+  }
+  return total;
+}
+
 function updateCostEstimate() {
   const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
   const priceUgnot = stats.price || 0;
-  const totalUgnot = qty * (ESTIMATED_UGNOT_PER_MINT + priceUgnot);
+  const recipientAlreadyMinted = stats.mintedByWallet != null && stats.mintedByWallet > 0;
+  const totalUgnot = estimateMintCostUgnot(qty, recipientAlreadyMinted) + qty * priceUgnot;
   const note = document.getElementById("totalCostNote");
   const w = getWallet();
   let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${fromBaseUnits(totalUgnot, NATIVE_DECIMALS)} GNOT`;
@@ -433,7 +456,7 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("costVal").textContent = `~${fromBaseUnits(ESTIMATED_UGNOT_PER_MINT, NATIVE_DECIMALS)} GNOT`;
+document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
 
 renderWalletGate();
 loadStats();

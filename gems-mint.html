@@ -132,6 +132,11 @@
         <span class="lbl">Price (per piece)</span>
         <span class="val" id="priceVal">…</span>
       </div>
+      <div class="price-row">
+        <span class="lbl">Est. network cost (per piece)</span>
+        <span class="val" id="costVal" style="font-size:14px">…</span>
+      </div>
+      <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
 
       <ul class="facts" id="factsList">
         <li><span class="k">Max possible combinations</span><span class="v" id="factMaxCombos">…</span></li>
@@ -147,6 +152,7 @@
         <input type="number" id="qtyInput" value="1" min="1" max="10">
         <span class="qty-note" id="qtyNote">up to 10 in one transaction</span>
       </div>
+      <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
 
       <div class="to-row">
         <label for="toInput">Mint to (defaults to your connected wallet)</label>
@@ -180,10 +186,25 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
+
+// gno.land charges a storage deposit for any new on-chain data a call
+// writes, not just for the code deployed initially -- each MintAssembled
+// call creates several new records (token ownership, provenance, sealed
+// trait tuple, combo-uniqueness entry, wallet mint count), so minting
+// itself costs GNOT beyond gas, separate from MintPrice. This baseline is
+// the OBSERVED real cost of this collection's own first live mint (tx
+// 1caXoZBpgYe3KEfDQOszIf63OQ6c6OYLW3fYbvYrADg, block 116096 on g2):
+// 1,287,700 ugnot storage deposit (12,877 bytes @ 100ugnot/byte, the
+// chain's live storage_price) + ~15,800 ugnot gas. Storage deposit is
+// ~99% of it and should be roughly constant per mint (same shape of new
+// records every time); gas can drift with network conditions. Padded
+// ~15% rather than quoting the bare observed number as a guarantee.
+const OBSERVED_MINT_COST_UGNOT = 1_303_500;
+const ESTIMATED_UGNOT_PER_MINT = Math.ceil(OBSERVED_MINT_COST_UGNOT * 1.15);
 
 // Returns null (not false) when the query itself failed -- e.g. the
 // realm isn't deployed yet -- so callers can tell "unknown" apart from
@@ -275,7 +296,31 @@ function renderWalletGate() {
 }
 onWalletChange(renderWalletGate);
 
+// Total network cost (storage deposit + gas, per ESTIMATED_UGNOT_PER_MINT
+// above) plus MintPrice if one's set -- shown regardless of connection
+// state so even a not-yet-connected visitor can see what to expect.
+// Compares against the connected wallet's own balance when available and
+// warns if it looks short, rather than letting the mint fail silently.
+function updateCostEstimate() {
+  const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
+  const priceUgnot = stats.price || 0;
+  const totalUgnot = qty * (ESTIMATED_UGNOT_PER_MINT + priceUgnot);
+  const note = document.getElementById("totalCostNote");
+  const w = getWallet();
+  let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${fromBaseUnits(totalUgnot, NATIVE_DECIMALS)} GNOT`;
+  note.style.color = "";
+  if (w.status === "connected" && w.balanceRaw != null) {
+    const balanceUgnot = parseInt(w.balanceRaw, 10);
+    if (!Number.isNaN(balanceUgnot) && balanceUgnot < totalUgnot) {
+      text += ` — your balance (${fromBaseUnits(w.balanceRaw, NATIVE_DECIMALS)} GNOT) looks short. Mint fewer, or add funds first.`;
+      note.style.color = "#e0596d";
+    }
+  }
+  note.textContent = text;
+}
+
 function updateMintButton() {
+  updateCostEstimate();
   const w = getWallet();
   const btn = document.getElementById("mintBtn");
   const qtyInput = document.getElementById("qtyInput");
@@ -387,6 +432,8 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
     updateMintButton();
   }
 });
+
+document.getElementById("costVal").textContent = `~${fromBaseUnits(ESTIMATED_UGNOT_PER_MINT, NATIVE_DECIMALS)} GNOT`;
 
 renderWalletGate();
 loadStats();

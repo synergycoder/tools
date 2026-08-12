@@ -23,7 +23,7 @@
 <script src="donate-widget.js"></script>
 <script src="suggestions-widget.js"></script>
 <script type="module">
-  import { initSiteChrome } from "./lib/site-chrome.js";
+  import { initSiteChrome, getActiveNetworkKey } from "./lib/site-chrome.js";
   // Network is a site-wide control now (the header's own always-visible
   // pill) — this page's own NETWORKS object below (keyed "testnet"/
   // "betanet" to match) still supplies the richer per-network data
@@ -35,6 +35,19 @@
   // every other tool uses without converting this whole file to a module.
   import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
   window.gtCache = { saveCache, loadCache, formatAgo };
+  // NET below defaults to "testnet" and otherwise only ever updates by
+  // catching the "gnotools:activenetwork" event — which only fires on an
+  // actual CHANGE. A header preference that was already correct before this
+  // page ever loaded (e.g. set on another page in an earlier session, or
+  // simply the persisted default) never fires that event at all, so NET
+  // silently never finds out. Confirmed live: wallet connected on mainnet,
+  // header correctly reading "gnoland1", this page still querying and
+  // showing sapphire-1 (testnet) names with no visible sign anything was
+  // wrong. This module script is deferred and so always runs AFTER the
+  // classic (non-deferred) <script> below has already fully executed and
+  // defined window.gtSyncNetworkFromHeader — safe to call immediately.
+  const initialNetKey = getActiveNetworkKey();
+  if (initialNetKey) window.gtSyncNetworkFromHeader?.(initialNetKey);
 </script>
 <style>
   /* Palette (--bg, --panel, --accent, --warn, --mono, --sans, etc.) is
@@ -730,12 +743,23 @@ function setNetInfo(){
   document.getElementById("netinfo").innerHTML='<span><span class="dot">●</span> '+esc(NET.label)+'</span><span>rpc: '+esc(NET.rpc.replace("https://",""))+'</span><span>'+(NET.hasNamereg?"registration: open (nym- tier)":"registration: closed")+'</span>';
   document.getElementById("foot-net").textContent="reading "+NET.chainId+(NET.indexer?" + indexer":"");
 }
-// Network control now lives inside the shared wallet bubble — see the
-// module <script> at the top of <head>, which dispatches this event
-// (detail is the selected {key,chainId,label} option, or null).
+// Network control now lives inside the shared wallet bubble. Exposed on
+// window (not just a local event handler) so the module <script> at the
+// top of <head> can also call this once, synchronously, right after
+// initSiteChrome() — covering the case where the header's network
+// preference was ALREADY correct before this page loaded (nothing
+// "changed" while this page was open, so the event below would never
+// fire on its own). See that module script's own comment for the full
+// story.
+window.gtSyncNetworkFromHeader=function(key){
+  const opt=NETWORKS[key];
+  if(!opt||opt.chainId===NET.chainId)return;
+  NET=opt;REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+};
+// detail is the selected {key,chainId,label} option, or null.
 window.addEventListener("gnotools:activenetwork",e=>{
   if(!e.detail)return;
-  NET=NETWORKS[e.detail.key];REGS=[];regsLoaded=false;setNetInfo();refreshActiveTab();
+  window.gtSyncNetworkFromHeader(e.detail.key);
 });
 // Wallet is global too (same header) — re-render whichever tab needs it
 // live, so connecting/switching networks there updates this page with no

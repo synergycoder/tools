@@ -142,6 +142,7 @@
 import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit } from "./lib/gno-rpc.js";
 import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "./lib/gno-nft.js";
 import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
+import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
 
 // Network is picked from the shared wallet bubble now, not a separate
 // <select> easy to forget was even there — same control used to connect.
@@ -201,27 +202,8 @@ function resetPanels(message) {
 // scan" state — a live re-scan is always one click away via Rescan.
 const SCAN_CACHE_PREFIX = "gnoTools:walletScan:";
 function scanCacheKey(netKey, address) { return `${SCAN_CACHE_PREFIX}${netKey}:${address}`; }
-function saveScanCache(netKey, address, data) {
-  try { localStorage.setItem(scanCacheKey(netKey, address), JSON.stringify({ ...data, scannedAt: Date.now() })); } catch {}
-}
-function loadScanCache(netKey, address) {
-  try {
-    const raw = localStorage.getItem(scanCacheKey(netKey, address));
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-function formatAgo(ts) {
-  const s = Math.round((Date.now() - ts) / 1000);
-  if (s < 10) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
+function saveScanCache(netKey, address, data) { saveCache(scanCacheKey(netKey, address), data); }
+function loadScanCache(netKey, address) { return loadCache(scanCacheKey(netKey, address)); }
 
 window.addEventListener("gnotools:activenetwork", (e) => {
   if (!e.detail) return;
@@ -416,7 +398,7 @@ function loadForCurrentNetwork() {
   if (cached) {
     renderTokenRows(cached.tokens || []);
     renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], cached.nftCheckedCount, cached.nftErrorCount);
-    cacheStatus.textContent = `Cached · ${formatAgo(cached.scannedAt)} — click Rescan for the latest`;
+    cacheStatus.textContent = `Cached · ${formatAgo(cached.cachedAt)} — click Rescan for the latest`;
   } else {
     scan();
   }

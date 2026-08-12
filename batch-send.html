@@ -122,6 +122,7 @@
   <p class="sub">Send a payment to many recipients at once — paste a list, upload a CSV, or pull one from a public Google Sheet. Connect Adena (top right) to approve; nothing is sent until you do.</p>
 </div>
 
+<div id="toolBody">
 <h2>1. Token</h2>
 <div class="panel">
   <div class="row">
@@ -205,14 +206,16 @@
   </div>
   <div class="batch-list" id="batchList"></div>
 </div>
+</div>
 
 </div>
 
 <script type="module">
-import { initSiteChrome, onWalletChange } from "./lib/site-chrome.js";
+import { initSiteChrome, onWalletChange, gateIfLocked } from "./lib/site-chrome.js";
 initSiteChrome({
   networkOptions: [], // this tool's own "query network" select below already covers it
 });
+gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
 import {
@@ -222,6 +225,7 @@ import {
 import { parseAddressAmountRows, sheetsUrlToCsvExportUrl } from "./lib/csv.js";
 import { doContract } from "./lib/adena-connect.js";
 import { onWalletChange } from "./lib/site-chrome.js";
+import { saveCache, loadCache } from "./lib/local-cache.js";
 
 const GNOT_DECIMALS = 6;
 const NETWORK_STORAGE_KEY = "gnoTools:batchSend:previewNetwork";
@@ -282,22 +286,35 @@ try {
   if (saved && NETWORKS[saved]) previewNetwork.value = saved;
 } catch {}
 
-async function loadTokenDropdown() {
+const TOKEN_CACHE_PREFIX = "gnoTools:fungibleTokens:v1:";
+
+function renderTokenOptions(tokens) {
   const keep = tokenSelect.value;
   tokenSelect.innerHTML = '<option value="native">GNOT (native)</option>';
+  for (const t of tokens) {
+    const opt = document.createElement("option");
+    opt.value = t.path;
+    opt.textContent = `${t.name} (${t.symbol})`;
+    tokenSelect.appendChild(opt);
+  }
+  // A background refresh should never silently change what the user already picked.
+  if ([...tokenSelect.options].some(o => o.value === keep)) tokenSelect.value = keep;
+}
+
+async function loadTokenDropdown() {
+  const cacheKey = TOKEN_CACHE_PREFIX + previewNetwork.value;
+  const cached = loadCache(cacheKey);
+  if (cached && Array.isArray(cached.tokens)) renderTokenOptions(cached.tokens);
   try {
     const net = NETWORKS[previewNetwork.value];
     const tokens = await loadFungibleTokens(net);
-    for (const t of tokens) {
-      const opt = document.createElement("option");
-      opt.value = t.path;
-      opt.textContent = `${t.name} (${t.symbol})`;
-      tokenSelect.appendChild(opt);
-    }
-    if ([...tokenSelect.options].some(o => o.value === keep)) tokenSelect.value = keep;
+    renderTokenOptions(tokens);
+    saveCache(cacheKey, { tokens });
   } catch (err) {
-    tokenPreview.style.display = "block";
-    tokenPreview.textContent = "Couldn't load the token registry: " + err.message;
+    if (!cached) {
+      tokenPreview.style.display = "block";
+      tokenPreview.textContent = "Couldn't load the token registry: " + err.message;
+    } // else: keep showing the cached list as-is on a background-refresh failure
   }
 }
 
@@ -575,7 +592,7 @@ sendBtn.addEventListener("click", async () => {
       const messages = batches[i].map(r => isNativeSelected()
         ? { type: "/bank.MsgSend", value: { from_address: wallet.address, to_address: r.address, amount: `${r.raw}ugnot` } }
         : { type: "/vm.m_call", value: { caller: wallet.address, send: "", pkg_path: tokenSelect.value, func: "Transfer", args: [r.address, r.raw] } });
-      const result = await doContract(messages);
+      const result = await doContract(messages, "sent from gno.tools");
       statusEl.className = "batch-status sent";
       statusEl.textContent = "Sent";
       hashEl.textContent = `tx ${result.hash}${result.height ? ` (block ${result.height})` : ""}`;

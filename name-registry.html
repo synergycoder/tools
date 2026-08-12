@@ -35,14 +35,24 @@
      — same tokens across every gno.tools page, light/dark/system aware. */
   :root{ color-scheme: light dark; }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px}
+  body{
+    margin:0; background:
+      radial-gradient(60% 50% at 15% -10%, #5ee6c814, transparent 60%),
+      radial-gradient(50% 40% at 100% 0%, #f0b35712, transparent 55%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);line-height:1.55;font-size:15px;
+  }
   a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
   code,.mono{font-family:var(--mono)}
   .wrap{max-width:920px;margin:0 auto;padding:0 20px 90px}
-  .reg-header{border-bottom:1px solid var(--hair);background:radial-gradient(120% 100% at 90% -20%,var(--accent-soft),transparent 60%)}
-  .head-inner{max-width:920px;margin:0 auto;padding:26px 20px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
-  .sub{color:var(--muted);font-size:13px;margin:0;max-width:60ch}
+  .page-title{padding:26px 0 4px}
+  .mark{
+    font-family:var(--mono); font-size:12px; color:var(--accent);
+    border:1px solid var(--accent-line); background:var(--accent-soft);
+    padding:3px 8px; border-radius:6px; letter-spacing:.06em;
+  }
+  h1{font-size:22px;margin:8px 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:13.5px;margin:0;max-width:60ch}
   .netinfo{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
   .netinfo .dot{color:var(--accent)}
   .tabs{display:flex;gap:4px;margin:26px 0 0;border-bottom:1px solid var(--hair);flex-wrap:wrap}
@@ -108,17 +118,14 @@
 </style>
 </head>
 <body>
-<div class="reg-header">
-  <div class="head-inner">
-    <div>
-      <h1>gno.land Name Registry</h1>
-      <p class="sub">Explore the on-chain user registry (<code>r/sys/users</code>) — a single source of truth for both <code>nym-…</code> and vanity names. Query, browse every name with full metadata, view registration history, and register.</p>
-    </div>
-  </div>
-  <div class="head-inner" style="padding-top:0"><div class="netinfo" id="netinfo"></div></div>
-</div>
-
 <div class="wrap">
+
+<div class="page-title">
+  <span class="mark">▤ REGISTRY</span>
+  <h1>gno.land Name Registry</h1>
+  <p class="sub">Explore the on-chain user registry (<code>r/sys/users</code>) — a single source of truth for both <code>nym-…</code> and vanity names. Query, browse every name with full metadata, view registration history, and register.</p>
+  <div class="netinfo" id="netinfo"></div>
+</div>
   <div class="tabs">
     <button data-tab="query" class="on">Query</button>
     <button data-tab="names">Names</button>
@@ -738,6 +745,11 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
 function activeTab(){const b=document.querySelector(".tabs button.on");return b?b.dataset.tab:"query";}
 function refreshActiveTab(){const t=activeTab();if(t==="names")loadNames();else if(t==="history")loadHistory();else if(t==="register")renderRegister();else if(t==="profile")renderProfile();}
 setNetInfo();
+// Deep link from the shared header's wallet dropdown ("view this name's
+// profile" opens here in a new tab) — the overlay opens on top of
+// whichever tab is default, no tab switch needed.
+const profileParam=new URLSearchParams(location.search).get("profile");
+if(profileParam)openDetail(profileParam);
 </script>
 </body>
 </html>

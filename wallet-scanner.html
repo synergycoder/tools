@@ -200,7 +200,11 @@ function resetPanels(message) {
 // are cached per address+network so navigating to another page and back
 // shows what was already found instantly instead of an empty "connect to
 // scan" state — a live re-scan is always one click away via Rescan.
-const SCAN_CACHE_PREFIX = "gnoTools:walletScan:";
+// v2: bumped when NETWORKS.testnet was repointed from topaz-1 to
+// sapphire-1 — a v1 cache entry keyed "testnet" could otherwise still be
+// showing topaz-era results (a completely different chain) under what's
+// now the sapphire-1 key, with no visible sign it was stale.
+const SCAN_CACHE_PREFIX = "gnoTools:walletScan:v2:";
 function scanCacheKey(netKey, address) { return `${SCAN_CACHE_PREFIX}${netKey}:${address}`; }
 function saveScanCache(netKey, address, data) { saveCache(scanCacheKey(netKey, address), data); }
 function loadScanCache(netKey, address) { return loadCache(scanCacheKey(netKey, address)); }

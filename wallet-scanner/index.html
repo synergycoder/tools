@@ -163,7 +163,7 @@
 
 <div class="panel">
   <h2>NFTs <span class="count" id="nftCount"></span></h2>
-  <p class="section-hint">Checked against every NFT-standard collection this scanner currently knows about — see the note below if that list needs a specific collection added.</p>
+  <p class="section-hint">Checked against every NFT-standard collection this scanner can find by walking the whole chain — no fixed list to fall behind, see the note below for how fresh it is.</p>
   <p class="empty" id="nftEmpty">Connect a wallet (top right) to scan.</p>
   <div class="nft-grid" id="nftGrid"></div>
   <p class="note" id="nftCoverageNote" style="display:none"></p>
@@ -181,6 +181,7 @@
 <script type="module">
 import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, abciQuery } from "/lib/gno-rpc.js";
 import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "/lib/gno-nft.js";
+import { discoverNftCollections } from "/lib/nft-discovery.js";
 import { initSiteChrome, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
 import { saveCache, loadCache, formatAgo } from "/lib/local-cache.js";
 
@@ -235,15 +236,73 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+// Replaces a hand-maintained static JSON of known collections with a
+// live, self-updating one: gno.land has no NFT registry, so "knowing"
+// every collection means periodically re-walking the whole chain (see
+// nft-discovery.js) rather than someone manually adding an entry and
+// redeploying every time a new collection shows up. Cached per network so
+// a returning visit renders instantly instead of re-paying the full-chain
+// walk on every page load.
+const NFT_COLLECTIONS_CACHE_PREFIX = "gnoTools:nftCollections:v1:";
+// How long a cached collection list is trusted before a background
+// rescan kicks off on its own — short enough to catch a same-day new
+// collection without being asked, long enough that switching tabs or
+// reloading a few times in a row doesn't re-walk the whole chain each
+// time. The manual Rescan button (see scan()) always forces a fresh
+// discovery regardless of this cooldown.
+const NFT_COLLECTIONS_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
+
 let nftRealmsByNetwork = {};
-async function loadNftRealms() {
-  try {
-    const res = await fetch("/data/nft-realms.json");
-    const data = await res.json();
-    nftRealmsByNetwork = data.networks || {};
-  } catch {
-    nftRealmsByNetwork = {};
+let nftCollectionsScannedAt = {}; // netKey -> cachedAt, for the "last refreshed" note
+let nftCollectionsInFlight = {}; // netKey -> Promise, de-dupes concurrent triggers for the same network
+
+function nftCollectionsCacheKey(netKey) { return `${NFT_COLLECTIONS_CACHE_PREFIX}${netKey}`; }
+
+// Populates nftRealmsByNetwork[netKey] from cache instantly (if present),
+// then — unless a scan for this network already completed within the
+// cooldown, or `force` bypasses it — kicks off a background full-chain
+// rescan that silently replaces the list once it finishes. If nothing is
+// cached yet at all, the caller has to actually wait for that first scan
+// rather than proceeding with an empty list.
+async function ensureNftCollections(netKey, { force = false } = {}) {
+  const net = NETWORKS[netKey];
+  const cached = loadCache(nftCollectionsCacheKey(netKey));
+  if (cached?.collections) {
+    nftRealmsByNetwork[netKey] = cached.collections;
+    nftCollectionsScannedAt[netKey] = cached.cachedAt;
   }
+  const stale = force || !cached || (Date.now() - cached.cachedAt) > NFT_COLLECTIONS_REFRESH_COOLDOWN_MS;
+  if (stale && !nftCollectionsInFlight[netKey]) {
+    nftCollectionsInFlight[netKey] = refreshNftCollections(netKey, net).finally(() => {
+      delete nftCollectionsInFlight[netKey];
+    });
+  }
+  // Cold start (nothing cached yet) always has to wait for the first scan
+  // to have anything to show. A forced refresh (the manual Rescan button)
+  // also has to wait — otherwise "force" would silently mean "kick off a
+  // background update for *next* time" instead of "give me the freshest
+  // data right now", which isn't what force is for.
+  if (nftCollectionsInFlight[netKey] && (!nftRealmsByNetwork[netKey] || force)) {
+    await nftCollectionsInFlight[netKey];
+  }
+}
+
+async function refreshNftCollections(netKey, net) {
+  const firstEverScan = !nftRealmsByNetwork[netKey];
+  const collections = await discoverNftCollections(net, {
+    onProgress: (checked, total) => {
+      // Only worth showing progress for the very first, uncached scan on
+      // this network — a background refresh behind an already-rendered
+      // list shouldn't visibly change anything until it's done.
+      if (firstEverScan && nftEmpty) {
+        nftEmpty.textContent = `Scanning the chain for NFT collections… (${checked}/${total})`;
+      }
+    },
+  });
+  nftRealmsByNetwork[netKey] = collections;
+  nftCollectionsScannedAt[netKey] = Date.now();
+  saveCache(nftCollectionsCacheKey(netKey), { collections });
+  return collections;
 }
 
 let wallet = null;
@@ -400,14 +459,18 @@ function nftThumbsHTML(entry) {
   ).join("") + (tokenIds.length > shown.length ? `<span class="ph">+${tokenIds.length - shown.length}</span>` : "");
 }
 
-function renderNftShell(held, net, checkedCount, errorCount) {
+function renderNftShell(held, net, netKey, checkedCount, errorCount) {
   nftEmpty.style.display = held.length ? "none" : "block";
   nftEmpty.textContent = held.length ? "" : "No NFTs found in any known collection.";
   nftCount.textContent = held.length ? `${held.length} collection(s)` : "";
   nftCoverageNote.style.display = "block";
-  nftCoverageNote.innerHTML = `Checked against ${checkedCount} known collection(s) on ${escapeHtml(net.label)}` +
+  const scannedAt = nftCollectionsScannedAt[netKey];
+  const freshness = scannedAt
+    ? `collection list last refreshed ${formatAgo(scannedAt)} (auto-refreshes in the background every ${NFT_COLLECTIONS_REFRESH_COOLDOWN_MS / 60000} min, or click Rescan for the latest now)`
+    : "collection list still loading";
+  nftCoverageNote.innerHTML = `Checked against ${checkedCount} collection(s) found by scanning the whole chain on ${escapeHtml(net.label)}` +
     (errorCount ? ` (${errorCount} couldn't be checked)` : "") +
-    `. This is not a full-chain scan — a real NFT collection this scanner doesn't know about yet won't show up here.`;
+    ` — ${freshness}. Detection is heuristic (source pattern match), so a genuinely non-standard collection could still be missed.`;
   nftGrid.innerHTML = held.map(r => `
     <div class="nft-card" data-path="${escapeHtml(r.path)}">
       <div class="top"><span class="cname">${escapeHtml(r.name)}</span>${r.symbol ? `<span class="sym">${escapeHtml(r.symbol)}</span>` : ""}</div>
@@ -418,19 +481,20 @@ function renderNftShell(held, net, checkedCount, errorCount) {
 }
 
 // Renders instantly from a cached scan — no RPC calls at all.
-function renderNftFromCache(held, net, checkedCount, errorCount) {
+function renderNftFromCache(held, net, netKey, checkedCount, errorCount) {
   nftGrid.innerHTML = "";
   nftCoverageNote.style.display = "none";
-  renderNftShell(held, net, checkedCount ?? held.length, errorCount ?? 0);
+  renderNftShell(held, net, netKey, checkedCount ?? held.length, errorCount ?? 0);
 }
 
-async function scanNfts(net, netKey, address) {
+async function scanNfts(net, netKey, address, { forceCollectionsRefresh = false } = {}) {
   nftGrid.innerHTML = "";
   nftEmpty.style.display = "block";
   nftEmpty.innerHTML = '<span class="pulse"></span>Checking known NFT collections…';
   nftCount.textContent = "";
   nftCoverageNote.style.display = "none";
 
+  await ensureNftCollections(netKey, { force: forceCollectionsRefresh });
   const realms = nftRealmsByNetwork[netKey] || [];
   if (!realms.length) {
     nftEmpty.textContent = "No known NFT collections for this network yet.";
@@ -448,7 +512,7 @@ async function scanNfts(net, netKey, address) {
   const held = balances.filter(r => r.count != null && r.count > 0);
   const checkedCount = balances.length;
   const errorCount = balances.filter(r => r.error).length;
-  renderNftShell(held, net, checkedCount, errorCount);
+  renderNftShell(held, net, netKey, checkedCount, errorCount);
   if (!held.length) return { held, checkedCount, errorCount };
 
   // Best-effort per-collection token-id + image fetch — a collection
@@ -523,7 +587,7 @@ async function scanName(net, address) {
   return name;
 }
 
-async function scan() {
+async function scan({ forceCollectionsRefresh = false } = {}) {
   const address = currentTargetAddress();
   if (!address) return;
   const netKey = activeNetKey;
@@ -533,7 +597,7 @@ async function scan() {
   try {
     const [tokens, nftResult, name] = await Promise.all([
       scanTokens(net, address),
-      scanNfts(net, netKey, address),
+      scanNfts(net, netKey, address, { forceCollectionsRefresh }),
       scanName(net, address),
     ]);
     saveScanCache(netKey, address, {
@@ -558,7 +622,14 @@ function loadForCurrentNetwork() {
   const cached = loadScanCache(activeNetKey, address);
   if (cached) {
     renderTokenRows(cached.tokens || []);
-    renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], cached.nftCheckedCount, cached.nftErrorCount);
+    renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], activeNetKey, cached.nftCheckedCount, cached.nftErrorCount);
+    // Kicks off the same cache-then-background-refresh collections check
+    // a live scan would run, purely so the freshness note has real data —
+    // re-renders the (already-shown) cached NFT cards afterward just to
+    // pick up that timestamp, not because the cards themselves changed.
+    ensureNftCollections(activeNetKey).then(() => {
+      renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], activeNetKey, cached.nftCheckedCount, cached.nftErrorCount);
+    });
     renderNameResult(cached.name ?? null, NETWORKS[activeNetKey]);
     cacheStatus.textContent = `Cached · ${formatAgo(cached.cachedAt ?? cached.scannedAt)} — click Rescan for the latest`;
   } else {
@@ -566,7 +637,9 @@ function loadForCurrentNetwork() {
   }
 }
 
-rescanBtn.addEventListener("click", scan);
+// A manual Rescan always forces a fresh collections walk too — bypassing
+// the cooldown is exactly what "I want the latest, right now" means here.
+rescanBtn.addEventListener("click", () => scan({ forceCollectionsRefresh: true }));
 
 onWalletChange((w) => {
   wallet = w.status === "connected" ? { address: w.address } : null;
@@ -581,7 +654,12 @@ onWalletChange((w) => {
   }
 });
 
-loadNftRealms();
+// Warms the collections cache for the network the page opens on, before
+// any wallet is even connected — by the time a scan actually runs (wallet
+// connects, or a "someone else's wallet" lookup is submitted), the list is
+// either already cached or a background scan is already in flight, rather
+// than starting cold at that point.
+ensureNftCollections(activeNetKey);
 </script>
 </body>
 </html>

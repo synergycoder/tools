@@ -425,8 +425,18 @@ let compressedDataUrl = "", compressedBinaryBytes = 0, compressedDataUriBytes = 
 // collection's own listing despite its metadata being fully intact.
 let finalDataUrl = "", finalDataUriBytes = 0;
 
+// The root <svg> needs its OWN width/height attributes, not just a
+// viewBox -- confirmed live (real deployed collection, real mint): with
+// only a viewBox, the SVG has no definite intrinsic size as an <img>
+// resource, and gnoweb's own CSS (`.c-realm-view a { display:
+// inline-block; text-wrap: balance; ... }` on the link this tool wraps
+// every thumbnail in) collapses that ambiguous-size image down to 2x2px
+// -- invisible, even though the tag, its src, and the underlying image
+// data are all completely correct. Reproduced and isolated in a bare
+// test page before/after adding these attributes to confirm this exact
+// fix, not guessed.
 function wrapAsSvgDataUrl(rasterDataUrl, width, height) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><image width="${width}" height="${height}" href="${rasterDataUrl}"/></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image width="${width}" height="${height}" href="${rasterDataUrl}"/></svg>`;
   return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
 }
 

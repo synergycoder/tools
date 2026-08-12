@@ -132,7 +132,7 @@
   </div>
   <div class="row">
     <span class="field-label">Token to send</span>
-    <select id="tokenSelect"><option value="native">GNOT (native)</option></select>
+    <select id="tokenSelect"><option value="native">Native GNOT</option></select>
   </div>
   <p class="status" id="tokenPreview" style="display:none"></p>
   <div class="note warn">
@@ -290,7 +290,7 @@ const TOKEN_CACHE_PREFIX = "gnoTools:fungibleTokens:v1:";
 
 function renderTokenOptions(tokens) {
   const keep = tokenSelect.value;
-  tokenSelect.innerHTML = '<option value="native">GNOT (native)</option>';
+  tokenSelect.innerHTML = '<option value="native">Native GNOT</option>';
   for (const t of tokens) {
     const opt = document.createElement("option");
     opt.value = t.path;

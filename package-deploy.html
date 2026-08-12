@@ -312,7 +312,7 @@ async function deployPackage(pi) {
       },
     };
     const { hash, height } = await doContract([msg], `deploy ${pkg.pkgpath}`);
-    setStatus(pi, "success", `Deployed at block ${height} — tx ${hash}`);
+    setStatus(pi, "success", `Deployed${height ? ` at block ${height}` : ""} — tx ${hash}`);
     renderDeployBadge(pi, "deployed");
   } catch (err) {
     setStatus(pi, "error", err.message || String(err));

@@ -304,7 +304,7 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
       value: { caller: w.address, send, pkg_path: REALM_PATH, func: "MintAssembled", args: [to] },
     }));
     const { hash, height } = await doContract(messages, `mint ${qty} Gem${qty > 1 ? "s" : ""}`);
-    setStatus("success", `Minted at block ${height} — tx ${hash}. Sealed for 10 blocks, then check TokenURI to see what you got.`);
+    setStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}. Sealed for 10 blocks, then check TokenURI to see what you got.`);
     document.getElementById("resultsGrid").innerHTML = Array.from({ length: qty }, (_, i) =>
       `<div class="rcard">piece ${i + 1}<br>sealed</div>`).join("");
     loadStats();

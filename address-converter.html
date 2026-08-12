@@ -14,6 +14,10 @@
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
 <script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<!-- Works around a real bug in Adena's own extension (a window.adena that
+     never gets set on some page-load orderings), not this code — must
+     stay an external <script src>, not inlined. -->
+<script src="adena-compat.js"></script>
 <style>
   :root{ color-scheme: light dark; }
   *{box-sizing:border-box}

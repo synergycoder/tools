@@ -132,6 +132,11 @@
         <span class="lbl">Price (per piece)</span>
         <span class="val" id="priceVal">…</span>
       </div>
+      <div class="price-row">
+        <span class="lbl">Est. network cost (per piece)</span>
+        <span class="val" id="costVal" style="font-size:14px">…</span>
+      </div>
+      <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
 
       <ul class="facts" id="factsList">
         <li><span class="k">Max possible combinations</span><span class="v" id="factMaxCombos">…</span></li>
@@ -147,6 +152,7 @@
         <input type="number" id="qtyInput" value="1" min="1" max="10">
         <span class="qty-note" id="qtyNote">up to 10 in one transaction</span>
       </div>
+      <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
 
       <div class="to-row">
         <label for="toInput">Mint to (defaults to your connected wallet)</label>
@@ -180,10 +186,31 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
+
+// gno.land charges a storage deposit for any new on-chain data a call
+// writes, not just for the code deployed initially -- each MintAssembled
+// call creates several new records (token ownership, provenance, sealed
+// trait tuple, combo-uniqueness entry, wallet mint count), so minting
+// itself costs GNOT beyond gas, separate from MintPrice. No SVG/image
+// data is ever stored -- TokenURI renders it fresh from the small trait
+// tuple on every read, by design (see gems.gno).
+//
+// Calibrated from a real 5-piece batch mint on this exact realm (block
+// 117573, one transaction, 5 StorageDepositEvents): the FIRST mint to a
+// wallet that's never minted here before cost 21,207 bytes (2,120,700
+// ugnot) -- it also creates that wallet's first mintCountByWallet entry,
+// a new AVL node on top of the usual per-token records. The 4 repeat
+// mints to the same already-tracked wallet cost 16,690-16,719 bytes
+// (~1,669,800 ugnot avg) -- cheaper, no new wallet-count entry. Gas for
+// that batch was ~7,725 ugnot/mint. Both tiers padded 12% for variance
+// (trait-string length differs by draw; gas price can drift) rather than
+// quoting the bare observed numbers as a guarantee.
+const FIRST_MINT_UGNOT = 2_383_836; // this recipient's very first mint on this realm
+const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 
 // Returns null (not false) when the query itself failed -- e.g. the
 // realm isn't deployed yet -- so callers can tell "unknown" apart from
@@ -268,14 +295,72 @@ function renderWalletGate() {
     gate.innerHTML = onSapphire
       ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
       : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+    // Only auto-track the connected wallet into "mint to" while the user
+    // hasn't manually typed their own recipient in -- otherwise switching
+    // Adena accounts after a manual edit would clobber an intentional
+    // override. But when it IS still auto-tracking, keep it synced on
+    // EVERY wallet change, not just while empty: previously this only
+    // filled in toInput.value once (when empty) and then never touched
+    // it again, so switching Adena accounts left a stale address sitting
+    // in the field -- confirmed live, a mint from a newly-switched
+    // account landed tokens on the PREVIOUS account instead. The pill
+    // above reads getWallet() fresh and looked correct; only this field
+    // (and everything downstream of currentRecipient(), including the
+    // actual mint tx's `to` and the "minted to this wallet" stat) was
+    // silently stale.
     const toInput = document.getElementById("toInput");
-    if (!toInput.value) { toInput.value = w.address; loadStats(); }
+    if (!toInput.dataset.manual) {
+      const changed = toInput.value !== w.address;
+      toInput.value = w.address;
+      if (changed) loadStats();
+    }
   }
   updateMintButton();
 }
 onWalletChange(renderWalletGate);
 
+// Total network cost (storage deposit + gas, per FIRST_MINT_UGNOT/
+// REPEAT_MINT_UGNOT above) plus MintPrice if one's set -- shown
+// regardless of connection state so even a not-yet-connected visitor can
+// see what to expect. Compares against the connected wallet's own
+// balance when available and warns if it looks short, rather than
+// letting the mint fail silently.
+// stats.mintedByWallet (already fetched for the wallet-cap display) tells
+// us whether the current recipient has ever minted here before -- only
+// the very first mint of their whole history costs the higher tier, so
+// within one batch to a never-minted recipient, piece 1 is FIRST_MINT_UGNOT
+// and pieces 2+ are REPEAT_MINT_UGNOT. Unknown (null, e.g. no wallet
+// connected yet) defaults to the conservative "first mint" assumption.
+function estimateMintCostUgnot(qty, recipientAlreadyMinted) {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    const isRecipientsFirstEver = !recipientAlreadyMinted && i === 0;
+    total += isRecipientsFirstEver ? FIRST_MINT_UGNOT : REPEAT_MINT_UGNOT;
+  }
+  return total;
+}
+
+function updateCostEstimate() {
+  const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
+  const priceUgnot = stats.price || 0;
+  const recipientAlreadyMinted = stats.mintedByWallet != null && stats.mintedByWallet > 0;
+  const totalUgnot = estimateMintCostUgnot(qty, recipientAlreadyMinted) + qty * priceUgnot;
+  const note = document.getElementById("totalCostNote");
+  const w = getWallet();
+  let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${fromBaseUnits(totalUgnot, NATIVE_DECIMALS)} GNOT`;
+  note.style.color = "";
+  if (w.status === "connected" && w.balanceRaw != null) {
+    const balanceUgnot = parseInt(w.balanceRaw, 10);
+    if (!Number.isNaN(balanceUgnot) && balanceUgnot < totalUgnot) {
+      text += ` — your balance (${fromBaseUnits(w.balanceRaw, NATIVE_DECIMALS)} GNOT) looks short. Mint fewer, or add funds first.`;
+      note.style.color = "#e0596d";
+    }
+  }
+  note.textContent = text;
+}
+
 function updateMintButton() {
+  updateCostEstimate();
   const w = getWallet();
   const btn = document.getElementById("mintBtn");
   const qtyInput = document.getElementById("qtyInput");
@@ -301,7 +386,11 @@ function updateMintButton() {
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
 
 let toInputDebounce = null;
-document.getElementById("toInput").addEventListener("input", () => {
+document.getElementById("toInput").addEventListener("input", (e) => {
+  // A real "input" event only fires from actual user typing, never from
+  // the programmatic `toInput.value = w.address` sync in renderWalletGate
+  // -- safe to treat this as "the user took over this field".
+  e.target.dataset.manual = "1";
   clearTimeout(toInputDebounce);
   toInputDebounce = setTimeout(loadStats, 400);
 });
@@ -387,6 +476,8 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
     updateMintButton();
   }
 });
+
+document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
 
 renderWalletGate();
 loadStats();

@@ -236,9 +236,101 @@
     <h2 style="margin:0">Data URI</h2>
     <button type="button" class="ghost small" id="copyDataUriBtn">Copy</button>
   </div>
-  <p class="section-hint">This exact string is what a mint transaction would eventually store as the token's image field. Copy it if you want to inspect or test it elsewhere — minting itself isn't wired up yet.</p>
+  <p class="section-hint">This exact string is what a mint transaction stores as the token's image field.</p>
   <textarea id="dataUriOutput" readonly rows="4"></textarea>
 </div>
+
+<div class="panel" id="walletGate">Checking wallet…</div>
+
+<div class="panel" id="collectionPanel" style="display:none">
+  <h2>Collection</h2>
+  <p class="section-hint">Every mint is public and uncapped — anyone can call it, any number of times, once pieces are queued. No per-wallet limit, no price, no delayed reveal: this is the simple version of the pattern, meant to be extended later.</p>
+  <div class="row" id="collectionTabs">
+    <button type="button" class="ghost small on" id="tabNewCollection">Deploy a new collection</button>
+    <button type="button" class="ghost small" id="tabExistingCollection">Use one I've already deployed</button>
+  </div>
+
+  <div id="newCollectionForm">
+    <div class="row">
+      <span class="field-label">Collection name</span>
+      <input type="text" id="collNameInput" placeholder="Gnosaurus Eclipse" style="flex:1;min-width:14rem;font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+    </div>
+    <div class="row">
+      <span class="field-label">Symbol</span>
+      <input type="text" id="collSymbolInput" placeholder="GNOS" style="width:8rem;font-family:var(--mono);font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+      <span class="field-label">Package path segment</span>
+      <input type="text" id="collSlugInput" placeholder="gnosaurus-eclipse" style="flex:1;min-width:12rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+    </div>
+    <p class="section-hint" id="collPathPreview"></p>
+    <p class="section-hint" id="collDeployCost"></p>
+    <div class="row">
+      <button type="button" id="deployCollBtn" disabled>Connect wallet to deploy</button>
+    </div>
+  </div>
+
+  <div id="existingCollectionForm" style="display:none">
+    <div class="row">
+      <span class="field-label">Package path</span>
+      <input type="text" id="collPathInput" placeholder="gno.land/r/g1.../mycollection" style="flex:1;min-width:20rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+      <button type="button" id="loadCollBtn">Load</button>
+    </div>
+  </div>
+
+  <p class="validation-error" id="collectionError" style="display:none"></p>
+  <div id="activeCollectionInfo" style="display:none">
+    <dl class="report-grid">
+      <dt>Active collection</dt><dd class="mono" id="activeCollPath"></dd>
+      <dt>Owner</dt><dd class="mono" id="activeCollOwner"></dd>
+      <dt>Minted so far</dt><dd id="activeCollCount"></dd>
+      <dt>Queued, unminted</dt><dd id="activeCollQueue"></dd>
+      <dt>Minting</dt><dd id="activeCollOpen"></dd>
+    </dl>
+  </div>
+</div>
+
+<div class="panel" id="mintPanel" style="display:none">
+  <h2>Queue &amp; mint this piece</h2>
+  <p class="section-hint">Only the collection owner can queue a piece (<code>AddPresetToken</code>); once queued, <code>Mint</code> is public — anyone (including you) can claim a uniformly-random piece from whatever's queued.</p>
+  <div class="row">
+    <span class="field-label">Name</span>
+    <input type="text" id="pieceNameInput" placeholder="Gnosaurus Eclipse #1" style="flex:1;min-width:14rem;font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+  </div>
+  <div class="row">
+    <span class="field-label">Description</span>
+    <input type="text" id="pieceDescInput" placeholder="A total solar eclipse, hand-shot." style="flex:1;min-width:14rem;font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+  </div>
+  <div class="row">
+    <span class="field-label">External URL</span>
+    <input type="text" id="pieceUrlInput" placeholder="(optional)" style="flex:1;min-width:14rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+    <span class="field-label">Background color</span>
+    <input type="text" id="pieceBgInput" placeholder="0a0b10" style="width:8rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+  </div>
+  <div class="row">
+    <span class="field-label">Attributes</span>
+    <input type="text" id="pieceAttrsInput" placeholder="Event=Total Eclipse;Location=..." style="flex:1;min-width:14rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+  </div>
+  <div class="row">
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+      <input type="checkbox" id="clearQueueFirstInput">
+      Clear the existing queue first, so this mint is guaranteed to be this exact piece
+    </label>
+  </div>
+  <div class="row">
+    <button type="button" id="queueAndMintBtn" disabled>Connect wallet</button>
+    <button type="button" class="ghost" id="queueOnlyBtn" disabled>Queue only (owner)</button>
+  </div>
+  <p class="validation-error" id="mintError" style="display:none"></p>
+  <div id="mintStatus"></div>
+</div>
+
+<div class="panel" id="streamPanel" style="display:none">
+  <div class="row" style="justify-content:space-between">
+    <h2 style="margin:0">Recently minted</h2>
+    <span class="section-hint" id="streamNote" style="margin:0"></span>
+  </div>
+  <div id="streamGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:12px"></div>
+</div>
+
 </div>
 
 </div>
@@ -255,6 +347,10 @@ initSiteChrome();
 gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
+import { getWallet, onWalletChange } from "/lib/site-chrome.js";
+import { doContract } from "/lib/adena-connect.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "/lib/gno-rpc.js";
+
 // Confirmed via a real deploy + the /tm.StorageDepositEvent read on both
 // gno.land testnet (sapphire-1) and Beta Mainnet -- see ~/gno-land-dev-notes.md,
 // 2026-08-05 "gno-nft-minter/gno-token-minter" entry. The *rate* is solid;
@@ -454,6 +550,13 @@ function recompute() {
 
   compImg.src = compressedDataUrl;
   dataUriOutput.value = compressedDataUrl;
+  // Queue/mint buttons gate on compressedDataUrl -- refresh their
+  // enabled state now that it's populated (or changed). Safe to call
+  // unconditionally: recompute() only ever runs from a user interaction
+  // (upload, slider, etc.), long after the whole module -- including
+  // this function declaration, hoisted regardless of source order -- has
+  // finished its first pass.
+  updateMintButtons();
 }
 
 function formatLabel(mime) {
@@ -519,6 +622,394 @@ copyDataUriBtn.addEventListener("click", async () => {
     setTimeout(() => { copyDataUriBtn.textContent = "Copy"; }, 1400);
   }
 });
+
+// ---------- deploy-a-collection + queue + mint ----------
+// Every new collection reuses this site's own already-deployed grc721
+// package (gno.land/p/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/grc721) and
+// the standard gno.land/p/nt/avl/v0 -- both public, importable `p/`
+// packages, so a new collection here is ONE package deploy, not three.
+// The template itself is the Mint/AddPresetToken half of that same
+// project's own nftminter.gno, trimmed to the essentials (no delayed
+// reveal, no per-wallet cap, no price) -- see its own header comment.
+
+const TEMPLATE_PKGPATH = "gno.land/p/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/grc721";
+
+// Declared up front, before renderWalletGate/updateMintButtons etc. are
+// defined below -- onWalletChange(cb) (used further down) invokes its
+// callback SYNCHRONOUSLY at registration time, so renderWalletGate() (and
+// everything it calls, including updateMintButtons()) runs immediately
+// when that line executes. If these were declared later with `let`, that
+// first synchronous call would hit them while still in the temporal dead
+// zone -- confirmed live (ReferenceError: Cannot access
+// 'activeCollectionPath' before initialization) rather than assumed.
+let activeCollectionPath = null;
+let activeCollectionStats = { owner: null, count: null, queue: null, open: null };
+
+let templateBodyRaw = null;
+async function loadTemplate() {
+  if (templateBodyRaw) return templateBodyRaw;
+  const res = await fetch("/nft-minter/simplenftminter-template.json");
+  const data = await res.json();
+  templateBodyRaw = data.body;
+  return templateBodyRaw;
+}
+
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "collection";
+}
+
+function goPkgNameFromSegment(segment) {
+  let name = segment.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  if (!name) name = "collection";
+  if (/^[0-9]/.test(name)) name = "c" + name;
+  return name;
+}
+
+function buildTemplateBody(segment) {
+  if (!templateBodyRaw) return null;
+  const w = getWallet();
+  if (w.status !== "connected") return null;
+  const pkgName = goPkgNameFromSegment(segment);
+  const name = document.getElementById("collNameInput").value.trim() || "Untitled Collection";
+  const symbol = (document.getElementById("collSymbolInput").value.trim() || "NFT").toUpperCase();
+  return templateBodyRaw
+    .split("__PKG_NAME__").join(pkgName)
+    .split("__COLLECTION_NAME__").join(name.replace(/"/g, '\\"'))
+    .split("__COLLECTION_SYMBOL__").join(symbol.replace(/"/g, '\\"'))
+    .split("__OWNER_ADDR__").join(w.address);
+}
+
+// ---- wallet gate ----
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.innerHTML = `Connect Adena (top right) to deploy a collection or mint. You can still prep an image above without connecting.`;
+  } else {
+    const onSapphire = w.chainId === "sapphire-1";
+    gate.innerHTML = onSapphire
+      ? `Connected as <code class="mono">${w.address}</code> on <code class="mono">sapphire-1</code>.`
+      : `Connected as <code class="mono">${w.address}</code>, but on <code class="mono">${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+  }
+  updateCollPathPreview();
+  updateDeployButton();
+  updateMintButtons();
+}
+onWalletChange(renderWalletGate);
+
+// ---- collection tabs ----
+
+const tabNew = document.getElementById("tabNewCollection");
+const tabExisting = document.getElementById("tabExistingCollection");
+const newForm = document.getElementById("newCollectionForm");
+const existingForm = document.getElementById("existingCollectionForm");
+tabNew.addEventListener("click", () => {
+  tabNew.classList.add("on"); tabExisting.classList.remove("on");
+  newForm.style.display = ""; existingForm.style.display = "none";
+});
+tabExisting.addEventListener("click", () => {
+  tabExisting.classList.add("on"); tabNew.classList.remove("on");
+  existingForm.style.display = ""; newForm.style.display = "none";
+});
+
+// ---- new-collection form ----
+
+function updateCollPathPreview() {
+  const w = getWallet();
+  const nameInput = document.getElementById("collNameInput");
+  const slugInput = document.getElementById("collSlugInput");
+  if (!slugInput.dataset.manual && nameInput.value.trim()) {
+    slugInput.value = slugify(nameInput.value.trim());
+  }
+  const segment = slugInput.value.trim() || "collection";
+  const addr = w.status === "connected" ? w.address : "<connect wallet>";
+  document.getElementById("collPathPreview").textContent = `gno.land/r/${addr}/${segment}`;
+
+  const costEl = document.getElementById("collDeployCost");
+  const body = buildTemplateBody(segment);
+  if (!body) { costEl.textContent = ""; return; }
+  const gnomod = `module = "gno.land/r/${w.address}/${segment}"\ngno = "0.9"\n`;
+  const bytes = new TextEncoder().encode(body).length + new TextEncoder().encode(gnomod).length;
+  const costUgnot = Math.ceil(bytes * STORAGE_UGNOT_PER_BYTE * 1.15);
+  costEl.textContent = `Estimated deploy cost: ~${fromBaseUnits(costUgnot, NATIVE_DECIMALS)} GNOT (${bytes.toLocaleString()} bytes @ 100 ugnot/byte, +15% margin). This reuses the site's already-deployed grc721 package (${TEMPLATE_PKGPATH}) — this is the only package you deploy.`;
+}
+document.getElementById("collNameInput").addEventListener("input", () => { updateCollPathPreview(); updateDeployButton(); });
+document.getElementById("collSlugInput").addEventListener("input", (e) => { e.target.dataset.manual = "1"; updateCollPathPreview(); });
+document.getElementById("collSymbolInput").addEventListener("input", updateCollPathPreview);
+
+function updateDeployButton() {
+  const w = getWallet();
+  const btn = document.getElementById("deployCollBtn");
+  if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect wallet to deploy"; return; }
+  if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (!document.getElementById("collNameInput").value.trim()) { btn.disabled = true; btn.textContent = "Enter a collection name"; return; }
+  btn.disabled = false;
+  btn.textContent = "Deploy this collection";
+}
+
+function showCollectionError(msg) {
+  const el = document.getElementById("collectionError");
+  el.textContent = msg; el.style.display = "block";
+}
+function clearCollectionError() {
+  document.getElementById("collectionError").style.display = "none";
+}
+function setCollectionStatus(cls, text) {
+  clearCollectionError();
+  // reuse the validation-error slot for pending/success text too, styled inline
+  const el = document.getElementById("collectionError");
+  el.style.display = "block";
+  el.style.color = cls === "success" ? "var(--good)" : cls === "error" ? "var(--bad)" : "var(--accent)";
+  el.textContent = text;
+}
+
+document.getElementById("deployCollBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  await loadTemplate();
+  const segment = document.getElementById("collSlugInput").value.trim() || slugify(document.getElementById("collNameInput").value.trim());
+  const pkgName = goPkgNameFromSegment(segment);
+  const body = buildTemplateBody(segment);
+  if (!body) { showCollectionError("Enter a collection name first."); return; }
+  const pkgPath = `gno.land/r/${w.address}/${segment}`;
+  const gnomod = `module = "${pkgPath}"\ngno = "0.9"\n`;
+  const files = [
+    { name: "gnomod.toml", body: gnomod },
+    { name: pkgName + ".gno", body },
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const bytes = files.reduce((n, f) => n + new TextEncoder().encode(f.body).length, 0);
+  const deposit = Math.ceil(bytes * STORAGE_UGNOT_PER_BYTE * 1.15) + "ugnot";
+
+  const btn = document.getElementById("deployCollBtn");
+  btn.disabled = true;
+  setCollectionStatus("pending", "Waiting for Adena approval — deploying your collection…");
+  try {
+    const msg = { type: "/vm.m_addpkg", value: { creator: w.address, deposit, package: { name: pkgName, path: pkgPath, files } } };
+    const { hash, height } = await doContract([msg], `deploy ${pkgPath}`);
+    setCollectionStatus("success", `Deployed${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    activeCollectionPath = pkgPath;
+    await refreshCollection();
+  } catch (err) {
+    showCollectionError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- existing-collection form ----
+
+document.getElementById("loadCollBtn").addEventListener("click", async () => {
+  const path = document.getElementById("collPathInput").value.trim();
+  if (!path) { showCollectionError("Paste a package path first."); return; }
+  activeCollectionPath = path;
+  clearCollectionError();
+  await refreshCollection();
+});
+
+// ---- active collection state + refresh ----
+// (activeCollectionPath/activeCollectionStats declared near the top of
+// this script, see the comment there for why.)
+
+async function collQeval(pkgpath, expr) {
+  return abciQuery(NETWORKS.testnet, "vm/qeval", `${pkgpath}.${expr}`, 10000);
+}
+// Owner() returns a gno `address`, whose qeval literal is
+// ("g1..." .uverse.address) -- NOT ("..." string). Matching only the
+// leading quote (not a specific trailing type) handles both, confirmed
+// live: matching literally on `string)` silently failed against Owner()
+// and rendered "unknown" for an address that was actually right there.
+function parseStrQ(raw) {
+  const m = raw && raw.match(/^\("([^"]*)"/s);
+  return m ? m[1] : null;
+}
+function parseBoolQ(raw) { return raw != null && /^\(true/.test(raw); }
+function parseIntQ(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+
+async function refreshCollection() {
+  if (!activeCollectionPath) return;
+  const [ownerR, countR, queueR, openR] = await Promise.all([
+    collQeval(activeCollectionPath, "Owner()").catch(() => null),
+    collQeval(activeCollectionPath, "TokenCount()").catch(() => null),
+    collQeval(activeCollectionPath, "PresetQueueLength()").catch(() => null),
+    collQeval(activeCollectionPath, "MintingOpen()").catch(() => null),
+  ]);
+  if (ownerR == null) {
+    showCollectionError(`Couldn't reach ${activeCollectionPath} — check the path, or that it's actually deployed with this tool's expected shape (Owner/TokenCount/PresetQueueLength/MintingOpen).`);
+    document.getElementById("activeCollectionInfo").style.display = "none";
+    document.getElementById("mintPanel").style.display = "none";
+    document.getElementById("streamPanel").style.display = "none";
+    return;
+  }
+  activeCollectionStats = {
+    owner: parseStrQ(ownerR),
+    count: parseIntQ(countR),
+    queue: parseIntQ(queueR),
+    open: parseBoolQ(openR),
+  };
+  document.getElementById("activeCollectionInfo").style.display = "";
+  document.getElementById("activeCollPath").textContent = activeCollectionPath;
+  document.getElementById("activeCollOwner").textContent = activeCollectionStats.owner || "unknown";
+  document.getElementById("activeCollCount").textContent = activeCollectionStats.count ?? "unknown";
+  document.getElementById("activeCollQueue").textContent = activeCollectionStats.queue ?? "unknown";
+  document.getElementById("activeCollOpen").textContent = activeCollectionStats.open ? "Open" : "Closed";
+  document.getElementById("mintPanel").style.display = "";
+  document.getElementById("streamPanel").style.display = "";
+  updateMintButtons();
+  await refreshStream();
+}
+
+// ---- queue + mint ----
+
+function showMintError(msg) {
+  const el = document.getElementById("mintError");
+  el.textContent = msg; el.style.display = "block";
+}
+function clearMintError() {
+  document.getElementById("mintError").style.display = "none";
+}
+function setMintStatus(cls, text) {
+  document.getElementById("mintStatus").innerHTML =
+    `<p class="section-hint" style="color:${cls === "success" ? "var(--good)" : cls === "error" ? "var(--bad)" : "var(--accent)"}">${text}</p>`;
+}
+
+function updateMintButtons() {
+  const w = getWallet();
+  const queueBtn = document.getElementById("queueOnlyBtn");
+  const mintBtn = document.getElementById("queueAndMintBtn");
+  if (!activeCollectionPath || w.status !== "connected") {
+    queueBtn.disabled = true; mintBtn.disabled = true; mintBtn.textContent = "Connect wallet"; return;
+  }
+  const isOwner = activeCollectionStats.owner && w.address === activeCollectionStats.owner;
+  queueBtn.disabled = !isOwner || !compressedDataUrl;
+  queueBtn.title = isOwner ? (compressedDataUrl ? "" : "Prep an image first") : "Only the collection owner can queue a piece";
+  if (isOwner) {
+    mintBtn.disabled = !compressedDataUrl;
+    mintBtn.textContent = compressedDataUrl ? "Queue & mint this piece" : "Prep an image first";
+  } else {
+    mintBtn.disabled = false;
+    mintBtn.textContent = "Mint (from whatever's already queued)";
+  }
+}
+
+document.getElementById("queueAndMintBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (!activeCollectionPath || w.status !== "connected") return;
+  const isOwner = activeCollectionStats.owner && w.address === activeCollectionStats.owner;
+  const btn = document.getElementById("queueAndMintBtn");
+  btn.disabled = true;
+  clearMintError();
+  try {
+    const messages = [];
+    if (isOwner) {
+      if (!compressedDataUrl) { showMintError("Prep an image first."); btn.disabled = false; return; }
+      if (document.getElementById("clearQueueFirstInput").checked) {
+        messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "ClearPresetQueue", args: [] } });
+      }
+      const name = document.getElementById("pieceNameInput").value.trim() || "Untitled";
+      const desc = document.getElementById("pieceDescInput").value.trim();
+      const url = document.getElementById("pieceUrlInput").value.trim();
+      const bg = document.getElementById("pieceBgInput").value.trim();
+      const attrs = document.getElementById("pieceAttrsInput").value.trim();
+      messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, compressedDataUrl, url, bg, attrs] } });
+    }
+    messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "Mint", args: [w.address] } });
+    setMintStatus("pending", `Waiting for Adena approval — ${isOwner ? "queuing + minting" : "minting"}…`);
+    const { hash, height } = await doContract(messages, isOwner ? "queue + mint" : "mint");
+    setMintStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    await refreshCollection();
+  } catch (err) {
+    showMintError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+    updateMintButtons();
+  }
+});
+
+document.getElementById("queueOnlyBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (!activeCollectionPath || w.status !== "connected") return;
+  if (!compressedDataUrl) { showMintError("Prep an image first."); return; }
+  const btn = document.getElementById("queueOnlyBtn");
+  btn.disabled = true;
+  clearMintError();
+  try {
+    const name = document.getElementById("pieceNameInput").value.trim() || "Untitled";
+    const desc = document.getElementById("pieceDescInput").value.trim();
+    const url = document.getElementById("pieceUrlInput").value.trim();
+    const bg = document.getElementById("pieceBgInput").value.trim();
+    const attrs = document.getElementById("pieceAttrsInput").value.trim();
+    const messages = [];
+    if (document.getElementById("clearQueueFirstInput").checked) {
+      messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "ClearPresetQueue", args: [] } });
+    }
+    messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, compressedDataUrl, url, bg, attrs] } });
+    setMintStatus("pending", "Waiting for Adena approval — queuing this piece…");
+    const { hash, height } = await doContract(messages, "queue piece");
+    setMintStatus("success", `Queued${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    await refreshCollection();
+  } catch (err) {
+    showMintError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---- stream / recently minted ----
+// CollectionSummary()'s qeval result is one gno string literal containing
+// newline-separated "tid|owner|b64(name)|b64(desc)|b64(image)|b64(url)|
+// b64(traits)|b64(bg)" lines (TokenSummary's own format) -- same shape
+// already proven live against the Gems collection's own mint page.
+const STREAM_LIMIT = 24;
+
+function parseCollectionSummaryQ(raw) {
+  if (!raw) return [];
+  const m = raw.match(/^\("([\s\S]*)" string\)$/);
+  const body = (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  if (!body.trim()) return [];
+  return body.split("\n").filter(Boolean).map(line => {
+    const parts = line.split("|");
+    if (parts.length !== 8) return null;
+    const [tid, owner, nameB64, , imageB64] = parts;
+    try {
+      return { tid, owner, name: atob(nameB64), image: atob(imageB64) };
+    } catch (e) {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+async function refreshStream() {
+  if (!activeCollectionPath) return;
+  const raw = await collQeval(activeCollectionPath, "CollectionSummary()").catch(() => null);
+  const tokens = parseCollectionSummaryQ(raw);
+  const grid = document.getElementById("streamGrid");
+  const note = document.getElementById("streamNote");
+  if (!tokens.length) {
+    grid.innerHTML = `<div class="section-hint">No pieces minted yet — be the first.</div>`;
+    note.textContent = "";
+    return;
+  }
+  const ordered = tokens.slice().reverse(); // most recently minted first
+  const shown = ordered.slice(0, STREAM_LIMIT);
+  note.textContent = tokens.length > STREAM_LIMIT ? `showing latest ${STREAM_LIMIT} of ${tokens.length}` : `${tokens.length} minted so far`;
+  grid.innerHTML = shown.map(t => `
+    <div style="border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel2)">
+      <div style="aspect-ratio:1;background:var(--panel);display:flex;align-items:center;justify-content:center">
+        <img src="${t.image}" alt="${t.name.replace(/"/g, "&quot;")}" style="max-width:100%;max-height:100%">
+      </div>
+      <div style="padding:6px 8px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <span style="color:var(--ink);font-weight:700;display:block">#${t.tid}</span>${t.name}
+      </div>
+    </div>`).join("");
+}
+
+// ---- init ----
+
+document.getElementById("collectionPanel").style.display = "";
+renderWalletGate();
+loadTemplate().then(() => { updateCollPathPreview(); updateDeployButton(); });
+setInterval(() => { if (activeCollectionPath) refreshCollection(); }, 20000);
 </script>
 </body>
 </html>

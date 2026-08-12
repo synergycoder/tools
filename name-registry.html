@@ -135,6 +135,10 @@
   /* profile view + avatar preview/lightbox */
   .avatar-preview{width:40px;height:40px;border-radius:8px;object-fit:cover;border:1px solid var(--hair2);background:var(--panel2);cursor:pointer;flex:none}
   .avatar-preview:hover{border-color:var(--accent)}
+  .scan-tabs{display:inline-flex;border:1px solid var(--hair2);border-radius:10px;padding:3px;gap:2px;background:var(--panel2)}
+  .scan-tab{font-family:var(--sans);font-size:13px;padding:7px 14px;border-radius:7px;border:none;background:transparent;color:var(--muted);cursor:pointer}
+  .scan-tab.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .scan-tab:hover:not(.on){color:var(--ink)}
   .profile-head{display:flex;align-items:center;gap:16px;margin-bottom:4px}
   .profile-avatar{width:84px;height:84px;border-radius:14px;cursor:pointer;flex:none}
   .profile-name{font-family:var(--mono);font-size:20px;font-weight:600}
@@ -156,7 +160,7 @@
     <button data-tab="names">Names</button>
     <button data-tab="history">History</button>
     <button data-tab="register">Register</button>
-    <button data-tab="profile">My Profile</button>
+    <button data-tab="profile">Profiles</button>
   </div>
 
   <!-- QUERY -->
@@ -198,17 +202,20 @@
     <div id="r-body"></div>
   </section>
 
-  <!-- PROFILE -->
+  <!-- PROFILES -->
   <section class="panel" id="tab-profile">
-    <h2>My Profile</h2>
-    <div id="p-body"></div>
-    <div class="sect">
-      <div class="h">Look up someone else's profile</div>
-      <div class="row">
-        <input type="text" id="op-input" placeholder="nym-alice123  or  g1…" autocomplete="off" spellcheck="false" />
-        <button class="act ghost" id="op-lookup">View profile</button>
-      </div>
+    <h2>Profiles</h2>
+    <p class="hint">On-chain profiles live in <code>r/demo/profile</code>, keyed to a wallet address (separate from the name registry). Look up your own to edit it, or anyone else's to view it — by name, by address, or a direct link (<code>?profile=nym-alice123</code> or <code>?profile=g1…</code>).</p>
+    <div class="scan-tabs" id="profileTabs">
+      <button class="scan-tab on" data-mode="mine">My Profile</button>
+      <button class="scan-tab" data-mode="other">Someone Else's Profile</button>
     </div>
+    <div class="row" id="otherProfileRow" style="display:none;margin-top:12px">
+      <input type="text" id="op-input" placeholder="nym-alice123  or  g1…" autocomplete="off" spellcheck="false" />
+      <button class="act ghost" id="op-lookup">View profile</button>
+    </div>
+    <div id="p-msg" style="margin-top:14px"></div>
+    <div id="p-body" style="margin-top:14px"></div>
   </section>
 
   <div class="reg-footer">
@@ -412,7 +419,7 @@ async function loadNames(force){
   html+='<div class="list">'+list.map(e=>{
     const badge=regNames.has(e.name)?'<span class="badge ok">registered</span>':'<span class="badge">genesis</span>';
     const del=e.deleted?' <span class="badge bad">deleted</span>':'';
-    return '<div class="item" onclick="openDetail(\''+esc(e.name)+'\')"><span class="nm">@'+esc(e.name)+' '+badge+del+'</span><span class="faint">details ↗</span></div>';
+    return '<div class="item" onclick="openDetail(\''+esc(e.name)+'\')"><span class="nm">@'+esc(e.name)+' '+badge+del+'</span><span class="faint">details ↗ · <a href="?profile='+encodeURIComponent(e.name)+'" onclick="event.stopPropagation()">profile</a></span></div>';
   }).join("")+'</div>';
   if(list.length<total)html+='<div class="note" style="margin-top:12px">Showing '+list.length+' of '+total+' (some entries could not be read — retry).</div>';
   if(regs&&regs.loadError)html+='<div class="note" style="margin-top:12px">Registration timestamps unavailable (indexer: '+esc(regs.loadError)+'); registered/genesis labels may be approximate.</div>';
@@ -676,50 +683,108 @@ async function pollForRegistration(n,submit,msg,attempt){
   setTimeout(()=>pollForRegistration(n,submit,msg,attempt+1),DELAY_MS);
 }
 
-/* ---------------- PROFILE tab (r/demo/profile) ---------------- */
+/* ---------------- PROFILES tab (r/demo/profile) ---------------- */
 const PROFILE_FIELDS=[
   {key:"DisplayName",label:"Display name",ph:"Alice"},
   {key:"Bio",label:"Bio / description",ph:"Pixel-game player and builder",area:true},
   {key:"Avatar",label:"Avatar image URL",ph:"https://…/pfp.png"},
-  {key:"Homepage",label:"Homepage / website",ph:"https://…"},
   {key:"Location",label:"Location",ph:"Internet"},
+  {key:"Homepage",label:"Homepage / website",ph:"https://…"},
   {key:"com.twitter",label:"Twitter / X",ph:"@handle"},
   {key:"com.github",label:"GitHub",ph:"username"},
   {key:"com.discord",label:"Discord",ph:"username"},
   {key:"org.telegram",label:"Telegram",ph:"@handle"},
 ];
 let profileLoaded={};
-function renderProfile(){
-  const body=document.getElementById("p-body");
-  const w=walletState();
-  const gate=connectGateHTML(w);
-  const hint='<p class="hint">Your on-chain profile lives in <code>r/demo/profile</code>, keyed to your <b>wallet address</b> (separate from the name registry — the native system splits them). All fields are optional; changed fields batch into a single Adena signature. Saved values appear in a name\'s detail view.</p>';
-  if(gate){
-    body.innerHTML=hint+gate;
-    return;
-  }
-  walletAddr=w.address;
-  body.innerHTML=hint+mismatchNoticeHTML(w)+'<div id="p-form" style="margin-top:18px"></div><div id="p-msg" style="margin-top:14px"></div>';
-  wireSwitchNetworkButton();
-  showProfileView();
-}
-document.getElementById("op-lookup").onclick=()=>{const v=document.getElementById("op-input").value.trim();if(v)openDetail(v);};
-document.getElementById("op-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
+let profileMode="mine"; // "mine" | "other"
+let otherProfileAddr=null; // resolved target address once "Someone Else's Profile" has one
 
-// Read-only landing view for the Profile tab — avatar, registry name,
-// display name, bio, and the remaining fields, with an Edit link into
-// showProfileEditForm(). savedNote (optional) surfaces a one-line success
-// banner right after saveProfile() lands back here.
-async function showProfileView(savedNote){
-  const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
+const profileTabsEl=document.getElementById("profileTabs");
+const otherProfileRow=document.getElementById("otherProfileRow");
+const opInput=document.getElementById("op-input");
+
+profileTabsEl.querySelectorAll(".scan-tab").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    if(btn.classList.contains("on"))return;
+    profileTabsEl.querySelectorAll(".scan-tab").forEach(b=>b.classList.remove("on"));
+    btn.classList.add("on");
+    profileMode=btn.dataset.mode;
+    otherProfileRow.style.display=profileMode==="other"?"flex":"none";
+    document.getElementById("p-msg").innerHTML="";
+    renderProfileTab();
+  });
+});
+document.getElementById("op-lookup").onclick=submitOtherProfile;
+opInput.addEventListener("keydown",e=>{if(e.key==="Enter")submitOtherProfile();});
+
+// Accepts either a registered name or a raw g1… address — same dual-mode
+// resolution resolveOne() already does for the Query tab, but this one
+// only needs the address (a profile is keyed by address, not name).
+async function resolveProfileTarget(raw){
+  raw=(raw||"").trim();
+  if(!raw)return{error:"Enter a name or address."};
+  if(isAddr(raw))return{address:raw};
+  if(!safeName(raw))return{error:"Not a valid name or g1… address."};
+  const r=await qeval(USERS+'.ResolveName("'+raw+'")');
+  if(r.error)return{error:r.error};
+  const u=r.gnoError?null:parseUser(r.data);
+  if(!u||!u.addr)return{error:'"'+raw+'" is not registered.'};
+  return{address:u.addr};
+}
+async function submitOtherProfile(){
+  const msg=document.getElementById("p-msg");
+  const v=opInput.value.trim();
+  msg.innerHTML='<span class="spinner"></span> <span class="faint">resolving…</span>';
+  const res=await resolveProfileTarget(v);
+  if(res.error){msg.innerHTML='<div class="err">✕ '+esc(res.error)+'</div>';return;}
   msg.innerHTML="";
-  form.innerHTML='<span class="spinner"></span> <span class="faint">loading profile…</span>';
+  otherProfileAddr=res.address;
+  renderProfileTab();
+}
+
+// Top-level entry for the Profiles tab — called on tab activation and on
+// every My Profile / Someone Else's Profile switch. Both modes render
+// through the exact same renderProfileCard() below, so the layout never
+// differs between "my profile" and "someone else's profile" — only
+// whether an Edit link appears.
+function renderProfileTab(){
+  const body=document.getElementById("p-body");
+  if(profileMode==="mine"){
+    const w=walletState();
+    const gate=connectGateHTML(w);
+    if(gate){body.innerHTML=gate;return;}
+    walletAddr=w.address;
+    body.innerHTML=mismatchNoticeHTML(w)+'<div id="p-card"></div>';
+    wireSwitchNetworkButton();
+    renderProfileCard(document.getElementById("p-card"),walletAddr,{editable:true});
+  }else{
+    if(!otherProfileAddr){
+      body.innerHTML='<p class="hint">Enter a name or address above, or open a direct link like <code>?profile=nym-alice123</code>.</p>';
+      return;
+    }
+    body.innerHTML='<div id="p-card"></div>';
+    renderProfileCard(document.getElementById("p-card"),otherProfileAddr,{editable:false});
+  }
+}
+
+// The one shared profile layout — avatar, registry name, display name,
+// bio, then location/links/etc. Every field always renders with its
+// label; unset ones just show "—" instead of being hidden, so "my
+// profile" and "someone else's profile" are pixel-identical regardless of
+// how filled-in either one is. editable adds the Edit link (My Profile
+// only — editing anyone else's profile isn't offered). savedNote
+// (optional) surfaces a one-line success banner right after saveProfile()
+// lands back here.
+async function renderProfileCard(container,addr,opts){
+  const editable=!!(opts&&opts.editable),savedNote=opts&&opts.savedNote;
+  container.innerHTML='<span class="spinner"></span> <span class="faint">loading profile…</span>';
   const [nr,prof]=await Promise.all([
-    qeval(USERS+'.ResolveAddress("'+walletAddr+'")'),
-    loadProfile(walletAddr),
+    qeval(USERS+'.ResolveAddress("'+addr+'")'),
+    loadProfile(addr),
   ]);
   const nu=(!nr.error&&!nr.gnoError)?parseUser(nr.data):null;
   const name=nu&&nu.name?nu.name:null;
+  const blank='<span class="faint">—</span>';
 
   let h="";
   if(savedNote)h+='<div class="note info" style="margin-bottom:14px">'+esc(savedNote)+'</div>';
@@ -727,31 +792,30 @@ async function showProfileView(savedNote){
     h+='<div class="err">✕ '+esc(prof.error)+'</div>';
   }else{
     const byKey={};prof.fields.forEach(f=>byKey[f.key]=f);
-    const displayName=byKey.DisplayName&&byKey.DisplayName.set?byKey.DisplayName.display:"";
-    const bio=byKey.Bio&&byKey.Bio.set?byKey.Bio.display:"";
-    const rest=["Homepage","Location","com.twitter","com.github","com.discord","org.telegram","Age","AvailableForHiring"]
-      .map(k=>byKey[k]).filter(f=>f&&f.set);
+    const displayName=byKey.DisplayName&&byKey.DisplayName.set?byKey.DisplayName.display:blank;
+    const bio=byKey.Bio&&byKey.Bio.set?byKey.Bio.display:blank;
+    const rest=["Location","Homepage","com.twitter","com.github","com.discord","org.telegram","Age","AvailableForHiring"]
+      .map(k=>byKey[k]).filter(Boolean);
     h+='<div class="profile-head">'+
-      (prof.avatar?'<img class="avatar profile-avatar" id="pv-avatar" src="'+esc(prof.avatar)+'" alt="" onerror="this.style.display=\'none\'"/>':'')+
+      (prof.avatar?'<img class="avatar profile-avatar" id="pv-avatar" src="'+esc(prof.avatar)+'" alt="" onerror="this.style.display=\'none\'"/>':'<div class="avatar profile-avatar"></div>')+
       '<div><div class="profile-name">'+(name?'@'+esc(name):'<span class="faint">No registry name</span>')+'</div>'+
-      (displayName?'<div class="profile-displayname">'+displayName+'</div>':'')+
+      '<div class="profile-displayname">'+displayName+'</div>'+
       '</div></div>';
-    if(bio)h+='<p class="profile-bio">'+bio+'</p>';
-    if(rest.length)h+=rest.map(f=>kv(f.label,f.display,true)).join("");
-    if(!name&&!displayName&&!bio&&!rest.length&&!prof.avatar)
-      h+='<div class="muted" style="font-size:13px;margin-top:10px">No profile details set yet.</div>';
+    h+='<p class="profile-bio">'+bio+'</p>';
+    h+=rest.map(f=>kv(f.label,f.set?f.display:blank,true)).join("");
+    h+='<div class="kv"><span class="k">address</span><span class="v">'+esc(addr)+'</span></div>';
   }
-  h+='<div class="row" style="margin-top:18px"><button class="act ghost" id="p-edit">Edit profile</button></div>';
-  form.innerHTML=h;
-  document.getElementById("p-edit").onclick=showProfileEditForm;
+  if(editable)h+='<div class="row" style="margin-top:18px"><button class="act ghost" id="p-edit">Edit profile</button></div>';
+  container.innerHTML=h;
+  if(editable)document.getElementById("p-edit").onclick=showProfileEditForm;
   const av=document.getElementById("pv-avatar");
-  if(av)av.onclick=()=>openImageLightbox(prof.avatar);
+  if(av&&prof.avatar)av.onclick=()=>openImageLightbox(prof.avatar);
 }
 
 async function showProfileEditForm(){
-  const form=document.getElementById("p-form"),msg=document.getElementById("p-msg");
+  const container=document.getElementById("p-card"),msg=document.getElementById("p-msg");
   msg.innerHTML="";
-  form.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
+  container.innerHTML='<span class="spinner"></span> <span class="faint">loading current profile…</span>';
   profileLoaded={};
   await mapLimit(PROFILE_FIELDS,4,async f=>{
     const r=await qeval(PROFILE+'.GetStringField("'+walletAddr+'","'+f.key+'","")');
@@ -759,7 +823,7 @@ async function showProfileEditForm(){
   });
   let nm="";const nr=await qeval(USERS+'.ResolveAddress("'+walletAddr+'")');
   const nu=(!nr.error&&!nr.gnoError)?parseUser(nr.data):null;if(nu&&nu.name)nm=nu.name;
-  form.innerHTML=(nm?'<div class="note info" style="margin-bottom:14px">Editing profile for <b>@'+esc(nm)+'</b> · '+esc(walletAddr)+'</div>':'<div class="note" style="margin-bottom:14px">This wallet has no registry name yet — the profile still attaches to your address '+esc(walletAddr)+'.</div>')+
+  container.innerHTML=(nm?'<div class="note info" style="margin-bottom:14px">Editing profile for <b>@'+esc(nm)+'</b> · '+esc(walletAddr)+'</div>':'<div class="note" style="margin-bottom:14px">This wallet has no registry name yet — the profile still attaches to your address '+esc(walletAddr)+'.</div>')+
     PROFILE_FIELDS.map(f=>{
       const v=profileLoaded[f.key]||"";
       if(f.key==="Avatar"){
@@ -775,7 +839,7 @@ async function showProfileEditForm(){
     }).join("")+
     '<div class="row"><button class="act" id="p-save">Save changes</button><button class="act ghost" id="p-cancel">Cancel</button></div>';
   document.getElementById("p-save").onclick=saveProfile;
-  document.getElementById("p-cancel").onclick=()=>showProfileView();
+  document.getElementById("p-cancel").onclick=()=>renderProfileCard(container,walletAddr,{editable:true});
 
   const avatarInput=document.getElementById("pf-Avatar"),avatarPreview=document.getElementById("pf-avatar-preview");
   if(avatarInput&&avatarPreview){
@@ -790,7 +854,7 @@ async function showProfileEditForm(){
   }
 }
 async function saveProfile(){
-  const msg=document.getElementById("p-msg"),btn=document.getElementById("p-save");
+  const msg=document.getElementById("p-msg"),btn=document.getElementById("p-save"),container=document.getElementById("p-card");
   const msgs=[];
   PROFILE_FIELDS.forEach(f=>{
     const el=document.getElementById("pf-"+f.key);if(!el)return;
@@ -802,7 +866,8 @@ async function saveProfile(){
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
   try{
     await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools"});
-    await showProfileView("✓ Saved "+msgs.length+" field(s). Open your name in the Names tab to see them in its detail view.");
+    msg.innerHTML="";
+    await renderProfileCard(container,walletAddr,{editable:true,savedNote:"✓ Saved "+msgs.length+" field(s)."});
   }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";}
 }
 
@@ -863,13 +928,27 @@ document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
   b.classList.add("on");document.getElementById("tab-"+b.dataset.tab).classList.add("on");refreshActiveTab();
 });
 function activeTab(){const b=document.querySelector(".tabs button.on");return b?b.dataset.tab:"query";}
-function refreshActiveTab(){const t=activeTab();if(t==="names")loadNames();else if(t==="history")loadHistory();else if(t==="register")renderRegister();else if(t==="profile")renderProfile();}
+function refreshActiveTab(){const t=activeTab();if(t==="names")loadNames();else if(t==="history")loadHistory();else if(t==="register")renderRegister();else if(t==="profile")renderProfileTab();}
 setNetInfo();
-// Deep link from the shared header's wallet dropdown ("view this name's
-// profile" opens here in a new tab) — the overlay opens on top of
-// whichever tab is default, no tab switch needed.
+// Deep link — ?profile=<name-or-address> switches straight to the
+// Profiles tab's "Someone Else's Profile" sub-tab, pre-filled and
+// resolved, so a shared link lands directly on that profile rather than
+// the query modal. Runs once at page load, after the tab/sub-tab click
+// handlers above are wired, so it can drive them the same way a real
+// click would.
+async function openProfileFromParam(raw){
+  document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
+  document.querySelectorAll("section.panel").forEach(x=>x.classList.remove("on"));
+  document.querySelector('.tabs button[data-tab="profile"]').classList.add("on");
+  document.getElementById("tab-profile").classList.add("on");
+  profileTabsEl.querySelectorAll(".scan-tab").forEach(b=>b.classList.toggle("on",b.dataset.mode==="other"));
+  profileMode="other";
+  otherProfileRow.style.display="flex";
+  opInput.value=raw;
+  await submitOtherProfile();
+}
 const profileParam=new URLSearchParams(location.search).get("profile");
-if(profileParam)openDetail(profileParam);
+if(profileParam)openProfileFromParam(profileParam);
 </script>
 </body>
 </html>

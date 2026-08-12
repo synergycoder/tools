@@ -161,6 +161,7 @@
   A minted NFT on gno.land with no IPFS/server backing it stores the image as a base64-encoded string directly in the realm's own on-chain storage — and storage is billed by the byte (confirmed identical on both gno.land testnet and Beta Mainnet: <code>100 ugnot</code> per byte, i.e. <code>0.0001 GNOT</code>/byte). Base64 also inflates the raw file by about a third. A full-resolution photo can easily cost tens of GNOT to mint this way — resizing and re-compressing first is the difference between a mint that's affordable and one that isn't.
 </div>
 
+<div id="toolBody">
 <div class="panel">
   <label class="dropzone" id="dropzone" for="fileInput">
     <input type="file" id="fileInput" accept="image/*">
@@ -238,6 +239,7 @@
   <p class="section-hint">This exact string is what a mint transaction would eventually store as the token's image field. Copy it if you want to inspect or test it elsewhere — minting itself isn't wired up yet.</p>
   <textarea id="dataUriOutput" readonly rows="4"></textarea>
 </div>
+</div>
 
 </div>
 
@@ -248,8 +250,9 @@
 </div>
 
 <script type="module">
-import { initSiteChrome } from "/lib/site-chrome.js";
+import { initSiteChrome, gateIfLocked } from "/lib/site-chrome.js";
 initSiteChrome();
+gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
 // Confirmed via a real deploy + the /tm.StorageDepositEvent read on both

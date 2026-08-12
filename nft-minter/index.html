@@ -689,7 +689,8 @@ function buildTemplateBody(segment) {
     .split("__COLLECTION_NAME__").join(name.replace(/"/g, '\\"'))
     .split("__COLLECTION_SYMBOL__").join(symbol.replace(/"/g, '\\"'))
     .split("__OWNER_ADDR__").join(w.address)
-    .split("__SHOW_IMAGE__").join(String(showImage));
+    .split("__SHOW_IMAGE__").join(String(showImage))
+    .split("__REALM_PATH__").join(`/r/${w.address}/${pkgName}`);
 }
 
 // ---- wallet gate ----

@@ -880,20 +880,47 @@ async function showProfileEditForm(){
 }
 async function saveProfile(){
   const msg=document.getElementById("p-msg"),btn=document.getElementById("p-save"),container=document.getElementById("p-card");
-  const msgs=[];
+  const changed=[];
   PROFILE_FIELDS.forEach(f=>{
     const el=document.getElementById("pf-"+f.key);if(!el)return;
     const v=el.value.trim();
-    if(v!==(profileLoaded[f.key]||""))msgs.push({type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:PROFILE,func:"SetStringField",args:[f.key,v]}});
+    if(v!==(profileLoaded[f.key]||""))changed.push({key:f.key,value:v});
   });
-  if(!msgs.length){msg.innerHTML='<div class="muted">No changes to save.</div>';return;}
+  if(!changed.length){msg.innerHTML='<div class="muted">No changes to save.</div>';return;}
   if(!requireMatchingChain(msg))return;
-  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+changed.length+' field(s)…';
   try{
-    await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools"});
-    msg.innerHTML="";
-    await renderProfileCard(container,walletAddr,{editable:true,savedNote:"✓ Saved "+msgs.length+" field(s)."});
-  }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";}
+    await window.adena.DoContract({
+      messages:changed.map(c=>({type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:PROFILE,func:"SetStringField",args:[c.key,c.value]}})),
+      gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools",
+    });
+  }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";return;}
+  msg.innerHTML="";
+  pollProfileSaved(container,changed,1);
+}
+// DoContract resolving without throwing means Adena broadcast the tx and it
+// landed in a block — but same as name registration, the RPC read side can
+// lag a block or two behind, so re-rendering the profile immediately after
+// could still show the OLD values with no visible sign the save actually
+// worked. Poll each changed field back until it matches what was just sent
+// (or give up after a bit, showing the profile anyway — the tx already went
+// through either way).
+async function pollProfileSaved(container,changed,attempt){
+  const MAX_ATTEMPTS=8,DELAY_MS=1500;
+  container.innerHTML='<span class="spinner"></span> <span class="faint">Confirming save… ('+attempt+'/'+MAX_ATTEMPTS+')</span>';
+  const matches=await mapLimit(changed,4,async c=>{
+    const r=await qeval(PROFILE+'.GetStringField("'+walletAddr+'","'+c.key+'","")');
+    const val=(!r.error&&!r.gnoError)?(pStr(r.data)||""):"";
+    return val===c.value;
+  });
+  const allMatch=matches.every(Boolean);
+  if(allMatch||attempt>=MAX_ATTEMPTS){
+    await renderProfileCard(container,walletAddr,{editable:true,savedNote:allMatch
+      ?("✓ Saved "+changed.length+" field(s).")
+      :"Your changes were submitted, but aren't showing up yet — that usually just means the read side is lagging behind, not that it failed. Try the profile again in a moment."});
+    return;
+  }
+  setTimeout(()=>pollProfileSaved(container,changed,attempt+1),DELAY_MS);
 }
 
 // Reuses the shared name-detail overlay/modal for a simple full-size image
@@ -947,25 +974,42 @@ window.addEventListener("gnotools:wallet",()=>{
   const t=activeTab();
   if(t==="register"||t==="profile")refreshActiveTab();
 });
-document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{
+// Which tab was active persists across reloads (gt-…-tab in localStorage) —
+// without this, refreshing the page to see a change (e.g. right after
+// saving a profile) silently dumps you back on Query every time.
+const TAB_STORAGE_KEY="gnoTools:nameRegistryActiveTab:v1";
+function switchToTab(key){
+  const btn=document.querySelector('.tabs button[data-tab="'+key+'"]');
+  if(!btn)return;
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
   document.querySelectorAll("section.panel").forEach(x=>x.classList.remove("on"));
-  b.classList.add("on");document.getElementById("tab-"+b.dataset.tab).classList.add("on");refreshActiveTab();
-});
+  btn.classList.add("on");
+  document.getElementById("tab-"+key).classList.add("on");
+  try{localStorage.setItem(TAB_STORAGE_KEY,key);}catch{}
+  refreshActiveTab();
+}
+document.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>switchToTab(b.dataset.tab));
 function activeTab(){const b=document.querySelector(".tabs button.on");return b?b.dataset.tab:"query";}
 function refreshActiveTab(){const t=activeTab();if(t==="names")loadNames();else if(t==="history")loadHistory();else if(t==="register")renderRegister();else if(t==="profile")renderProfileTab();}
 setNetInfo();
+try{
+  const storedTab=localStorage.getItem(TAB_STORAGE_KEY);
+  if(storedTab&&storedTab!=="query"&&document.querySelector('.tabs button[data-tab="'+storedTab+'"]'))switchToTab(storedTab);
+}catch{}
 // Deep link — ?profile=<name-or-address> switches straight to the
 // Profiles tab's "Someone Else's Profile" sub-tab, pre-filled and
 // resolved, so a shared link lands directly on that profile rather than
 // the query modal. Runs once at page load, after the tab/sub-tab click
-// handlers above are wired, so it can drive them the same way a real
-// click would.
+// handlers above are wired (and after the stored-tab restore above, which
+// it deliberately overrides — a deep link always wins). Also persists
+// "profile" as the stored tab, same as any other tab switch, so a plain
+// reload afterward lands back here too.
 async function openProfileFromParam(raw){
   document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("on"));
   document.querySelectorAll("section.panel").forEach(x=>x.classList.remove("on"));
   document.querySelector('.tabs button[data-tab="profile"]').classList.add("on");
   document.getElementById("tab-profile").classList.add("on");
+  try{localStorage.setItem(TAB_STORAGE_KEY,"profile");}catch{}
   profileTabsEl.querySelectorAll(".scan-tab").forEach(b=>b.classList.toggle("on",b.dataset.mode==="other"));
   profileMode="other";
   otherProfileRow.style.display="flex";

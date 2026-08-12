@@ -96,6 +96,22 @@
   th{color:var(--faint); font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; position:sticky; top:0; background:var(--panel2)}
   td.addr{font-family:var(--mono); word-break:break-all}
   tr.row-invalid td{color:var(--bad)}
+
+  /* The target-chain picker is the last step in both tabs — moved via JS
+     into whichever tab is active, so it always renders here as a distinct
+     step rather than its own boxed panel nested inside another one. */
+  .chain-step{border-top:1px solid var(--hair); margin-top:16px; padding-top:16px}
+
+  .gate-overlay{position:fixed; inset:0; z-index:400; background:#04060ae6; backdrop-filter:blur(6px);
+    display:flex; align-items:center; justify-content:center; padding:24px}
+  .gate-box{max-width:520px; width:100%; background:var(--panel); border:2px solid var(--bad);
+    border-radius:16px; padding:28px 30px; box-shadow:0 20px 60px #000000aa}
+  .gate-box h2{color:var(--bad); font-size:19px; margin:0 0 14px}
+  .gate-box p{font-size:13.5px; color:var(--ink); margin:0 0 12px; line-height:1.55}
+  .gate-box p strong{color:var(--bad)}
+  .gate-box button{width:100%; font-family:var(--sans); font-weight:700; font-size:14px; padding:11px;
+    border-radius:9px; border:1px solid var(--bad); background:var(--bad-soft); color:var(--bad); cursor:pointer}
+  .gate-box button:hover{opacity:.85}
 </style>
 </head>
 <body>
@@ -112,17 +128,20 @@
   A Cosmos SDK address (gno.land included) is a 20-byte hash bech32-encoded with a chain-specific prefix — converting just swaps that prefix and re-encodes the same bytes. That's correct <em>only</em> if the target chain derives its addresses the same way (secp256k1 keys, <code>RIPEMD160(SHA256(pubkey))</code>, plain bech32) — true for most Cosmos SDK chains, but <b>not all</b> — a few (e.g. some EVM-compatible chains) use a different scheme entirely, and this tool has no way to tell the difference. Verify independently before sending anything to a converted address.
 </div>
 
-<div class="panel">
-  <div class="row" style="margin:0">
-    <span class="field-label">Convert to chain</span>
-    <select id="targetChainSelect"></select>
-    <span class="status" id="registryStatus"></span>
-  </div>
-</div>
-
 <div class="tabs">
   <button data-tab="single" class="on">Single address</button>
   <button data-tab="batch">Batch list</button>
+</div>
+
+<div id="toolBody">
+<div class="panel" id="chainSelectPanel" style="display:none">
+  <div class="chain-step">
+    <div class="row" style="margin:0">
+      <span class="field-label">Convert to chain</span>
+      <select id="targetChainSelect"></select>
+      <span class="status" id="registryStatus"></span>
+    </div>
+  </div>
 </div>
 
 <section class="tabpanel on" id="tab-single">
@@ -141,6 +160,8 @@
       </dl>
     </div>
 
+    <div class="chain-select-slot" id="chainSlotSingle"></div>
+
     <div class="result-card" id="resultCard" style="display:none">
       <p class="label">Converted address</p>
       <div class="row" style="margin:0">
@@ -154,8 +175,11 @@
 <section class="tabpanel" id="tab-batch">
   <div class="panel">
     <h2>Convert a list of addresses</h2>
-    <p class="section-hint">Paste addresses, one per line — mixed chains are fine, each line's own source prefix is detected automatically. Everything below converts to the one target chain picked above.</p>
+    <p class="section-hint">Paste addresses, one per line — mixed chains are fine, each line's own source prefix is detected automatically.</p>
     <textarea id="batchInput" placeholder="cosmos1...&#10;osmo1...&#10;g1...&#10;juno1..."></textarea>
+
+    <div class="chain-select-slot" id="chainSlotBatch"></div>
+
     <div class="row">
       <button id="batchConvertBtn">Convert all</button>
       <button class="ghost" id="batchCsvBtn" disabled>Download CSV</button>
@@ -169,20 +193,45 @@
     </div>
   </div>
 </section>
+</div>
 
 </div>
 
+<div class="gate-overlay" id="chainWarnOverlay" style="display:none">
+  <div class="gate-box">
+    <h2>⚠ This chain likely uses different address math</h2>
+    <p id="chainWarnText"></p>
+    <p>The address below may not correspond to any account you or anyone else controls. <strong>Don't send anything to it.</strong></p>
+    <button id="chainWarnContinueBtn">I understand — show me anyway</button>
+  </div>
+</div>
+
 <script type="module">
-import { initSiteChrome } from "./lib/site-chrome.js";
+import { initSiteChrome, gateIfLocked } from "./lib/site-chrome.js";
 initSiteChrome();
+gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
 import { decodeBech32, encodeBech32, bytesToHex } from "./lib/bech32-convert.js";
 import { fetchChainRegistry } from "./lib/cosmos-registry.js";
 import { toCsv, downloadCsv } from "./lib/csv.js";
+import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+// ---------- target chain picker — the last step in both tabs. There's only
+// ever one #targetChainSelect node; it gets physically re-parented into
+// whichever tab is currently active rather than duplicated, so its value,
+// event listeners, and options stay a single source of truth. ----------
+
+const chainSelectPanel = document.getElementById("chainSelectPanel");
+function moveChainSelectIntoActiveTab() {
+  const slot = document.querySelector("section.tabpanel.on .chain-select-slot");
+  if (!slot) return;
+  chainSelectPanel.style.display = "";
+  slot.appendChild(chainSelectPanel);
 }
 
 // ---------- tabs ----------
@@ -191,14 +240,50 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
   document.querySelectorAll("section.tabpanel").forEach(x => x.classList.remove("on"));
   b.classList.add("on");
   document.getElementById(`tab-${b.dataset.tab}`).classList.add("on");
+  moveChainSelectIntoActiveTab();
 }));
 
-// ---------- target chain dropdown — gno.land always present, the rest
-// live from cosmos.directory's chain registry (~200 active Cosmos SDK
-// chains, refreshed on every page load). gno.land isn't itself a Cosmos
-// SDK chain in that registry, so it's added unconditionally rather than
-// hoping it shows up. ----------
+// ---------- incompatible-chain warning ----------
+// SLIP-44 coin type 60 is Ethereum's — Cosmos SDK chains registered under it
+// (Injective, Evmos, Kava, Cronos, Dymension, Canto, etc.) are almost always
+// the EVM-style ones using eth_secp256k1 keys + Keccak256 addressing, not
+// this ecosystem's usual secp256k1 + RIPEMD160(SHA256(pubkey)) scheme this
+// converter assumes. Kava reports 459, not 60, but is a well-known
+// EVM-adjacent exception, so it's called out explicitly.
+const EVM_SLIP44 = 60;
+const MANUAL_OVERRIDE_KEYS = new Set(["kava"]);
 
+function isChainFlagged(chain) {
+  return !!chain && (chain.slip44 === EVM_SLIP44 || MANUAL_OVERRIDE_KEYS.has(chain.key));
+}
+
+const chainWarnOverlay = document.getElementById("chainWarnOverlay");
+const chainWarnText = document.getElementById("chainWarnText");
+const chainWarnContinueBtn = document.getElementById("chainWarnContinueBtn");
+let ackedFlaggedPrefix = null; // reset whenever the select's value actually changes
+
+function ensureChainAllowed(prefix, onAllowed) {
+  const chain = chainByPrefix.get(prefix);
+  if (!isChainFlagged(chain) || ackedFlaggedPrefix === prefix) { onAllowed(); return; }
+  chainWarnText.textContent = `"${chain.label}" is registered under SLIP-44 coin type 60 (Ethereum's) — chains that do this almost always use a different key/address scheme (eth_secp256k1 + Keccak256) than gno.land's (secp256k1 + RIPEMD160(SHA256(pubkey))).`;
+  chainWarnOverlay.style.display = "flex";
+  const handler = () => {
+    ackedFlaggedPrefix = prefix;
+    chainWarnOverlay.style.display = "none";
+    chainWarnContinueBtn.removeEventListener("click", handler);
+    onAllowed();
+  };
+  chainWarnContinueBtn.addEventListener("click", handler);
+}
+
+// ---------- target chain dropdown — gno.land always present, the rest live
+// from cosmos.directory's chain registry (~200 active Cosmos SDK chains).
+// gno.land isn't itself a Cosmos SDK chain in that registry, so it's added
+// unconditionally rather than hoping it shows up. Populates instantly from
+// a cached list (if any) and always also refetches live in the background,
+// silently updating the options without disturbing the user's current pick. ----------
+
+const CHAIN_CACHE_KEY = "gnoTools:chainRegistry:v1";
 const GNO_CHAIN = { prefix: "g", label: "gno.land (g)" };
 const targetChainSelect = document.getElementById("targetChainSelect");
 const registryStatus = document.getElementById("registryStatus");
@@ -211,31 +296,58 @@ function addOption(select, chain) {
   select.appendChild(opt);
 }
 
-async function loadChains() {
+function buildEntry(c) {
+  return { prefix: c.prefix, label: `${c.label} (${c.prefix})`, slip44: c.slip44 ?? null, key: c.key };
+}
+
+function renderChainOptions(entries) {
+  const currentValue = targetChainSelect.value;
+  targetChainSelect.innerHTML = "";
+  chainByPrefix = new Map([[GNO_CHAIN.prefix, GNO_CHAIN]]);
   addOption(targetChainSelect, GNO_CHAIN);
-  registryStatus.textContent = "Loading live Cosmos chain registry…";
+  for (const entry of entries) {
+    chainByPrefix.set(entry.prefix, entry);
+    addOption(targetChainSelect, entry);
+  }
+  if (currentValue && chainByPrefix.has(currentValue)) targetChainSelect.value = currentValue;
+}
+
+async function loadChains() {
+  const cached = loadCache(CHAIN_CACHE_KEY);
+  if (cached && Array.isArray(cached.entries) && cached.entries.length) {
+    renderChainOptions(cached.entries);
+    registryStatus.textContent = `${cached.entries.length + 1} chains (cached · ${formatAgo(cached.cachedAt)}) — refreshing…`;
+  } else {
+    addOption(targetChainSelect, GNO_CHAIN);
+    registryStatus.textContent = "Loading live Cosmos chain registry…";
+  }
+
   try {
     const chains = await fetchChainRegistry();
     const seenPrefixes = new Set([GNO_CHAIN.prefix]);
     const sorted = chains
       .filter(c => c.prefix && !seenPrefixes.has(c.prefix) && seenPrefixes.add(c.prefix))
-      .sort((a, b) => a.label.localeCompare(b.label));
-    for (const c of sorted) {
-      const entry = { prefix: c.prefix, label: `${c.label} (${c.prefix})` };
-      chainByPrefix.set(c.prefix, entry);
-      addOption(targetChainSelect, entry);
-    }
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map(buildEntry);
+    renderChainOptions(sorted);
     registryStatus.textContent = `${sorted.length + 1} chains (live registry + gno.land).`;
+    saveCache(CHAIN_CACHE_KEY, { entries: sorted });
   } catch (err) {
-    registryStatus.textContent = `Couldn't load the live chain registry (${err.message}) — gno.land is still available; type any other prefix isn't possible right now, reload to retry.`;
+    if (!cached) {
+      registryStatus.textContent = `Couldn't load the live chain registry (${err.message}) — gno.land is still available; reload to retry.`;
+    } // else: keep showing the cached list as-is on a background-refresh failure
   }
 }
 loadChains();
+moveChainSelectIntoActiveTab();
 
 function targetPrefix() {
   return targetChainSelect.value;
 }
-targetChainSelect.addEventListener("change", () => { updateResult(); });
+targetChainSelect.addEventListener("change", () => {
+  ackedFlaggedPrefix = null;
+  updateResult();
+});
 
 // ---------- single-address mode ----------
 
@@ -275,12 +387,14 @@ function updateDecode() {
 function updateResult() {
   resultCard.style.display = "none";
   if (!decoded) return;
-  try {
-    resultOutput.value = encodeBech32(targetPrefix(), decoded.bytes, decoded.variant);
-    resultCard.style.display = "block";
-  } catch (err) {
-    resultCard.style.display = "none";
-  }
+  ensureChainAllowed(targetPrefix(), () => {
+    try {
+      resultOutput.value = encodeBech32(targetPrefix(), decoded.bytes, decoded.variant);
+      resultCard.style.display = "block";
+    } catch (err) {
+      resultCard.style.display = "none";
+    }
+  });
 }
 
 sourceInput.addEventListener("input", updateDecode);
@@ -341,7 +455,9 @@ function renderBatchTable() {
   `).join("");
 }
 
-batchConvertBtn.addEventListener("click", convertBatch);
+batchConvertBtn.addEventListener("click", () => {
+  ensureChainAllowed(targetPrefix(), convertBatch);
+});
 
 batchCsvBtn.addEventListener("click", () => {
   const rows = batchResults.filter(r => r.ok).map(r => [r.original, r.converted]);

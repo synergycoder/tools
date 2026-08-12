@@ -90,6 +90,23 @@
   .found-status,.status{font-size:13px; color:var(--muted)}
   .search-status{font-family:var(--mono); font-size:12.5px; color:var(--muted); margin:8px 0}
 
+  .gate-overlay{position:fixed; inset:0; z-index:400; background:#04060ae6; backdrop-filter:blur(6px);
+    display:flex; align-items:center; justify-content:center; padding:24px}
+  .gate-box{max-width:520px; width:100%; background:var(--panel); border:2px solid var(--bad);
+    border-radius:16px; padding:28px 30px; box-shadow:0 20px 60px #000000aa}
+  .gate-box h2{color:var(--bad); font-size:20px; margin:0 0 14px}
+  .gate-box p{font-size:13.5px; color:var(--ink); margin:0 0 12px; line-height:1.55}
+  .gate-box p strong{color:var(--bad)}
+  .gate-phrase{font-family:var(--mono); font-size:13px; color:var(--bad); background:var(--bad-soft);
+    border-radius:8px; padding:10px 12px; margin:14px 0}
+  .gate-box input{width:100%; box-sizing:border-box; font-family:var(--mono); font-size:13px;
+    padding:10px 12px; border-radius:9px; border:1px solid var(--hair2); background:var(--panel2);
+    color:var(--ink); margin-bottom:12px}
+  .gate-box button{width:100%; font-family:var(--sans); font-weight:700; font-size:14px; padding:11px;
+    border-radius:9px; border:1px solid var(--bad); background:var(--bad-soft); color:var(--bad); cursor:pointer}
+  .gate-box button:disabled{opacity:.4; cursor:default}
+  .gate-box button:not(:disabled):hover{opacity:.85}
+
   .wallet-list{margin-top:6px; display:flex; flex-direction:column; gap:10px}
   .wallet-row{border:1px solid var(--hair); background:var(--panel2); border-radius:12px; padding:14px 16px; font-size:13px}
   .wallet-row .addr{font-family:var(--mono); word-break:break-all; color:var(--ink)}
@@ -102,6 +119,19 @@
 </style>
 </head>
 <body>
+
+<div class="gate-overlay" id="warnOverlay">
+  <div class="gate-box">
+    <h2>⚠ This is not a real wallet</h2>
+    <p>This tool generates throwaway keys entirely in your browser, purely for fun and curiosity — nothing more. <strong>Never send real funds, tokens, or anything of value to an address generated here.</strong></p>
+    <p>The keys it generates are stored <strong>unencrypted in this browser's localStorage</strong>. Consider them compromised the moment they're created: anyone with access to this device, or a malicious script via an XSS bug, could read them. There is no undo, no recovery, and no support — this is a novelty generator, not a wallet.</p>
+    <p>To continue, type the phrase below exactly:</p>
+    <p class="gate-phrase">"I understand this is not a real wallet"</p>
+    <input type="text" id="warnInput" autocomplete="off" spellcheck="false" placeholder="Type the phrase above">
+    <button id="warnContinueBtn" disabled>Continue</button>
+  </div>
+</div>
+
 <div class="wrap">
 
 <div class="page-title">
@@ -115,6 +145,7 @@
   Everything below happens locally — there are no network calls in this tool at all (check your browser's network tab). But results you keep are stored <b>unencrypted in this browser's localStorage</b>: anyone with access to this device, or a malicious script via an XSS bug, could read them. Fine for throwaway/vanity/testnet keys. Don't use this for anything holding real value.
 </div>
 
+<div id="toolBody">
 <div class="panel">
   <fieldset>
     <legend>1. Secret format</legend>
@@ -169,15 +200,18 @@
   <p class="status">Export writes everything below to a plaintext file, including secrets — handle the downloaded file carefully and delete it once you're done with it.</p>
   <div class="wallet-list" id="walletList"></div>
 </div>
+</div>
 
 </div>
 
 <script type="module">
-import { initSiteChrome } from "./lib/site-chrome.js";
+import { initSiteChrome, gateIfLocked } from "./lib/site-chrome.js";
 initSiteChrome();
+gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
 import { generateWallet, matchesTarget, validateTarget, estimateAttempts, ADDRESS_CHARSET } from "./lib/gno-address.js";
+import { onWalletChange, isCurrentWalletWhitelisted } from "./lib/site-chrome.js";
 
 // ---------- constants ----------
 
@@ -208,6 +242,30 @@ const searchStatus = document.getElementById("searchStatus");
 const modeNote = document.getElementById("modeNote");
 const walletListEl = document.getElementById("walletList");
 const listStatus = document.getElementById("listStatus");
+
+// ---------- mandatory warning gate ----------
+
+const WARN_ACK_KEY = "gnoTools:vanityWarningAcked:v1";
+const WARN_PHRASE = "i understand this is not a real wallet";
+const warnOverlay = document.getElementById("warnOverlay");
+const warnInput = document.getElementById("warnInput");
+const warnContinueBtn = document.getElementById("warnContinueBtn");
+
+function warnAcked() {
+  try { return localStorage.getItem(WARN_ACK_KEY) === "1"; } catch { return false; }
+}
+function ackWarn() {
+  try { localStorage.setItem(WARN_ACK_KEY, "1"); } catch {}
+}
+warnInput.addEventListener("input", () => {
+  warnContinueBtn.disabled = warnInput.value.trim().toLowerCase() !== WARN_PHRASE;
+});
+warnContinueBtn.addEventListener("click", () => {
+  if (warnContinueBtn.disabled) return;
+  ackWarn();
+  warnOverlay.style.display = "none";
+  afterWarningAck();
+});
 
 function currentMode() {
   return document.querySelector('input[name="mode"]:checked').value;
@@ -311,15 +369,42 @@ document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener(
 modeNote.textContent = MODE_NOTES[currentMode()];
 updateDifficulty();
 
+// ---------- search checkpoint (survives navigating to another page and back) ----------
+
+// A running search is real Worker-based computation tied to this page's own
+// JS context — navigating to another page on the site (a full page unload,
+// not a single-page-app transition) kills it outright. This checkpoint
+// doesn't keep it *running* while you're away (not possible here), but lets
+// it pick back up automatically for whatever's left to find when you return
+// — already-found wallets are separately, durably saved via addWallet()
+// below regardless.
+const CHECKPOINT_KEY = "gnoTools:vanitySearchCheckpoint:v1";
+function saveCheckpoint(cp) {
+  try { localStorage.setItem(CHECKPOINT_KEY, JSON.stringify(cp)); } catch {}
+}
+function loadCheckpoint() {
+  try {
+    const raw = localStorage.getItem(CHECKPOINT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function clearCheckpoint() {
+  try { localStorage.removeItem(CHECKPOINT_KEY); } catch {}
+}
+
 // ---------- search orchestration ----------
 
 let workers = [];
-let searchStartTime = 0;
+let searchStartedAt = 0; // Date.now()-based (not performance.now()) so elapsed time stays continuous across a resume
 let totalAttempts = 0;
 let foundCount = 0;
 let wantedCount = 1;
 let searchDone = false;
 let timerHandle = null;
+let lastCheckpointWriteAt = 0;
+let activeTarget = "", activePosition = "anywhere", activeMode = "12";
 
 function stopWorkers() {
   workers.forEach(w => { try { w.postMessage({ type: "stop" }); } catch {} });
@@ -333,10 +418,9 @@ function formatElapsed(seconds) {
 }
 
 function startTimer() {
-  elapsedTimer.textContent = "0:00";
-  timerHandle = setInterval(() => {
-    elapsedTimer.textContent = formatElapsed((performance.now() - searchStartTime) / 1000);
-  }, 250);
+  const tick = () => { elapsedTimer.textContent = formatElapsed((Date.now() - searchStartedAt) / 1000); };
+  tick();
+  timerHandle = setInterval(tick, 250);
 }
 
 function stopTimer() {
@@ -353,6 +437,56 @@ function setSearching(on) {
   countInput.disabled = on;
   document.querySelectorAll('input[name="mode"]').forEach(r => r.disabled = on);
   if (on) startTimer(); else stopTimer();
+}
+
+// Throttled to ~once/sec on plain progress ticks (up to 6 workers report
+// roughly every 300ms each — writing localStorage on every single one would
+// be ~15-20 writes/sec for no real benefit); a match always writes
+// immediately since losing a just-found match's bookkeeping to a crash is
+// worse than losing a second of attempt-count precision.
+function writeCheckpoint(force) {
+  const now = Date.now();
+  if (!force && now - lastCheckpointWriteAt < 1000) return;
+  lastCheckpointWriteAt = now;
+  saveCheckpoint({
+    target: activeTarget, position: activePosition, mode: activeMode,
+    wantedCount, foundCount, totalAttempts, startedAt: searchStartedAt,
+  });
+}
+
+// Shared by both a fresh search (startSearch) and a resumed one
+// (resumeSearch) — spins up the worker pool against activeTarget/
+// activePosition/activeMode and wires the same match/progress handling
+// either way.
+function spinUpWorkers() {
+  const n = workerCount();
+  workers = Array.from({ length: n }, () => new Worker("./lib/vanity-worker.js", { type: "module" }));
+
+  workers.forEach(w => {
+    w.onmessage = (e) => {
+      if (searchDone) return;
+      const msg = e.data;
+      if (msg.type === "progress") {
+        totalAttempts += msg.attempts;
+        searchStatus.textContent = `${totalAttempts.toLocaleString()} attempts so far…`;
+        writeCheckpoint(false);
+      } else if (msg.type === "match") {
+        totalAttempts += msg.attempts;
+        foundCount++;
+        addWallet({ ...msg.wallet, mode: activeMode, target: activeTarget, position: activePosition });
+        foundStatus.textContent = `Found ${foundCount} of ${wantedCount}`;
+        writeCheckpoint(true);
+        if (foundCount >= wantedCount) {
+          searchDone = true;
+          searchStatus.textContent = `Done — found ${foundCount} after ~${totalAttempts.toLocaleString()} attempts.`;
+          clearCheckpoint();
+          stopWorkers();
+          setSearching(false);
+        }
+      }
+    };
+    w.postMessage({ type: "start", mode: activeMode, target: activeTarget, position: activePosition });
+  });
 }
 
 function startSearch() {
@@ -373,45 +507,83 @@ function startSearch() {
     return;
   }
 
+  activeTarget = target;
+  activePosition = position;
+  activeMode = mode;
   setSearching(true);
   totalAttempts = 0;
   foundCount = 0;
   wantedCount = count;
   searchDone = false;
-  searchStartTime = performance.now();
+  searchStartedAt = Date.now();
   foundStatus.textContent = `Found 0 of ${wantedCount}`;
   searchStatus.textContent = "Starting workers…";
+  writeCheckpoint(true); // overwrite any stale leftover from an unrelated prior search
 
-  const n = workerCount();
-  workers = Array.from({ length: n }, () => new Worker("./lib/vanity-worker.js", { type: "module" }));
+  spinUpWorkers();
+}
 
-  workers.forEach(w => {
-    w.onmessage = (e) => {
-      if (searchDone) return;
-      const msg = e.data;
-      if (msg.type === "progress") {
-        totalAttempts += msg.attempts;
-        searchStatus.textContent = `${totalAttempts.toLocaleString()} attempts so far…`;
-      } else if (msg.type === "match") {
-        totalAttempts += msg.attempts;
-        foundCount++;
-        addWallet({ ...msg.wallet, mode, target, position });
-        foundStatus.textContent = `Found ${foundCount} of ${wantedCount}`;
-        if (foundCount >= wantedCount) {
-          searchDone = true;
-          searchStatus.textContent = `Done — found ${foundCount} after ~${totalAttempts.toLocaleString()} attempts.`;
-          stopWorkers();
-          setSearching(false);
-        }
+// Picks a checkpointed search back up — deliberately does NOT go through
+// startSearch()'s tier/confirmLong gate, since that checkbox always starts
+// unchecked on a fresh page load and would otherwise silently block
+// resuming any search that had been in the slow difficulty tier.
+function resumeSearch(checkpoint) {
+  activeTarget = checkpoint.target;
+  activePosition = checkpoint.position;
+  activeMode = checkpoint.mode;
+  wantedCount = checkpoint.wantedCount;
+  foundCount = checkpoint.foundCount;
+  totalAttempts = checkpoint.totalAttempts;
+  searchStartedAt = checkpoint.startedAt || Date.now();
+  searchDone = false;
+
+  // Reflect the resumed search in the form for visual continuity — the
+  // actual worker parameters come from the checkpoint above, not these.
+  targetInput.value = activeTarget;
+  positionSelect.value = activePosition;
+  document.querySelectorAll('input[name="mode"]').forEach(r => { r.checked = r.value === activeMode; });
+  countInput.value = wantedCount;
+
+  setSearching(true);
+  foundStatus.textContent = `Found ${foundCount} of ${wantedCount}`;
+  searchStatus.textContent = `Resuming search for "${activeTarget}" — already found ${foundCount} of ${wantedCount} (~${totalAttempts.toLocaleString()} attempts so far)…`;
+
+  spinUpWorkers();
+}
+
+// Stays inert while the wallet gate is locked — resuming (or even just
+// checking) a search here shouldn't spend CPU behind a hidden "coming
+// soon" notice. Symmetric: connecting the whitelisted wallet (even after
+// the page has already loaded) triggers a resume; losing that whitelisted
+// status mid-search (wallet disconnects, or the optimistic snapshot render
+// gets corrected to "not actually connected" once background verification
+// finishes) pauses it again rather than letting it keep computing behind a
+// hidden notice — progress already lives in the checkpoint, so pausing
+// here never loses anything, and a later re-whitelist picks it back up.
+let resumeAttempted = false;
+function afterWarningAck() {
+  onWalletChange(() => {
+    const unlocked = isCurrentWalletWhitelisted();
+    if (unlocked && !resumeAttempted) {
+      const checkpoint = loadCheckpoint();
+      if (checkpoint && checkpoint.foundCount < checkpoint.wantedCount) {
+        resumeAttempted = true;
+        resumeSearch(checkpoint);
       }
-    };
-    w.postMessage({ type: "start", mode, target, position });
+    } else if (!unlocked && workers.length && !searchDone) {
+      searchDone = true;
+      stopWorkers();
+      setSearching(false);
+      resumeAttempted = false;
+      searchStatus.textContent = "Paused — wallet no longer connected/whitelisted.";
+    }
   });
 }
 
 startBtn.addEventListener("click", startSearch);
 cancelBtn.addEventListener("click", () => {
   searchDone = true;
+  clearCheckpoint();
   stopWorkers();
   setSearching(false);
   searchStatus.textContent = `Stopped — found ${foundCount} of ${wantedCount} before cancelling.`;
@@ -572,6 +744,13 @@ document.getElementById("clearAllBtn").addEventListener("click", () => {
 });
 
 renderWallets();
+
+if (warnAcked()) {
+  warnOverlay.style.display = "none";
+  afterWarningAck();
+} else {
+  warnInput.focus();
+}
 </script>
 </body>
 </html>

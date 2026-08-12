@@ -23,6 +23,11 @@
       { key: "betanet", chainId: "gnoland1", label: "Mainnet-beta" },
     ],
   });
+  // The rest of this page's logic is a plain (non-module) <script> further
+  // down — mirrored onto window here so it can reuse the same cache helper
+  // every other tool uses without converting this whole file to a module.
+  import { saveCache, loadCache, formatAgo } from "./lib/local-cache.js";
+  window.gtCache = { saveCache, loadCache, formatAgo };
 </script>
 <style>
   /* Palette (--bg, --panel, --accent, --warn, --mono, --sans, etc.) is
@@ -141,6 +146,7 @@
       <input type="text" id="n-input" placeholder="inspect any name → nym-alice123" autocomplete="off" spellcheck="false" />
       <button class="act ghost" id="n-lookup">Inspect</button>
       <button class="act ghost" id="n-refresh" title="Reload from chain — e.g. after registering a name">↻ Refresh</button>
+      <span class="hint" id="n-cache-status"></span>
     </div>
     <div class="result" id="n-stats"><span class="faint">Loading…</span></div>
     <div id="n-list"></div>
@@ -150,7 +156,7 @@
   <section class="panel" id="tab-history">
     <h2>Registration history</h2>
     <p class="hint">Every open-tier registration transaction (via <code>r/sys/namereg</code>), newest first — with timestamp, block, and a link to GnoScan. Click a row for full details.</p>
-    <div class="row" style="margin-bottom:12px"><button class="act ghost" id="h-refresh" title="Reload from chain — e.g. after registering a name">↻ Refresh</button></div>
+    <div class="row" style="margin-bottom:12px"><button class="act ghost" id="h-refresh" title="Reload from chain — e.g. after registering a name">↻ Refresh</button> <span class="hint" id="h-cache-status"></span></div>
     <div id="h-body"><span class="faint">Loading…</span></div>
   </section>
 
@@ -328,17 +334,35 @@ async function loadRegs(){
 /* ---------------- NAMES tab ---------------- */
 document.getElementById("n-lookup").onclick=()=>{const v=document.getElementById("n-input").value.trim();if(v)openDetail(v);};
 document.getElementById("n-input").addEventListener("keydown",e=>{if(e.key==="Enter"){const v=e.target.value.trim();if(v)openDetail(v);}});
-document.getElementById("n-refresh").onclick=()=>{regsLoaded=false;loadNames();};
-async function loadNames(){
-  const stats=document.getElementById("n-stats"),listEl=document.getElementById("n-list");
+document.getElementById("n-refresh").onclick=()=>{regsLoaded=false;loadNames(true);};
+async function loadNames(force){
+  const stats=document.getElementById("n-stats"),listEl=document.getElementById("n-list"),cacheEl=document.getElementById("n-cache-status");
+  const cacheKey="gnoTools:nameRegistryNames:v1:"+NET.chainId;
+  if(!force){
+    const cached=window.gtCache.loadCache(cacheKey);
+    if(cached&&cached.html!=null){
+      stats.innerHTML=cached.stats;
+      listEl.innerHTML=cached.html;
+      cacheEl.textContent="Cached · "+window.gtCache.formatAgo(cached.cachedAt)+" — click Refresh for the latest";
+      return;
+    }
+  }
+  cacheEl.textContent="";
   stats.innerHTML='<span class="spinner"></span> <span class="faint">reading '+esc(NET.chainId)+'…</span>';listEl.innerHTML="";
   const cnt=await qeval(USERS+".GetReadOnlyNameStore().Size()");
   const total=cnt.error?null:pInt(cnt.data);
-  stats.innerHTML=cnt.error?'<span class="err">✕ '+esc(cnt.error)+'</span>':
+  const statsHtml=cnt.error?'<span class="err">✕ '+esc(cnt.error)+'</span>':
     '<span class="stat">Total names in registry on '+esc(NET.chainId)+': <b>'+(total==null?"?":total)+'</b></span>';
+  stats.innerHTML=statsHtml;
 
   if(cnt.error)return;
-  if(!total){listEl.innerHTML='<div class="note">This registry is empty on '+esc(NET.chainId)+'. Use the box above to inspect any name that may exist.</div>';return;}
+  if(!total){
+    const emptyHtml='<div class="note">This registry is empty on '+esc(NET.chainId)+'. Use the box above to inspect any name that may exist.</div>';
+    listEl.innerHTML=emptyHtml;
+    window.gtCache.saveCache(cacheKey,{stats:statsHtml,html:emptyHtml});
+    cacheEl.textContent="Updated just now";
+    return;
+  }
   listEl.innerHTML='<p class="faint" style="margin-top:14px"><span class="spinner"></span> enumerating '+total+' names…</p>';
   // Enumerate ALL names dynamically via the read-only store's index accessor (GetByIndex).
   const regs=await loadRegs();
@@ -361,18 +385,30 @@ async function loadNames(){
   if(list.length<total)html+='<div class="note" style="margin-top:12px">Showing '+list.length+' of '+total+' (some entries could not be read — retry).</div>';
   if(regs&&regs.loadError)html+='<div class="note" style="margin-top:12px">Registration timestamps unavailable (indexer: '+esc(regs.loadError)+'); registered/genesis labels may be approximate.</div>';
   listEl.innerHTML=html;
+  window.gtCache.saveCache(cacheKey,{stats:statsHtml,html});
+  cacheEl.textContent="Updated just now";
 }
 
 /* ---------------- HISTORY tab ---------------- */
-document.getElementById("h-refresh").onclick=()=>{regsLoaded=false;loadHistory();};
-async function loadHistory(){
-  const body=document.getElementById("h-body");
+document.getElementById("h-refresh").onclick=()=>{regsLoaded=false;loadHistory(true);};
+async function loadHistory(force){
+  const body=document.getElementById("h-body"),cacheEl=document.getElementById("h-cache-status");
+  const cacheKey="gnoTools:nameRegistryHistory:v1:"+NET.chainId;
+  if(!force){
+    const cached=window.gtCache.loadCache(cacheKey);
+    if(cached&&cached.html!=null){
+      body.innerHTML=cached.html;
+      cacheEl.textContent="Cached · "+window.gtCache.formatAgo(cached.cachedAt)+" — click Refresh for the latest";
+      return;
+    }
+  }
+  cacheEl.textContent="";
   body.innerHTML='<span class="spinner"></span> <span class="faint">querying indexer…</span>';
   if(!NET.hasNamereg){body.innerHTML='<div class="note">No registration transactions on mainnet-beta (no open registration controller deployed).</div>';return;}
   const regs=await loadRegs();
   if(regs.loadError){body.innerHTML='<div class="err">✕ indexer: '+esc(regs.loadError)+'</div>';return;}
-  if(!regs.length){body.innerHTML='<p class="muted">No registration transactions found yet.</p>';return;}
-  body.innerHTML='<div class="tblwrap"><table><thead><tr><th>Name</th><th>Registered</th><th>Block</th><th>Registrant</th><th>Tx</th></tr></thead><tbody>'+
+  const html=!regs.length?'<p class="muted">No registration transactions found yet.</p>':
+    '<div class="tblwrap"><table><thead><tr><th>Name</th><th>Registered</th><th>Block</th><th>Registrant</th><th>Tx</th></tr></thead><tbody>'+
     regs.map(r=>'<tr onclick="openDetail(\''+esc(r.name)+'\')">'+
       '<td class="ok">@'+esc(r.name)+'</td>'+
       '<td>'+esc(fmtTime(r.time))+'</td>'+
@@ -380,6 +416,9 @@ async function loadHistory(){
       '<td title="'+esc(r.caller||"")+'">'+esc((r.caller||"").slice(0,12))+'…</td>'+
       '<td><a href="'+esc(gnoscanTx(r.hash))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">GnoScan ↗</a></td>'+
     '</tr>').join("")+'</tbody></table></div>';
+  body.innerHTML=html;
+  window.gtCache.saveCache(cacheKey,{html});
+  cacheEl.textContent="Updated just now";
 }
 
 /* ---------------- DETAIL modal ---------------- */
@@ -570,7 +609,7 @@ async function doRegister(n,submit,msg){
   submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Registering…';
   msg.innerHTML="";
   try{
-    await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:""});
+    await window.adena.DoContract({messages:[{type:"/vm.m_call",value:{caller:walletAddr,send:"",pkg_path:NAMEREG,func:"Register",args:[n]}}],gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools"});
   }catch(e){
     msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"registration failed / rejected")+'</div>';
     submit.disabled=false;submit.innerHTML="Register";
@@ -667,7 +706,7 @@ async function saveProfile(){
   if(!requireMatchingChain(msg))return;
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span> Saving '+msgs.length+' field(s)…';
   try{
-    await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:""});
+    await window.adena.DoContract({messages:msgs,gasFee:1000000,gasWanted:20000000,memo:"sent from gno.tools"});
     await loadProfileForm();
     document.getElementById("p-msg").innerHTML='<div class="note info">✓ Saved '+msgs.length+' field(s) in one transaction. Open your name in the Names tab to see them in its detail view.</div>';
   }catch(e){msg.innerHTML='<div class="err">✕ '+esc((e&&e.message)||"save failed / rejected")+'</div>';btn.disabled=false;btn.innerHTML="Save changes";}

@@ -35,7 +35,12 @@
       },
       {
         "path": "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g1",
-        "name": "Gems",
+        "name": "Gems (g1)",
+        "symbol": "GEMS"
+      },
+      {
+        "path": "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g2",
+        "name": "Gems (g2)",
         "symbol": "GEMS"
       }
     ]

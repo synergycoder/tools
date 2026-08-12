@@ -211,7 +211,7 @@ gateIfLocked(document.getElementById("toolBody"));
 </script>
 <script type="module">
 import { generateWallet, matchesTarget, validateTarget, estimateAttempts, ADDRESS_CHARSET } from "./lib/gno-address.js";
-import { onWalletChange, isCurrentWalletWhitelisted } from "./lib/site-chrome.js";
+import { onWalletChange, isCurrentWalletWhitelisted, isUnlocked } from "./lib/site-chrome.js";
 
 // ---------- constants ----------
 
@@ -252,6 +252,7 @@ const warnInput = document.getElementById("warnInput");
 const warnContinueBtn = document.getElementById("warnContinueBtn");
 
 function warnAcked() {
+  if (isUnlocked()) return true;
   try { return localStorage.getItem(WARN_ACK_KEY) === "1"; } catch { return false; }
 }
 function ackWarn() {

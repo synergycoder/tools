@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems — Mint (mock)</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+  .mock-banner{background:var(--amber-soft);border-bottom:1px solid var(--amber-line);color:var(--amber);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+  .hero{padding:44px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{margin:0 0 8px;font-size:32px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:var(--muted);margin:0;max-width:60ch;font-size:14.5px}
+
+  .mint-layout{display:grid;grid-template-columns:340px 1fr;gap:36px;margin:36px 0 60px;align-items:start}
+  @media (max-width:760px){.mint-layout{grid-template-columns:1fr}}
+
+  .preview{border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden;position:sticky;top:80px}
+  .preview .art{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .preview .art svg{width:100%;height:100%;display:block}
+  .preview .cap{padding:12px 16px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
+
+  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:22px 24px}
+  .panel h2{margin:0 0 4px;font-size:16px}
+  .panel .desc{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+
+  .price-row{display:flex;align-items:baseline;justify-content:space-between;padding:14px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+  .price-row .lbl{font-size:13px;color:var(--muted)}
+  .price-row .val{font-family:var(--mono);font-size:20px;font-weight:700}
+  .price-row .val .unit{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+
+  .facts{list-style:none;margin:16px 0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .facts li{display:flex;justify-content:space-between;font-size:13px}
+  .facts .k{color:var(--muted)}
+  .facts .v{font-family:var(--mono);color:var(--ink)}
+
+  .mint-btn{width:100%;padding:15px;border-radius:10px;border:none;background:var(--accent);color:#fff;
+    font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px}
+  .mint-btn:hover{filter:brightness(1.08)}
+  .mint-btn.disabled{background:var(--panel2);color:var(--faint);cursor:not-allowed;border:1px solid var(--hair)}
+
+  .connect-note{font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+
+  .howitworks{margin:50px 0 70px}
+  .howitworks h2{font-size:18px;margin:0 0 18px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .step{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:16px 18px}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:6px}
+  .step h3{margin:0 0 6px;font-size:14px}
+  .step p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+
+  .recent{margin:0 0 70px}
+  .recent h2{font-size:16px;margin:0 0 14px}
+  .strip{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}
+  .strip .card{flex:none;width:120px;border:1px solid var(--hair);border-radius:10px;background:var(--panel);overflow:hidden}
+  .strip .card .art{aspect-ratio:1;background:#0a0b10}
+  .strip .card .art svg{width:100%;height:100%;display:block}
+  .strip .card .lbl{padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">MOCK PREVIEW — layout test only, unlinked from the site, mint button is not wired to the chain</div>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · GRC721 · public mint</p>
+    <h1>Mint a Gem</h1>
+    <p class="sub">Every mint draws uniformly at random from the owner's queued trait pool — no picking, no preview before you own it. What you get stays sealed behind a placeholder image for a short delay after mint, then reveals for good.</p>
+  </div>
+
+  <div class="mint-layout">
+    <div class="preview">
+      <div class="art" id="sealedArt"></div>
+      <div class="cap">Sealed — revealed after the delay window</div>
+    </div>
+
+    <div class="panel">
+      <h2>Mint from the current pool</h2>
+      <p class="desc">Connect your wallet to mint. The realm assigns your piece at random from what's currently queued — you can't choose traits.</p>
+
+      <div class="price-row">
+        <span class="lbl">Price</span>
+        <span class="val">0<span class="unit">GNOT (free mint)</span></span>
+      </div>
+
+      <ul class="facts">
+        <li><span class="k">Queued &amp; unminted</span><span class="v">— (owner-managed)</span></li>
+        <li><span class="k">Ever minted</span><span class="v">100 (sample)</span></li>
+        <li><span class="k">Max possible unique</span><span class="v">15,840</span></li>
+        <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
+        <li><span class="k">Minting</span><span class="v" style="color:#7fd88f">Open</span></li>
+      </ul>
+
+      <button class="mint-btn disabled" type="button" disabled>Connect Wallet to Mint</button>
+      <p class="connect-note">This mock doesn't sign transactions — the real page will call <code>MintAssembled</code> via Adena.</p>
+    </div>
+  </div>
+
+  <div class="howitworks">
+    <h2>How minting works</h2>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Random draw</h3><p>Your mint pulls one entry uniformly at random from whatever the owner has queued — never first-come-first-served, never previewable.</p></div>
+      <div class="step"><div class="n">02</div><h3>Sealed reveal</h3><p>You receive a real token immediately, but its art and traits stay behind a shared placeholder for a short delay — long enough that no one can snipe based on the outcome.</p></div>
+      <div class="step"><div class="n">03</div><h3>Guaranteed unique</h3><p>No two Gems ever share an exact (chain, shape, color, metal, status) combination — enforced on-chain, permanently, across the whole collection.</p></div>
+      <div class="step"><div class="n">04</div><h3>No supply cap</h3><p>Minting stays open until the owner closes it — the only real ceiling is running out of unique trait combinations to give out.</p></div>
+    </div>
+  </div>
+
+  <div class="recent">
+    <h2>Recently minted</h2>
+    <div class="strip" id="recentStrip"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome } from "./lib/site-chrome.js";
+initSiteChrome();
+
+async function boot() {
+  const res = await fetch("gems-collection-data.json");
+  const pieces = await res.json();
+  // "Sealed" preview: reuse one piece's ring/metal look but hide the traits,
+  // matching the real contract's own shared placeholder image concept.
+  document.getElementById("sealedArt").innerHTML = pieces[0].svg.replace(/<text[^>]*>.*?<\/text>/g, "").replace(/opacity="0\.55"/g, 'opacity="0.12"');
+  const recent = pieces.slice(-8).reverse();
+  document.getElementById("recentStrip").innerHTML = recent.map(p => `
+    <div class="card"><div class="art">${p.svg}</div><div class="lbl">${p.serial}</div></div>
+  `).join("");
+}
+boot();
+</script>
+
+</body>
+</html>

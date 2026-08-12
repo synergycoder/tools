@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems — Setup (mock)</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 70px}
+  .mock-banner{background:var(--amber-soft);border-bottom:1px solid var(--amber-line);color:var(--amber);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+  .hero{padding:40px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{margin:0 0 8px;font-size:30px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:var(--muted);margin:0;max-width:64ch;font-size:14.5px}
+
+  .owner-gate{display:flex;align-items:center;gap:12px;border:1px solid var(--amber-line);background:var(--amber-soft);
+    border-radius:12px;padding:14px 18px;margin:24px 0}
+  .owner-gate .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);flex:none}
+  .owner-gate p{margin:0;font-size:13.5px;color:var(--ink)}
+  .owner-gate code{font-family:var(--mono);font-size:12px}
+
+  .section{border:1px solid var(--hair);border-radius:14px;background:var(--panel);padding:22px 24px;margin-bottom:20px}
+  .section h2{margin:0 0 4px;font-size:15.5px}
+  .section .desc{color:var(--muted);font-size:13px;margin:0 0 16px}
+
+  .kv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .kv{border:1px solid var(--hair);border-radius:10px;padding:11px 13px;background:var(--panel2)}
+  .kv .k{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+  .kv .v{font-family:var(--mono);font-size:13px;color:var(--ink);word-break:break-all}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0}
+  .switch{position:relative;width:44px;height:24px;flex:none}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#7fd88f;border-radius:99px;transition:.15s}
+  .slider:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.15s}
+  .switch input:not(:checked) + .slider{background:var(--hair2)}
+  .switch input:not(:checked) + .slider:before{transform:translateX(20px)}
+
+  form.inline{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field label{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .field input, .field select{padding:8px 10px;border-radius:8px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink);font-family:inherit;font-size:13px;min-width:110px}
+  .btn{padding:9px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
+  .btn.danger{background:#e0596d1a;color:#e0596d;border:1px solid #e0596d55}
+
+  table.queue{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.queue th{text-align:left;color:var(--muted);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.05em;padding:8px 10px;border-bottom:1px solid var(--hair)}
+  table.queue td{padding:8px 10px;border-bottom:1px solid var(--hair);font-family:var(--mono)}
+  table.queue tr:last-child td{border-bottom:none}
+  .swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+
+  .withdraw-row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<div class="mock-banner">MOCK PREVIEW — layout test only, unlinked from the site, no button here signs a real transaction</div>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · GRC721 · owner console</p>
+    <h1>Gems — Collection Setup</h1>
+    <p class="sub">Deploy, queue trait presets, and manage minting for the Gems collection. Every write here is enforced owner-only on-chain (<code>assertOwner()</code>) regardless of what this page shows — this UI is just a convenience, not the access control.</p>
+  </div>
+
+  <div class="owner-gate">
+    <span class="dot"></span>
+    <p>Connect the collection wallet (<code>g17cjym…hgems</code>) to unlock write actions below. Read-only status is visible to anyone.</p>
+  </div>
+
+  <div class="section">
+    <h2>Deployment</h2>
+    <p class="desc">Current realm status on the connected network.</p>
+    <div class="kv-grid">
+      <div class="kv"><div class="k">Package path</div><div class="v">gno.land/r/g17cjym…hgems/nftminter</div></div>
+      <div class="kv"><div class="k">Network</div><div class="v">Sapphire-1 (testnet)</div></div>
+      <div class="kv"><div class="k">Deployed</div><div class="v">not yet deployed</div></div>
+      <div class="kv"><div class="k">Collection owner</div><div class="v">g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Minting controls</h2>
+    <p class="desc"><code>SetMintingOpen</code> / <code>SetMintPrice</code> — owner-only.</p>
+    <div class="toggle-row">
+      <span>Minting open</span>
+      <label class="switch"><input type="checkbox" checked disabled><span class="slider"></span></label>
+    </div>
+    <form class="inline" style="margin-top:10px">
+      <div class="field"><label>Mint price (ugnot)</label><input type="number" value="0" disabled></div>
+      <button class="btn ghost" type="button" disabled>Update price</button>
+    </form>
+  </div>
+
+  <div class="section">
+    <h2>Trait preset queue</h2>
+    <p class="desc"><code>AddTraitPreset</code> — queue a (chain, shape, color, metal, active) combination for the next random mint to draw from. Duplicate or already-minted combinations are rejected on-chain.</p>
+    <form class="inline" style="margin-bottom:16px">
+      <div class="field"><label>Chain</label><select disabled><option>SAPPHIRE-1</option></select></div>
+      <div class="field"><label>Shape</label><select disabled><option>Round Brilliant</option></select></div>
+      <div class="field"><label>Color</label><select disabled><option>Blue</option></select></div>
+      <div class="field"><label>Metal</label><select disabled><option>Gold</option></select></div>
+      <div class="field"><label>Active</label><select disabled><option>true</option></select></div>
+      <button class="btn" type="button" disabled>Queue preset</button>
+    </form>
+    <table class="queue" id="queueTable"></table>
+  </div>
+
+  <div class="section">
+    <h2>Withdraw funds</h2>
+    <p class="desc"><code>WithdrawFunds</code> — move accumulated mint payments to the owner address.</p>
+    <div class="withdraw-row">
+      <div class="field"><label>Accumulated balance</label><input value="0 GNOT" disabled></div>
+      <div class="field"><label>Amount (ugnot)</label><input type="number" placeholder="0" disabled></div>
+      <button class="btn danger" type="button" disabled>Withdraw</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Stone / color table</h2>
+    <p class="desc"><code>SetStoneForChain</code> / <code>AddStoneColor</code> — extend the trait tables for a future testnet generation without redeploying.</p>
+    <form class="inline">
+      <div class="field"><label>New chain</label><input placeholder="TEST-16" disabled></div>
+      <div class="field"><label>Assign stone</label><input placeholder="Emerald" disabled></div>
+      <button class="btn ghost" type="button" disabled>Assign</button>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome } from "./lib/site-chrome.js";
+initSiteChrome();
+
+async function boot() {
+  const res = await fetch("gems-collection-data.json");
+  const pieces = await res.json();
+  const queued = pieces.slice(0, 12);
+  document.getElementById("queueTable").innerHTML = `
+    <tr><th>Chain</th><th>Shape</th><th>Color</th><th>Metal</th><th>Active</th><th></th></tr>
+    ${queued.map(p => `
+      <tr>
+        <td>${p.chain}</td><td>${p.shape}</td>
+        <td><span class="swatch" style="background:${p.colorHex}"></span>${p.color}</td>
+        <td>${p.metal}</td><td>${p.status === "Active" ? "true" : "false"}</td>
+        <td><button class="btn ghost" type="button" disabled style="padding:4px 9px;font-size:11px">Remove</button></td>
+      </tr>`).join("")}
+  `;
+}
+boot();
+</script>
+
+</body>
+</html>

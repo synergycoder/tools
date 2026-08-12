@@ -287,6 +287,7 @@
   <div id="activeCollectionInfo" style="display:none">
     <dl class="report-grid">
       <dt>Active collection</dt><dd class="mono" id="activeCollPath"></dd>
+      <dt>Gno.land page</dt><dd><a id="activeCollGnowebLink" class="mono" href="#" target="_blank" rel="noopener"></a></dd>
       <dt>Owner</dt><dd class="mono" id="activeCollOwner"></dd>
       <dt>Minted so far</dt><dd id="activeCollCount"></dd>
       <dt>Queued, unminted</dt><dd id="activeCollQueue"></dd>
@@ -340,6 +341,12 @@
     <span class="section-hint" id="streamNote" style="margin:0"></span>
   </div>
   <div id="streamGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:12px"></div>
+</div>
+
+<div class="panel" id="myMintsPanel" style="display:none">
+  <h2 style="margin:0">Your mints this session</h2>
+  <p class="section-hint">Pieces you've just minted here, each with a direct link to its own gno.land page.</p>
+  <div id="myMintsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px"></div>
 </div>
 
 </div>
@@ -670,6 +677,26 @@ copyDataUriBtn.addEventListener("click", async () => {
 
 const TEMPLATE_PKGPATH = "gno.land/p/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/grc721";
 
+// This tool only ever deploys/mints on sapphire-1 (deployCollBtn is
+// disabled off that chain) -- so gnoweb link-building never needs to
+// branch on network, unlike lib/gno-rpc.js's NETWORKS map which serves
+// multiple chains for other tools on this site.
+const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
+function gnowebCollectionUrl(pkgPath) {
+  return pkgPath.replace(/^gno\.land/, GNOWEB_BASE);
+}
+// Colon (not slash) before the sub-path -- confirmed live via vm/qrender
+// against a real deployed realm; this exact convention is also what the
+// template's own Render() uses to link each token from the home page.
+function gnowebTokenUrl(pkgPath, tid) {
+  return `${gnowebCollectionUrl(pkgPath)}:token/${tid}`;
+}
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
+}
+
 // Declared up front, before renderWalletGate/updateMintButtons etc. are
 // defined below -- onWalletChange(cb) (used further down) invokes its
 // callback SYNCHRONOUSLY at registration time, so renderWalletGate() (and
@@ -804,13 +831,20 @@ function showCollectionError(msg) {
 function clearCollectionError() {
   document.getElementById("collectionError").style.display = "none";
 }
-function setCollectionStatus(cls, text) {
+function setCollectionStatus(cls, text, linkUrl, linkLabel) {
   clearCollectionError();
   // reuse the validation-error slot for pending/success text too, styled inline
   const el = document.getElementById("collectionError");
   el.style.display = "block";
   el.style.color = cls === "success" ? "var(--good)" : cls === "error" ? "var(--bad)" : "var(--accent)";
-  el.textContent = text;
+  el.textContent = text + (linkUrl ? " " : "");
+  if (linkUrl) {
+    const a = document.createElement("a");
+    a.href = linkUrl; a.target = "_blank"; a.rel = "noopener";
+    a.style.color = "inherit";
+    a.textContent = linkLabel || "View on gno.land →";
+    el.appendChild(a);
+  }
 }
 
 document.getElementById("deployCollBtn").addEventListener("click", async () => {
@@ -839,7 +873,7 @@ document.getElementById("deployCollBtn").addEventListener("click", async () => {
   try {
     const msg = { type: "/vm.m_addpkg", value: { creator: w.address, deposit, package: { name: pkgName, path: pkgPath, files } } };
     const { hash, height } = await doContract([msg], `deploy ${pkgPath}`);
-    setCollectionStatus("success", `Deployed${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    setCollectionStatus("success", `Deployed${height ? ` at block ${height}` : ""} — tx ${hash}.`, gnowebCollectionUrl(pkgPath));
     activeCollectionPath = pkgPath;
     await refreshCollection();
   } catch (err) {
@@ -906,6 +940,9 @@ async function refreshCollection() {
   };
   document.getElementById("activeCollectionInfo").style.display = "";
   document.getElementById("activeCollPath").textContent = activeCollectionPath;
+  const gnowebLink = document.getElementById("activeCollGnowebLink");
+  gnowebLink.href = gnowebCollectionUrl(activeCollectionPath);
+  gnowebLink.textContent = gnowebCollectionUrl(activeCollectionPath);
   document.getElementById("activeCollOwner").textContent = activeCollectionStats.owner || "unknown";
   document.getElementById("activeCollCount").textContent = activeCollectionStats.count ?? "unknown";
   document.getElementById("activeCollQueue").textContent = activeCollectionStats.queue ?? "unknown";
@@ -956,9 +993,21 @@ function showMintError(msg) {
 function clearMintError() {
   document.getElementById("mintError").style.display = "none";
 }
-function setMintStatus(cls, text) {
-  document.getElementById("mintStatus").innerHTML =
-    `<p class="section-hint" style="color:${cls === "success" ? "var(--good)" : cls === "error" ? "var(--bad)" : "var(--accent)"}">${text}</p>`;
+function setMintStatus(cls, text, linkUrl, linkLabel) {
+  const container = document.getElementById("mintStatus");
+  container.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "section-hint";
+  p.style.color = cls === "success" ? "var(--good)" : cls === "error" ? "var(--bad)" : "var(--accent)";
+  p.textContent = text + (linkUrl ? " " : "");
+  if (linkUrl) {
+    const a = document.createElement("a");
+    a.href = linkUrl; a.target = "_blank"; a.rel = "noopener";
+    a.style.color = "inherit";
+    a.textContent = linkLabel || "View this piece on gno.land →";
+    p.appendChild(a);
+  }
+  container.appendChild(p);
 }
 
 function updateMintButtons() {
@@ -1003,9 +1052,24 @@ document.getElementById("queueAndMintBtn").addEventListener("click", async () =>
     }
     messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "Mint", args: [w.address] } });
     setMintStatus("pending", `Waiting for Adena approval — ${isOwner ? "queuing + minting" : "minting"}…`);
+    // Adena's DoContract response here only ever surfaces {hash, height},
+    // not Mint's own return value (the new TokenID) -- so which token
+    // just got claimed is worked out by diffing CollectionSummary()
+    // before/after against this wallet's address, not by parsing the tx
+    // response.
+    const idsBefore = new Set(latestTokens.map(t => t.tid));
     const { hash, height } = await doContract(messages, isOwner ? "queue + mint" : "mint");
-    setMintStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}`);
     await refreshCollection();
+    const justMinted = latestTokens.filter(t => !idsBefore.has(t.tid) && t.owner === w.address);
+    justMinted.forEach(t => {
+      myMintedTokens.unshift({ tid: t.tid, name: t.name, image: t.image, tokenUrl: gnowebTokenUrl(activeCollectionPath, t.tid) });
+    });
+    renderMyMints();
+    if (justMinted.length === 1) {
+      setMintStatus("success", `Minted #${justMinted[0].tid} — “${justMinted[0].name}”${height ? ` at block ${height}` : ""} — tx ${hash}.`, gnowebTokenUrl(activeCollectionPath, justMinted[0].tid));
+    } else {
+      setMintStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}.`, gnowebCollectionUrl(activeCollectionPath), "View the collection on gno.land →");
+    }
   } catch (err) {
     showMintError(err.message || String(err));
   } finally {
@@ -1050,6 +1114,13 @@ document.getElementById("queueOnlyBtn").addEventListener("click", async () => {
 // already proven live against the Gems collection's own mint page.
 const STREAM_LIMIT = 24;
 
+// Populated at the end of every refreshStream() call -- the mint handler
+// snapshots this (tid set) immediately before submitting a Mint tx, then
+// diffs against the post-mint refresh to figure out which token(s) just
+// got claimed, since Adena's own DoContract response here only surfaces
+// {hash, height}, not the called function's return value.
+let latestTokens = [];
+
 function parseCollectionSummaryQ(raw) {
   if (!raw) return [];
   const m = raw.match(/^\("([\s\S]*)" string\)$/);
@@ -1071,6 +1142,7 @@ async function refreshStream() {
   if (!activeCollectionPath) return;
   const raw = await collQeval(activeCollectionPath, "CollectionSummary()").catch(() => null);
   const tokens = parseCollectionSummaryQ(raw);
+  latestTokens = tokens;
   const grid = document.getElementById("streamGrid");
   const note = document.getElementById("streamNote");
   if (!tokens.length) {
@@ -1088,6 +1160,29 @@ async function refreshStream() {
       </div>
       <div style="padding:6px 8px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         <span style="color:var(--ink);font-weight:700;display:block">#${t.tid}</span>${t.name}
+      </div>
+    </div>`).join("");
+}
+
+// ---- your mints this session ----
+// In-memory only (not persisted) -- a running list of what THIS wallet
+// has claimed via THIS page load, distinct from streamGrid's "everyone,
+// whole collection" view. Newest first.
+let myMintedTokens = [];
+
+function renderMyMints() {
+  const panel = document.getElementById("myMintsPanel");
+  const grid = document.getElementById("myMintsGrid");
+  if (!myMintedTokens.length) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  grid.innerHTML = myMintedTokens.map(t => `
+    <div style="border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--panel2)">
+      <div style="aspect-ratio:1;background:var(--panel);display:flex;align-items:center;justify-content:center">
+        <img src="${t.image}" alt="${escapeHtml(t.name)}" style="max-width:100%;max-height:100%">
+      </div>
+      <div style="padding:6px 8px;font-family:var(--mono);font-size:10.5px;color:var(--muted)">
+        <span style="color:var(--ink);font-weight:700;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#${t.tid} — ${escapeHtml(t.name)}</span>
+        <a href="${t.tokenUrl}" target="_blank" rel="noopener" style="color:var(--accent)">View this piece on gno.land →</a>
       </div>
     </div>`).join("");
 }

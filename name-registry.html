@@ -22,15 +22,12 @@
 <script src="adena-compat.js"></script>
 <script type="module">
   import { initSiteChrome } from "./lib/site-chrome.js";
-  // This tool's own "which network to read/write" options, rendered
-  // inside the shared wallet bubble's dropdown — one control for
-  // connect + network instead of a separate row duplicating it.
-  initSiteChrome({
-    networkOptions: [
-      { key: "sapphire", chainId: "sapphire-1", label: "Sapphire testnet" },
-      { key: "betanet", chainId: "gnoland1", label: "Mainnet-beta" },
-    ],
-  });
+  // Network is a site-wide control now (the header's own always-visible
+  // pill) — this page's own NETWORKS object below (keyed "testnet"/
+  // "betanet" to match) still supplies the richer per-network data
+  // (rpc/indexer/gnoweb/gnoscan/hasNamereg) the header's own generic list
+  // doesn't carry.
+  initSiteChrome();
   // The rest of this page's logic is a plain (non-module) <script> further
   // down — mirrored onto window here so it can reuse the same cache helper
   // every other tool uses without converting this whole file to a module.
@@ -207,7 +204,7 @@
 "use strict";
 /* ---------------- config ---------------- */
 const NETWORKS = {
-  sapphire: {
+  testnet: {
     label:"Testnet (sapphire-1)", chainId:"sapphire-1",
     rpc:"https://rpc.sapphire.testnets.gno.land",
     indexer:"https://indexer.sapphire.testnets.gno.land/graphql/query",
@@ -223,7 +220,7 @@ const NETWORKS = {
   },
 };
 const USERS="gno.land/r/sys/users", NAMEREG="gno.land/r/sys/namereg/v1", PROFILE="gno.land/r/demo/profile";
-let NET=NETWORKS.sapphire;
+let NET=NETWORKS.testnet;
 let REGS=[];               // cached registrations for the active network
 let regsLoaded=false;
 

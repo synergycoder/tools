@@ -199,6 +199,7 @@
     <span class="found-status" id="foundStatus"></span>
   </div>
   <p class="search-status" id="searchStatus"></p>
+  <p class="status" id="keepOpenNote" style="display:none">Keep this tab open — navigating away or closing it pauses the search. Nothing is lost: it resumes automatically from where it left off the next time you open this page.</p>
 </div>
 
 <div class="panel">
@@ -250,6 +251,7 @@ const searchProgress = document.getElementById("searchProgress");
 const elapsedTimer = document.getElementById("elapsedTimer");
 const foundStatus = document.getElementById("foundStatus");
 const searchStatus = document.getElementById("searchStatus");
+const keepOpenNote = document.getElementById("keepOpenNote");
 const modeNote = document.getElementById("modeNote");
 const walletListEl = document.getElementById("walletList");
 const listStatus = document.getElementById("listStatus");
@@ -444,6 +446,7 @@ function setSearching(on) {
   startBtn.style.display = on ? "none" : "inline-block";
   cancelBtn.style.display = on ? "inline-block" : "none";
   searchProgress.style.display = on ? "flex" : "none";
+  keepOpenNote.style.display = on ? "block" : "none";
   targetInput.disabled = on;
   positionSelect.disabled = on;
   countInput.disabled = on;

@@ -295,8 +295,25 @@ function renderWalletGate() {
     gate.innerHTML = onSapphire
       ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
       : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+    // Only auto-track the connected wallet into "mint to" while the user
+    // hasn't manually typed their own recipient in -- otherwise switching
+    // Adena accounts after a manual edit would clobber an intentional
+    // override. But when it IS still auto-tracking, keep it synced on
+    // EVERY wallet change, not just while empty: previously this only
+    // filled in toInput.value once (when empty) and then never touched
+    // it again, so switching Adena accounts left a stale address sitting
+    // in the field -- confirmed live, a mint from a newly-switched
+    // account landed tokens on the PREVIOUS account instead. The pill
+    // above reads getWallet() fresh and looked correct; only this field
+    // (and everything downstream of currentRecipient(), including the
+    // actual mint tx's `to` and the "minted to this wallet" stat) was
+    // silently stale.
     const toInput = document.getElementById("toInput");
-    if (!toInput.value) { toInput.value = w.address; loadStats(); }
+    if (!toInput.dataset.manual) {
+      const changed = toInput.value !== w.address;
+      toInput.value = w.address;
+      if (changed) loadStats();
+    }
   }
   updateMintButton();
 }
@@ -369,7 +386,11 @@ function updateMintButton() {
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
 
 let toInputDebounce = null;
-document.getElementById("toInput").addEventListener("input", () => {
+document.getElementById("toInput").addEventListener("input", (e) => {
+  // A real "input" event only fires from actual user typing, never from
+  // the programmatic `toInput.value = w.address` sync in renderWalletGate
+  // -- safe to treat this as "the user took over this field".
+  e.target.dataset.manual = "1";
   clearTimeout(toInputDebounce);
   toInputDebounce = setTimeout(loadStats, 400);
 });

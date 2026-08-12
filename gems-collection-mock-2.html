@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gems — Collection (mock)</title>
+<title>Gems — Collection (mock v2 · CSS animations)</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
@@ -93,7 +93,7 @@
 </head>
 <body>
 
-<div class="mock-banner">MOCK PREVIEW v1 — layout test only, unlinked from the site, no real chain data. Animation is SMIL &lt;animate&gt; (matches the current gems.gno). CSS-keyframe comparison: gems-collection-mock-2.html</div>
+<div class="mock-banner">MOCK PREVIEW v2 — same layout as gems-collection-mock.html, but every piece's motion (ring glow, floating drift, glint sweep, status ripple) runs on CSS @keyframes instead of SMIL &lt;animate&gt;, to test whether that fixes Safari jank. Compare side by side with gems-collection-mock.html.</div>
 
 <div class="wrap">
   <div class="hero">
@@ -151,7 +151,7 @@ let sortMode = "newest";
 
 async function boot() {
   performance.mark("gems:fetch-start");
-  const res = await fetch("gems-collection-data.json");
+  const res = await fetch("gems-collection-data-2.json");
   pieces = await res.json();
   performance.mark("gems:fetch-done");
   pieces.forEach((p, i) => { p._idx = i; });
@@ -173,6 +173,7 @@ function renderStats() {
     <div class="stat"><div class="k">Chains represented</div><div class="v">${chains} / 15</div></div>
     <div class="stat"><div class="k">Active / Sunset</div><div class="v">${activeCount} / ${pieces.length - activeCount}</div></div>
     <div class="stat"><div class="k">Supply cap</div><div class="v">None</div></div>
+    <div class="stat"><div class="k">Animation engine</div><div class="v accent">CSS @keyframes</div></div>
   `;
 }
 

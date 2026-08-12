@@ -1,9 +1,10 @@
 <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#g)"/>
-  <g transform="rotate(-30 16 16)" fill="#081015" fill-rule="evenodd">
-    <path d="M11.5 4 H20.5 V11 H11.5 Z M14.3 4 H17.7 V7.2 H14.3 Z"/>
-    <rect x="14.3" y="11" width="3.4" height="10" rx="1.2" fill-rule="nonzero"/>
-    <path d="M12.8 21 H19.2 V27 H12.8 Z M14.3 23.8 H17.7 V27 H14.3 Z"/>
+  <g fill="#081015">
+    <rect x="12.5" y="7" width="7" height="6" rx="2.2" fill="none" stroke="#081015" stroke-width="2.6"/>
+    <rect x="5" y="13" width="22" height="12.5" rx="2.5"/>
+    <rect x="4.3" y="15.5" width="23.4" height="3" fill="url(#g)"/>
+    <rect x="14.3" y="16.3" width="3.4" height="3.4" rx="0.8" fill="url(#g)"/>
   </g>
   <defs>
     <linearGradient id="g" x1="1" y1="1" x2="31" y2="31" gradientUnits="userSpaceOnUse">

@@ -136,8 +136,9 @@
   <div class="row">
     <span class="field-label">Query network</span>
     <select id="previewNetwork"></select>
-    <span class="status">(only used to look up tokens below — the actual send always uses whatever network your connected wallet is on)</span>
+    <span class="status" id="previewBalance"></span>
   </div>
+  <p class="status" id="previewNetworkNote">Picking a network here also asks your connected wallet to switch to it — the actual send always uses whatever network your wallet ends up on (shown above and in the header).</p>
   <div class="row">
     <span class="field-label">Token to send</span>
     <select id="tokenSelect"><option value="native">Native GNOT</option></select>
@@ -228,17 +229,18 @@ gateIfLocked(document.getElementById("toolBody"));
 <script type="module">
 import {
   NETWORKS, networkForChainId, loadFungibleTokens, resolveToken, fetchTokenDecimals,
-  fetchBalance, toBaseUnits, fromBaseUnits,
+  fetchBalance, fetchNativeBalance, toBaseUnits, fromBaseUnits,
 } from "./lib/gno-rpc.js";
 import { parseAddressAmountRows, sheetsUrlToCsvExportUrl } from "./lib/csv.js";
 import { doContract } from "./lib/adena-connect.js";
-import { onWalletChange } from "./lib/site-chrome.js";
+import { onWalletChange, switchWalletNetwork, getWallet } from "./lib/site-chrome.js";
 import { saveCache, loadCache } from "./lib/local-cache.js";
 
 const GNOT_DECIMALS = 6;
 const NETWORK_STORAGE_KEY = "gnoTools:batchSend:previewNetwork";
 
 const previewNetwork = document.getElementById("previewNetwork");
+const previewBalance = document.getElementById("previewBalance");
 const tokenSelect = document.getElementById("tokenSelect");
 const tokenPreview = document.getElementById("tokenPreview");
 const pasteSection = document.getElementById("pasteSection");
@@ -329,9 +331,39 @@ async function loadTokenDropdown() {
   }
 }
 
-previewNetwork.addEventListener("change", () => {
+// Shows the connected wallet's native balance on whichever network is
+// currently picked above — "how much can I actually send" at a glance,
+// before even getting to step 2. Best-effort: a fetch failure just clears
+// the text rather than showing a stale or misleading number.
+let previewBalanceToken = 0;
+async function updatePreviewBalance() {
+  const token = ++previewBalanceToken;
+  const w = getWallet();
+  if (w.status !== "connected" || !w.address) {
+    previewBalance.textContent = "";
+    return;
+  }
+  previewBalance.textContent = "checking balance…";
+  try {
+    const net = NETWORKS[previewNetwork.value];
+    const raw = await fetchNativeBalance(net, w.address);
+    if (token !== previewBalanceToken) return; // a newer call superseded this one
+    previewBalance.textContent = `Your balance: ${fromBaseUnits(raw, GNOT_DECIMALS)} GNOT`;
+  } catch {
+    if (token === previewBalanceToken) previewBalance.textContent = "";
+  }
+}
+
+previewNetwork.addEventListener("change", async () => {
   try { localStorage.setItem(NETWORK_STORAGE_KEY, previewNetwork.value); } catch {}
   loadTokenDropdown();
+  const net = NETWORKS[previewNetwork.value];
+  const w = getWallet();
+  if (w.status === "connected" && w.chainId !== net.chainId) {
+    previewBalance.textContent = "switching wallet…";
+    await switchWalletNetwork(net.chainId);
+  }
+  updatePreviewBalance();
 });
 tokenSelect.addEventListener("change", () => {
   tokenDecimals = undefined;
@@ -341,6 +373,7 @@ tokenSelect.addEventListener("change", () => {
   if (wallet) { resolveRealToken().then(checkBalance).then(updatePlan); }
 });
 loadTokenDropdown();
+updatePreviewBalance();
 
 // ---------- recipient input: paste / file / sheet ----------
 
@@ -459,6 +492,7 @@ async function applyConnectedUI(w) {
   await resolveRealToken();
   await checkBalance();
   updatePlan();
+  updatePreviewBalance();
 }
 
 function handleDisconnected() {
@@ -470,6 +504,7 @@ function handleDisconnected() {
   connectedBox.style.display = "none";
   balanceNote.style.display = "none";
   updatePlan();
+  updatePreviewBalance();
 }
 
 onWalletChange((w) => {

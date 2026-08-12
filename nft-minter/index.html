@@ -236,7 +236,7 @@
     <h2 style="margin:0">Data URI</h2>
     <button type="button" class="ghost small" id="copyDataUriBtn">Copy</button>
   </div>
-  <p class="section-hint">This exact string is what a mint transaction stores as the token's image field.</p>
+  <p class="section-hint">This exact string is what a mint transaction stores as the token's image field — the compressed image above, wrapped in a small SVG container. That wrapping is required: gno.land's own page renderer (gnoweb) only displays <code>data:image/svg+xml</code> images inline — every other image type is silently hidden on the collection's own gno.land page (its real data is still there and works everywhere else, e.g. wallets, marketplaces — just not shown on that one page). Wrapping adds real size/cost, shown below.</p>
   <textarea id="dataUriOutput" readonly rows="4"></textarea>
 </div>
 
@@ -406,6 +406,22 @@ const lightboxClose = document.getElementById("lightboxClose");
 
 let originalImg = null, originalBytes = 0, originalW = 0, originalH = 0, originalType = "";
 let compressedDataUrl = "", compressedBinaryBytes = 0, compressedDataUriBytes = 0, compressedW = 0, compressedH = 0;
+// finalDataUrl is what actually gets minted -- compressedDataUrl (PNG/
+// JPEG/WebP) wrapped in a minimal SVG container. gnoweb's own markdown
+// sanitizer only allows "data:image/svg+xml" images -- every other
+// data: image MIME type is silently stripped to an empty src when
+// rendered (confirmed directly in gnoweb's source,
+// gno.land/pkg/gnoweb/render_config.go's allowSvgDataImage). Without
+// this wrap, a minted photo's real data is on-chain and correct, but
+// invisible on the collection's own gnoweb page -- confirmed live: an
+// already-minted piece showed nothing on its token page or the
+// collection's own listing despite its metadata being fully intact.
+let finalDataUrl = "", finalDataUriBytes = 0;
+
+function wrapAsSvgDataUrl(rasterDataUrl, width, height) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}"><image width="${width}" height="${height}" href="${rasterDataUrl}"/></svg>`;
+  return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+}
 
 function fmtBytes(n) {
   if (n < 1024) return n + " B";
@@ -556,11 +572,14 @@ function recompute() {
   compressedBinaryBytes = Math.floor((base64Payload.length * 3) / 4) - padding;
   compressedDataUriBytes = dataUrl.length;
 
+  finalDataUrl = wrapAsSvgDataUrl(compressedDataUrl, targetW, targetH);
+  finalDataUriBytes = finalDataUrl.length;
+
   renderCompare(effectiveFormat, quality);
   renderReport();
 
   compImg.src = compressedDataUrl;
-  dataUriOutput.value = compressedDataUrl;
+  dataUriOutput.value = finalDataUrl;
   // Queue/mint buttons gate on compressedDataUrl -- refresh their
   // enabled state now that it's populated (or changed). Safe to call
   // unconditionally: recompute() only ever runs from a user interaction
@@ -587,9 +606,15 @@ function renderCompare(effectiveFormat, quality) {
 function renderReport() {
   repOrig.innerHTML = `<span class="mono">${fmtBytes(originalBytes)}</span> — ${originalW}×${originalH}, ${formatLabel(originalType)}`;
   repComp.innerHTML = `<span class="mono">${fmtBytes(compressedBinaryBytes)}</span> — ${compressedW}×${compressedH} ${pctBadge(originalBytes, compressedBinaryBytes)}`;
-  repDataUri.innerHTML = `<span class="mono">${fmtBytes(compressedDataUriBytes)}</span> <span class="section-hint" style="margin:0">(${compressedDataUriBytes.toLocaleString()} characters — base64 payload plus the data-URI prefix)</span>`;
+  // finalDataUriBytes (not compressedDataUriBytes) is what actually gets
+  // minted -- see finalDataUrl's own doc comment for why an SVG wrapper
+  // is required, and note that wrapping an already-base64 image in
+  // another base64 layer adds real, non-trivial overhead (roughly +33%
+  // at typical sizes) -- surfaced here rather than hidden, since it's a
+  // genuine cost difference from the raw compressed size shown above.
+  repDataUri.innerHTML = `<span class="mono">${fmtBytes(finalDataUriBytes)}</span> <span class="section-hint" style="margin:0">(${finalDataUriBytes.toLocaleString()} characters — the compressed image (${fmtBytes(compressedDataUriBytes)}) wrapped in an SVG container so it displays on the collection's own gno.land page, ~${Math.round((finalDataUriBytes / compressedDataUriBytes - 1) * 100)}% larger as a result)</span>`;
 
-  const costUgnot = compressedDataUriBytes * STORAGE_UGNOT_PER_BYTE;
+  const costUgnot = finalDataUriBytes * STORAGE_UGNOT_PER_BYTE;
   const costGnot = costUgnot / 1e6;
   let cls = "";
   if (costGnot >= 5) cls = "bad";
@@ -974,7 +999,7 @@ document.getElementById("queueAndMintBtn").addEventListener("click", async () =>
       const url = document.getElementById("pieceUrlInput").value.trim();
       const bg = document.getElementById("pieceBgInput").value.trim();
       const attrs = document.getElementById("pieceAttrsInput").value.trim();
-      messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, compressedDataUrl, url, bg, attrs] } });
+      messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, finalDataUrl, url, bg, attrs] } });
     }
     messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "Mint", args: [w.address] } });
     setMintStatus("pending", `Waiting for Adena approval — ${isOwner ? "queuing + minting" : "minting"}…`);
@@ -1006,7 +1031,7 @@ document.getElementById("queueOnlyBtn").addEventListener("click", async () => {
     if (document.getElementById("clearQueueFirstInput").checked) {
       messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "ClearPresetQueue", args: [] } });
     }
-    messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, compressedDataUrl, url, bg, attrs] } });
+    messages.push({ type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "AddPresetToken", args: [name, desc, finalDataUrl, url, bg, attrs] } });
     setMintStatus("pending", "Waiting for Adena approval — queuing this piece…");
     const { hash, height } = await doContract(messages, "queue piece");
     setMintStatus("success", `Queued${height ? ` at block ${height}` : ""} — tx ${hash}`);

@@ -236,7 +236,7 @@ async function scanTokens(net) {
   try {
     const nativeRaw = await fetchNativeBalance(net, wallet.address);
     if (nativeRaw !== "0") {
-      rows.push({ name: "GNOT (native)", symbol: "GNOT", balance: fromBaseUnits(nativeRaw, 6), path: "—" });
+      rows.push({ name: "Native GNOT", symbol: "GNOT", balance: fromBaseUnits(nativeRaw, 6), path: "—" });
     }
   } catch {}
 
@@ -398,7 +398,7 @@ function loadForCurrentNetwork() {
   if (cached) {
     renderTokenRows(cached.tokens || []);
     renderNftFromCache(cached.nfts || [], NETWORKS[activeNetKey], cached.nftCheckedCount, cached.nftErrorCount);
-    cacheStatus.textContent = `Cached · ${formatAgo(cached.cachedAt)} — click Rescan for the latest`;
+    cacheStatus.textContent = `Cached · ${formatAgo(cached.cachedAt ?? cached.scannedAt)} — click Rescan for the latest`;
   } else {
     scan();
   }

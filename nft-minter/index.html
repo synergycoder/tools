@@ -262,6 +262,13 @@
       <input type="text" id="collSlugInput" placeholder="gnosaurus-eclipse" style="flex:1;min-width:12rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
     </div>
     <p class="section-hint" id="collPathPreview"></p>
+    <div class="row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)">
+        <input type="checkbox" id="collShowImageInput" checked>
+        Show each piece's image on this collection's own gno.land page
+      </label>
+    </div>
+    <p class="section-hint">Off just hides the image from the realm's public gnoweb page — every token's real metadata (what wallets/marketplaces read) always has the image either way. Owner-adjustable later too.</p>
     <p class="section-hint" id="collDeployCost"></p>
     <div class="row">
       <button type="button" id="deployCollBtn" disabled>Connect wallet to deploy</button>
@@ -284,7 +291,11 @@
       <dt>Minted so far</dt><dd id="activeCollCount"></dd>
       <dt>Queued, unminted</dt><dd id="activeCollQueue"></dd>
       <dt>Minting</dt><dd id="activeCollOpen"></dd>
+      <dt>Images on gnoweb page</dt><dd id="activeCollShowImage"></dd>
     </dl>
+    <div class="row" id="ownerTogglesRow" style="display:none;margin-top:10px">
+      <button type="button" class="ghost small" id="toggleShowImageBtn"></button>
+    </div>
   </div>
 </div>
 
@@ -672,11 +683,13 @@ function buildTemplateBody(segment) {
   const pkgName = goPkgNameFromSegment(segment);
   const name = document.getElementById("collNameInput").value.trim() || "Untitled Collection";
   const symbol = (document.getElementById("collSymbolInput").value.trim() || "NFT").toUpperCase();
+  const showImage = document.getElementById("collShowImageInput").checked;
   return templateBodyRaw
     .split("__PKG_NAME__").join(pkgName)
     .split("__COLLECTION_NAME__").join(name.replace(/"/g, '\\"'))
     .split("__COLLECTION_SYMBOL__").join(symbol.replace(/"/g, '\\"'))
-    .split("__OWNER_ADDR__").join(w.address);
+    .split("__OWNER_ADDR__").join(w.address)
+    .split("__SHOW_IMAGE__").join(String(showImage));
 }
 
 // ---- wallet gate ----
@@ -722,14 +735,23 @@ function updateCollPathPreview() {
   if (!slugInput.dataset.manual && nameInput.value.trim()) {
     slugInput.value = slugify(nameInput.value.trim());
   }
-  const segment = slugInput.value.trim() || "collection";
+  // gno.land requires the deploy path's last segment, gnomod.toml's own
+  // module path, the addpkg message's package name, and the file's own
+  // `package X` declaration to all agree EXACTLY -- confirmed the hard
+  // way deploying this project's own g1 realm earlier. A Go package
+  // name can't contain a hyphen, so the deployed path segment can't
+  // either, even though hyphens are otherwise valid in gno.land paths
+  // (this site's own URL slugs use them) -- pkgName (hyphen-stripped)
+  // is the single source of truth for BOTH the path and the package
+  // identifier here, not two independently-derived strings.
+  const pkgName = goPkgNameFromSegment(slugInput.value.trim() || "collection");
   const addr = w.status === "connected" ? w.address : "<connect wallet>";
-  document.getElementById("collPathPreview").textContent = `gno.land/r/${addr}/${segment}`;
+  document.getElementById("collPathPreview").textContent = `gno.land/r/${addr}/${pkgName}`;
 
   const costEl = document.getElementById("collDeployCost");
-  const body = buildTemplateBody(segment);
+  const body = buildTemplateBody(pkgName);
   if (!body) { costEl.textContent = ""; return; }
-  const gnomod = `module = "gno.land/r/${w.address}/${segment}"\ngno = "0.9"\n`;
+  const gnomod = `module = "gno.land/r/${w.address}/${pkgName}"\ngno = "0.9"\n`;
   const bytes = new TextEncoder().encode(body).length + new TextEncoder().encode(gnomod).length;
   const costUgnot = Math.ceil(bytes * STORAGE_UGNOT_PER_BYTE * 1.15);
   costEl.textContent = `Estimated deploy cost: ~${fromBaseUnits(costUgnot, NATIVE_DECIMALS)} GNOT (${bytes.toLocaleString()} bytes @ 100 ugnot/byte, +15% margin). This reuses the site's already-deployed grc721 package (${TEMPLATE_PKGPATH}) — this is the only package you deploy.`;
@@ -737,6 +759,7 @@ function updateCollPathPreview() {
 document.getElementById("collNameInput").addEventListener("input", () => { updateCollPathPreview(); updateDeployButton(); });
 document.getElementById("collSlugInput").addEventListener("input", (e) => { e.target.dataset.manual = "1"; updateCollPathPreview(); });
 document.getElementById("collSymbolInput").addEventListener("input", updateCollPathPreview);
+document.getElementById("collShowImageInput").addEventListener("change", updateCollPathPreview);
 
 function updateDeployButton() {
   const w = getWallet();
@@ -768,11 +791,14 @@ document.getElementById("deployCollBtn").addEventListener("click", async () => {
   const w = getWallet();
   if (w.status !== "connected") return;
   await loadTemplate();
-  const segment = document.getElementById("collSlugInput").value.trim() || slugify(document.getElementById("collNameInput").value.trim());
-  const pkgName = goPkgNameFromSegment(segment);
-  const body = buildTemplateBody(segment);
+  // pkgName (hyphen-stripped) is used for the path segment AND the Go
+  // package identifier -- see updateCollPathPreview's comment for why
+  // these can't be two different strings.
+  const rawSegment = document.getElementById("collSlugInput").value.trim() || slugify(document.getElementById("collNameInput").value.trim());
+  const pkgName = goPkgNameFromSegment(rawSegment);
+  const body = buildTemplateBody(pkgName);
   if (!body) { showCollectionError("Enter a collection name first."); return; }
-  const pkgPath = `gno.land/r/${w.address}/${segment}`;
+  const pkgPath = `gno.land/r/${w.address}/${pkgName}`;
   const gnomod = `module = "${pkgPath}"\ngno = "0.9"\n`;
   const files = [
     { name: "gnomod.toml", body: gnomod },
@@ -828,11 +854,12 @@ function parseIntQ(raw) { if (raw == null) return null; const m = raw.match(/^\(
 
 async function refreshCollection() {
   if (!activeCollectionPath) return;
-  const [ownerR, countR, queueR, openR] = await Promise.all([
+  const [ownerR, countR, queueR, openR, showImageR] = await Promise.all([
     collQeval(activeCollectionPath, "Owner()").catch(() => null),
     collQeval(activeCollectionPath, "TokenCount()").catch(() => null),
     collQeval(activeCollectionPath, "PresetQueueLength()").catch(() => null),
     collQeval(activeCollectionPath, "MintingOpen()").catch(() => null),
+    collQeval(activeCollectionPath, "ShowImageInRender()").catch(() => null),
   ]);
   if (ownerR == null) {
     showCollectionError(`Couldn't reach ${activeCollectionPath} — check the path, or that it's actually deployed with this tool's expected shape (Owner/TokenCount/PresetQueueLength/MintingOpen).`);
@@ -846,6 +873,10 @@ async function refreshCollection() {
     count: parseIntQ(countR),
     queue: parseIntQ(queueR),
     open: parseBoolQ(openR),
+    // null (not false) when the collection predates this setting or
+    // isn't this tool's template at all -- ShowImageInRender() simply
+    // won't exist to query, distinct from a real "false".
+    showImage: showImageR == null ? null : parseBoolQ(showImageR),
   };
   document.getElementById("activeCollectionInfo").style.display = "";
   document.getElementById("activeCollPath").textContent = activeCollectionPath;
@@ -853,11 +884,42 @@ async function refreshCollection() {
   document.getElementById("activeCollCount").textContent = activeCollectionStats.count ?? "unknown";
   document.getElementById("activeCollQueue").textContent = activeCollectionStats.queue ?? "unknown";
   document.getElementById("activeCollOpen").textContent = activeCollectionStats.open ? "Open" : "Closed";
+  document.getElementById("activeCollShowImage").textContent =
+    activeCollectionStats.showImage == null ? "unknown" : activeCollectionStats.showImage ? "Shown" : "Hidden";
+
+  const w = getWallet();
+  const isOwner = activeCollectionStats.owner && w.status === "connected" && w.address === activeCollectionStats.owner;
+  const togglesRow = document.getElementById("ownerTogglesRow");
+  const toggleBtn = document.getElementById("toggleShowImageBtn");
+  if (isOwner && activeCollectionStats.showImage != null) {
+    togglesRow.style.display = "";
+    toggleBtn.textContent = activeCollectionStats.showImage ? "Hide images on gnoweb page" : "Show images on gnoweb page";
+  } else {
+    togglesRow.style.display = "none";
+  }
+
   document.getElementById("mintPanel").style.display = "";
   document.getElementById("streamPanel").style.display = "";
   updateMintButtons();
   await refreshStream();
 }
+
+document.getElementById("toggleShowImageBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (!activeCollectionPath || w.status !== "connected" || activeCollectionStats.showImage == null) return;
+  const btn = document.getElementById("toggleShowImageBtn");
+  btn.disabled = true;
+  try {
+    const next = !activeCollectionStats.showImage;
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: activeCollectionPath, func: "SetShowImageInRender", args: [String(next)] } };
+    await doContract([msg], next ? "show images on gnoweb page" : "hide images on gnoweb page");
+    await refreshCollection();
+  } catch (err) {
+    showCollectionError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---- queue + mint ----
 

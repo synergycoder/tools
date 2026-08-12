@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy a gno.land package</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px 80px}
+  .unlinked-banner{background:var(--amber-soft);border-bottom:1px solid var(--amber-line);color:var(--amber);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+  .hero{padding:40px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{margin:0 0 8px;font-size:28px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:var(--muted);margin:0;max-width:66ch;font-size:14.5px}
+
+  .wallet-gate{display:flex;align-items:center;gap:12px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:12px;padding:14px 18px;margin:22px 0;font-size:13.5px}
+  .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
+  .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
+  .wallet-gate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate.ok .dot{background:#7fd88f}
+  .wallet-gate.warn .dot{background:var(--amber)}
+  .wallet-gate code{font-family:var(--mono)}
+
+  .preset-row{display:flex;gap:10px;align-items:center;margin:20px 0;flex-wrap:wrap}
+  .btn{padding:9px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
+  .btn.danger{background:#e0596d1a;color:#e0596d;border:1px solid #e0596d55}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .hint{color:var(--muted);font-size:12.5px}
+
+  .pkg-list{display:flex;flex-direction:column;gap:16px;margin:20px 0}
+  .pkg-card{border:1px solid var(--hair);border-radius:14px;background:var(--panel);padding:18px 20px}
+  .pkg-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .pkg-head .num{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-soft);
+    border-radius:6px;padding:2px 7px;flex:none}
+  .pkg-head input.pkgpath{flex:1;font-family:var(--mono);font-size:13px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+  .pkg-head .remove-pkg{background:none;border:none;color:var(--faint);cursor:pointer;font-size:16px;padding:2px 6px}
+  .pkg-head .remove-pkg:hover{color:#e0596d}
+
+  .file-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--hair)}
+  .file-row:last-of-type{border-bottom:none}
+  .file-row input.fname{font-family:var(--mono);font-size:12.5px;padding:5px 8px;border-radius:6px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink);width:180px}
+  .file-row .fsize{font-family:var(--mono);font-size:11px;color:var(--faint);flex:1}
+  .file-row .edit-file{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px}
+  .file-row .remove-file{background:none;border:none;color:var(--faint);cursor:pointer;font-size:15px}
+  .file-row .remove-file:hover{color:#e0596d}
+  textarea.fbody{display:none;width:100%;min-height:160px;font-family:var(--mono);font-size:11.5px;padding:10px;
+    border-radius:8px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink);resize:vertical;
+    margin-top:8px}
+
+  .pkg-actions{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .pkg-actions .field{display:flex;flex-direction:column;gap:4px}
+  .pkg-actions label{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .pkg-actions input.deposit{font-family:var(--mono);font-size:12.5px;padding:7px 9px;border-radius:7px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink);width:120px}
+
+  .status-line{font-family:var(--mono);font-size:12px;margin-top:10px;padding:8px 10px;border-radius:7px}
+  .status-line.pending{background:var(--accent-soft);color:var(--accent)}
+  .status-line.success{background:#7fd88f1a;color:#7fd88f}
+  .status-line.error{background:#e0596d1a;color:#e0596d;word-break:break-word}
+
+  input[type=file]{display:none}
+</style>
+</head>
+<body>
+
+<div class="unlinked-banner">Unlinked utility page — reachable only by direct URL, not in the site nav</div>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · generic tooling</p>
+    <h1>Deploy a package</h1>
+    <p class="sub">Connect Adena and deploy one or more gno.land packages directly from the browser — no CLI, no local keys touched. Paste or upload each package's <code>.gno</code> source files; deploy signs and broadcasts as whichever wallet is connected. Works for any package, not just this one — the Gems preset below is just a one-click convenience for today's actual deploy.</p>
+  </div>
+
+  <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+
+  <div class="preset-row">
+    <button class="btn ghost" id="loadPresetBtn" type="button">Load Gems deploy preset (avl → grc721 → nftminter@/g1)</button>
+    <button class="btn ghost" id="addPkgBtn" type="button">+ Add empty package</button>
+    <span class="hint" id="presetHint"></span>
+  </div>
+
+  <div class="pkg-list" id="pkgList"></div>
+</div>
+
+<script type="module">
+import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
+import { doContract } from "./lib/adena-connect.js";
+initSiteChrome();
+
+let packages = []; // [{pkgpath, deposit, files: [{name, body}]}]
+let preset = null;
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.className = "wallet-gate warn";
+    gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) to deploy. You can still draft packages below without connecting.`;
+    return;
+  }
+  const onSapphire = w.chainId === "sapphire-1";
+  gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
+  gate.innerHTML = onSapphire
+    ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>. Deploys will be signed by this address.`
+    : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 (network pill, top right) before deploying.`;
+}
+onWalletChange(renderWalletGate);
+
+async function loadPreset() {
+  if (!preset) {
+    const res = await fetch("gems-deploy-preset.json");
+    preset = await res.json();
+  }
+  packages = preset.map(p => ({ pkgpath: p.pkgpath, deposit: "1000000ugnot", files: p.files.map(f => ({ ...f })) }));
+  renderPkgList();
+  document.getElementById("presetHint").textContent = "Loaded 3 packages — review before deploying, in order.";
+}
+document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset().catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
+
+document.getElementById("addPkgBtn").addEventListener("click", () => {
+  packages.push({ pkgpath: "gno.land/r/<your-address>/<name>", deposit: "1000000ugnot", files: [] });
+  renderPkgList();
+});
+
+function fmtBytes(n) {
+  return n < 1024 ? n + " B" : (n / 1024).toFixed(1) + " KB";
+}
+
+function renderPkgList() {
+  const list = document.getElementById("pkgList");
+  list.innerHTML = packages.map((pkg, pi) => `
+    <div class="pkg-card" data-pi="${pi}">
+      <div class="pkg-head">
+        <span class="num">${pi + 1}</span>
+        <input class="pkgpath" data-pi="${pi}" value="${pkg.pkgpath.replace(/"/g, "&quot;")}" placeholder="gno.land/r/g1.../name">
+        <button class="remove-pkg" data-pi="${pi}" title="Remove package">&times;</button>
+      </div>
+      <div class="files" data-pi="${pi}">
+        ${pkg.files.map((f, fi) => `
+          <div class="file-row" data-pi="${pi}" data-fi="${fi}">
+            <input class="fname" data-pi="${pi}" data-fi="${fi}" value="${f.name.replace(/"/g, "&quot;")}">
+            <span class="fsize">${fmtBytes(new TextEncoder().encode(f.body).length)}</span>
+            <button class="edit-file" data-pi="${pi}" data-fi="${fi}">edit</button>
+            <button class="remove-file" data-pi="${pi}" data-fi="${fi}" title="Remove file">&times;</button>
+          </div>
+          <textarea class="fbody" data-pi="${pi}" data-fi="${fi}">${f.body.replace(/</g, "&lt;")}</textarea>
+        `).join("")}
+      </div>
+      <div class="pkg-actions">
+        <button class="btn ghost add-file-btn" data-pi="${pi}" type="button">+ Paste a file</button>
+        <button class="btn ghost upload-file-btn" data-pi="${pi}" type="button">Upload .gno file(s)</button>
+        <input type="file" class="file-input" data-pi="${pi}" multiple accept=".gno">
+        <div class="field">
+          <label>Deposit</label>
+          <input class="deposit" data-pi="${pi}" value="${pkg.deposit}">
+        </div>
+        <button class="btn deploy-btn" data-pi="${pi}" type="button">Deploy package ${pi + 1}</button>
+      </div>
+      <div class="status-line-holder" data-pi="${pi}"></div>
+    </div>
+  `).join("");
+  wireList();
+}
+
+function wireList() {
+  document.querySelectorAll(".pkgpath").forEach(el => el.addEventListener("input", e => {
+    packages[+e.target.dataset.pi].pkgpath = e.target.value;
+  }));
+  document.querySelectorAll(".deposit").forEach(el => el.addEventListener("input", e => {
+    packages[+e.target.dataset.pi].deposit = e.target.value;
+  }));
+  document.querySelectorAll(".fname").forEach(el => el.addEventListener("input", e => {
+    const { pi, fi } = e.target.dataset;
+    packages[+pi].files[+fi].name = e.target.value;
+  }));
+  document.querySelectorAll(".fbody").forEach(el => el.addEventListener("input", e => {
+    const { pi, fi } = e.target.dataset;
+    packages[+pi].files[+fi].body = e.target.value;
+  }));
+  document.querySelectorAll(".remove-pkg").forEach(el => el.addEventListener("click", e => {
+    packages.splice(+e.target.dataset.pi, 1);
+    renderPkgList();
+  }));
+  document.querySelectorAll(".remove-file").forEach(el => el.addEventListener("click", e => {
+    const { pi, fi } = e.target.dataset;
+    packages[+pi].files.splice(+fi, 1);
+    renderPkgList();
+  }));
+  document.querySelectorAll(".edit-file").forEach(el => el.addEventListener("click", e => {
+    const row = e.target.closest(".file-row");
+    const ta = row.nextElementSibling;
+    ta.style.display = ta.style.display === "block" ? "none" : "block";
+  }));
+  document.querySelectorAll(".add-file-btn").forEach(el => el.addEventListener("click", e => {
+    const pi = +e.target.dataset.pi;
+    packages[pi].files.push({ name: `file${packages[pi].files.length + 1}.gno`, body: "package name\n\n" });
+    renderPkgList();
+  }));
+  document.querySelectorAll(".upload-file-btn").forEach(el => el.addEventListener("click", e => {
+    list_input_for(e.target.dataset.pi).click();
+  }));
+  document.querySelectorAll(".file-input").forEach(el => el.addEventListener("change", async e => {
+    const pi = +e.target.dataset.pi;
+    for (const file of e.target.files) {
+      const body = await file.text();
+      packages[pi].files.push({ name: file.name, body });
+    }
+    e.target.value = "";
+    renderPkgList();
+  }));
+  document.querySelectorAll(".deploy-btn").forEach(el => el.addEventListener("click", e => deployPackage(+e.target.dataset.pi)));
+}
+function list_input_for(pi) {
+  return document.querySelector(`.file-input[data-pi="${pi}"]`);
+}
+
+function setStatus(pi, cls, text) {
+  const holder = document.querySelector(`.status-line-holder[data-pi="${pi}"]`);
+  holder.innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+async function deployPackage(pi) {
+  const pkg = packages[pi];
+  const w = getWallet();
+  if (w.status !== "connected") { setStatus(pi, "error", "Connect Adena first."); return; }
+  if (!pkg.files.length) { setStatus(pi, "error", "Add at least one .gno file."); return; }
+  setStatus(pi, "pending", `Waiting for Adena approval — deploying ${pkg.pkgpath}…`);
+  try {
+    const msg = {
+      type: "/vm.m_addpkg",
+      value: {
+        creator: w.address,
+        deposit: pkg.deposit || "1ugnot",
+        package: {
+          name: pkg.pkgpath.split("/").pop(),
+          path: pkg.pkgpath,
+          files: pkg.files.map(f => ({ name: f.name, body: f.body })),
+        },
+      },
+    };
+    const { hash, height } = await doContract([msg], `deploy ${pkg.pkgpath}`);
+    setStatus(pi, "success", `Deployed at block ${height} — tx ${hash}`);
+  } catch (err) {
+    setStatus(pi, "error", err.message || String(err));
+  }
+}
+
+renderWalletGate();
+renderPkgList();
+</script>
+
+</body>
+</html>

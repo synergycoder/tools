@@ -17,7 +17,7 @@
      with an explicit preference never flashes the other theme. A "system"
      preference (no stored choice) needs no JS — it's handled by a plain
      @media query in lib/site-chrome.js's injected stylesheet. -->
-<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
 <!-- Works around a real bug in Adena's own extension (a window.adena
      that never gets set on some page-load orderings), not this code —
      must stay an external <script src>, not inlined. -->

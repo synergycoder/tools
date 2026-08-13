@@ -164,6 +164,23 @@
     </div>
   </div>
 
+  <div class="panel" id="ownerPanel" style="display:none;margin:24px 0">
+    <h2>Owner controls</h2>
+    <p class="desc">Visible because you're connected as the collection owner. Changes apply immediately, on-chain.</p>
+    <div class="price-row">
+      <span class="lbl">Current mint price</span>
+      <span class="val" id="ownerCurrentPrice" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <label for="setPriceInput">New price</label>
+      <input type="number" id="setPriceInput" min="0" step="0.000001" placeholder="1.0" style="width:120px">
+      <span class="qty-note">GNOT</span>
+      <button type="button" id="setPriceBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set price</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Converted to ugnot automatically. Set to 0 for a free mint.</p>
+    <div id="ownerStatusHolder"></div>
+  </div>
+
   <div class="gallery">
     <div class="gallery-head">
       <h2>Recently minted</h2>
@@ -186,7 +203,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
@@ -219,12 +236,17 @@ const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 // as a real active-collection state instead of "nothing to query yet".
 function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+// Owner() returns a gno `address`, whose qeval literal is
+// ("g1..." .uverse.address) -- not ("..." string). Matching only the
+// leading quote (not a specific trailing type) handles both -- same
+// gotcha nft-minter/index.html's parseStrQ already hit live.
+function parseStrQ(raw) { const m = raw && raw.match(/^\("([^"]*)"/s); return m ? m[1] : null; }
 
 async function qeval(expr) {
   return abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
 }
 
-let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null };
+let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null, owner: null };
 
 // The per-wallet cap applies to the mint's RECIPIENT (`to`), not
 // whoever signs -- so the count shown/enforced tracks whatever address
@@ -239,13 +261,14 @@ function currentRecipient() {
 
 async function loadStats() {
   const recipient = currentRecipient();
-  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
+  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR, ownerR] = await Promise.all([
     qeval("MintingOpen()").catch(() => null),
     qeval("MintPrice()").catch(() => null),
     qeval("MaxUniqueTraitCombos()").catch(() => null),
     qeval("TokenCount()").catch(() => null),
     qeval("MaxMintsPerWallet()").catch(() => null),
     recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
+    qeval("Owner()").catch(() => null),
   ]);
   stats = {
     mintingOpen: parseBool(openR),
@@ -254,6 +277,7 @@ async function loadStats() {
     supply: parseInt64(supplyR),
     walletCap: parseInt64(walletCapR),
     mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
+    owner: parseStrQ(ownerR),
   };
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
@@ -272,6 +296,18 @@ async function loadStats() {
     youMintedRow.style.display = "none";
   }
   updateMintButton();
+  updateOwnerPanel();
+}
+
+function updateOwnerPanel() {
+  const w = getWallet();
+  const panel = document.getElementById("ownerPanel");
+  const isOwner = stats.owner && w.status === "connected" && w.address === stats.owner;
+  panel.style.display = isOwner ? "" : "none";
+  if (!isOwner) return;
+  document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
+    ? "0 GNOT (free)"
+    : stats.price != null ? `${(stats.price / 1e6).toFixed(6)} GNOT` : "unknown";
 }
 
 // how many more pieces the current recipient (the "mint to" address) is
@@ -474,6 +510,37 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
     setStatus("error", err.message || String(err));
   } finally {
     updateMintButton();
+  }
+});
+
+function setOwnerStatus(cls, text) {
+  document.getElementById("ownerStatusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+document.getElementById("setPriceBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const raw = document.getElementById("setPriceInput").value.trim();
+  if (!raw) { setOwnerStatus("error", "Enter a price in GNOT (0 for free)."); return; }
+  let ugnot;
+  try {
+    ugnot = toBaseUnits(raw, NATIVE_DECIMALS);
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+    return;
+  }
+  const btn = document.getElementById("setPriceBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — setting price to ${raw} GNOT…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMintPrice", args: [ugnot] } };
+    const { hash, height } = await doContract([msg], `set mint price to ${raw} GNOT`);
+    setOwnerStatus("success", `Price updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
   }
 });
 

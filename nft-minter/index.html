@@ -276,6 +276,13 @@
   </div>
 
   <div id="existingCollectionForm" style="display:none">
+    <div class="row" id="myDeploysRow" style="display:none">
+      <span class="field-label">Your collections</span>
+      <select id="myDeploysSelect" style="flex:1;min-width:20rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
+        <option value="">— select a collection you've deployed —</option>
+      </select>
+    </div>
+    <p class="section-hint" id="myDeploysHint"></p>
     <div class="row">
       <span class="field-label">Package path</span>
       <input type="text" id="collPathInput" placeholder="gno.land/r/g1.../mycollection" style="flex:1;min-width:20rem;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:9px;border:1px solid var(--hair2);background:var(--panel2);color:var(--ink)">
@@ -367,7 +374,7 @@ gateIfLocked(document.getElementById("toolBody"));
 <script type="module">
 import { getWallet, onWalletChange } from "/lib/site-chrome.js";
 import { doContract } from "/lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "/lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, fetchDeployedPackagesFrom } from "/lib/gno-rpc.js";
 
 // Confirmed via a real deploy + the /tm.StorageDepositEvent read on both
 // gno.land testnet (sapphire-1) and Beta Mainnet -- see ~/gno-land-dev-notes.md,
@@ -771,8 +778,64 @@ function renderWalletGate() {
   updateCollPathPreview();
   updateDeployButton();
   updateMintButtons();
+  refreshMyDeployedPackages();
 }
 onWalletChange(renderWalletGate);
+
+// ---- your previously-deployed collections ----
+// Recall-by-address, not localStorage: a wallet's own deploys should be
+// findable from any browser/device, not just the one that happened to
+// deploy them. MsgAddPackage.creator/package.{name,path} confirmed live
+// against the real indexer schema (introspected directly, not guessed --
+// see ~/gno-land-dev-notes.md) before wiring this in.
+let myDeploysFetchedForAddr = null;
+
+async function refreshMyDeployedPackages() {
+  const w = getWallet();
+  const row = document.getElementById("myDeploysRow");
+  const hint = document.getElementById("myDeploysHint");
+  const select = document.getElementById("myDeploysSelect");
+  if (w.status !== "connected") {
+    myDeploysFetchedForAddr = null;
+    row.style.display = "none";
+    hint.textContent = "";
+    return;
+  }
+  if (myDeploysFetchedForAddr === w.address) return;
+  myDeploysFetchedForAddr = w.address;
+  row.style.display = "";
+  hint.textContent = "Looking up collections you've deployed…";
+  select.innerHTML = `<option value="">— select a collection you've deployed —</option>`;
+  try {
+    const packages = await fetchDeployedPackagesFrom(NETWORKS.testnet, w.address);
+    if (myDeploysFetchedForAddr !== w.address) return; // wallet changed again mid-fetch
+    if (!packages.length) {
+      hint.textContent = "No collections found for this wallet yet — deploy one above.";
+      return;
+    }
+    const ordered = packages.slice().sort((a, b) => (b.height || 0) - (a.height || 0));
+    for (const pkg of ordered) {
+      const opt = document.createElement("option");
+      opt.value = pkg.path;
+      opt.textContent = `${pkg.name} — ${pkg.path}`;
+      select.appendChild(opt);
+    }
+    hint.textContent = `${packages.length} found for this wallet, newest first.`;
+  } catch (err) {
+    if (myDeploysFetchedForAddr !== w.address) return;
+    hint.textContent = `Couldn't look up your deployments: ${err.message || err}. You can still paste a package path below.`;
+    myDeploysFetchedForAddr = null; // allow a retry (e.g. via tab reclick / wallet event) rather than sticking on this error forever
+  }
+}
+
+document.getElementById("myDeploysSelect").addEventListener("change", (e) => {
+  if (!e.target.value) return;
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  const pathInput = document.getElementById("collPathInput");
+  setter.call(pathInput, e.target.value);
+  pathInput.dispatchEvent(new Event("input", { bubbles: true }));
+  document.getElementById("loadCollBtn").click();
+});
 
 // ---- collection tabs ----
 
@@ -885,6 +948,17 @@ document.getElementById("deployCollBtn").addEventListener("click", async () => {
     const { hash, height } = await doContract([msg], `deploy ${pkgPath}`);
     setCollectionStatus("success", `Deployed${height ? ` at block ${height}` : ""} — tx ${hash}.`, gnowebCollectionUrl(pkgPath));
     activeCollectionPath = pkgPath;
+    // Added directly rather than re-querying the indexer -- it's
+    // typically a block or two behind the RPC head, so an immediate
+    // refetch here could easily still miss the tx that was just broadcast.
+    const select = document.getElementById("myDeploysSelect");
+    if (select && !Array.from(select.options).some((o) => o.value === pkgPath)) {
+      const opt = document.createElement("option");
+      opt.value = pkgPath;
+      opt.textContent = `${pkgName} — ${pkgPath}`;
+      select.insertBefore(opt, select.options[1] || null);
+      document.getElementById("myDeploysRow").style.display = "";
+    }
     await refreshCollection();
   } catch (err) {
     showCollectionError(err.message || String(err));

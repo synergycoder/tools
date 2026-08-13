@@ -114,6 +114,12 @@
   .lightbox-close:hover{color:var(--ink)}
   @media (max-width:640px){.lightbox-panel{flex-direction:column;max-height:92vh;overflow-y:auto}.lightbox-art{width:100%;aspect-ratio:1}}
 
+  .migrate-preview-list{list-style:none;margin:14px 0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+  .migrate-preview-list li{display:flex;align-items:center;gap:10px;border:1px solid var(--hair);border-radius:8px;padding:7px 10px;background:var(--panel2);font-size:12.5px}
+  .migrate-preview-list img{width:36px;height:36px;border-radius:6px;flex:none;background:#0a0b10}
+  .migrate-preview-list .name{flex:1;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .migrate-preview-list .owner-addr{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+
   .howitworks{margin:50px 0 20px}
   .howitworks h2{font-size:18px;margin:0 0 18px}
   .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
@@ -129,7 +135,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g4</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g5</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -205,6 +211,25 @@
     <div id="ownerStatusHolder"></div>
   </div>
 
+  <div class="panel" id="migratePanel" style="display:none;margin:24px 0">
+    <h2>Migrate previous iteration's holders</h2>
+    <p class="desc">Reads every revealed token from <code id="migrateFromPath"></code> and seeds this collection's migration snapshot so each original holder can claim their piece here, provenance carried forward.</p>
+    <div id="migratePreview"></div>
+    <div class="qty-row">
+      <button type="button" id="migrateFetchBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Preview tokens to migrate</button>
+      <button type="button" id="migrateSubmitBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px;display:none">Seed migration snapshot</button>
+    </div>
+    <div id="migrateStatusHolder"></div>
+  </div>
+
+  <div class="panel" id="claimPanel" style="display:none;margin:24px 0">
+    <h2>Claim your migrated piece</h2>
+    <p class="desc">You held a Gem on a previous iteration of this collection, and the owner has seeded it here — claim it below. Same piece, provenance carried forward, no re-mint.</p>
+    <div id="claimList"></div>
+    <button type="button" id="claimBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin-top:10px;font-size:13px;display:none">Claim</button>
+    <div id="claimStatusHolder"></div>
+  </div>
+
   <div class="gallery">
     <div class="gallery-head">
       <h2>Recently minted</h2>
@@ -248,19 +273,26 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g4";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g5";
+
+// The immediately-prior iteration -- read-only, used only as the
+// migration source (see "Migrate previous iteration" below). Hand-
+// maintained the same way REALM_PATH itself is: gno.land packages can't
+// be redeployed in place, so each new iteration means updating both of
+// these by hand, same as nftminter.gno's own realmRelPath constant.
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g4";
 
 // This page only ever reads/writes sapphire-1, so gnoweb link-building
 // never needs to branch on network -- same reasoning as nft-minter's
 // own gnowebCollectionUrl/gnowebTokenUrl.
 const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
-function gnowebCollectionUrl() {
-  return REALM_PATH.replace(/^gno\.land/, GNOWEB_BASE);
+function gnowebCollectionUrl(pkgPath = REALM_PATH) {
+  return pkgPath.replace(/^gno\.land/, GNOWEB_BASE);
 }
 // Colon (not slash) before the sub-path -- confirmed live via vm/qrender,
 // and it's what nftminter.gno's own Render() uses to link each token.
-function gnowebTokenUrl(tid) {
-  return `${gnowebCollectionUrl()}:token/${tid}`;
+function gnowebTokenUrl(tid, pkgPath = REALM_PATH) {
+  return `${gnowebCollectionUrl(pkgPath)}:token/${tid}`;
 }
 
 // gno.land charges a storage deposit for any new on-chain data a call
@@ -356,9 +388,10 @@ async function loadStats() {
 
 function updateOwnerPanel() {
   const w = getWallet();
-  const panel = document.getElementById("ownerPanel");
   const isOwner = stats.owner && w.status === "connected" && w.address === stats.owner;
+  const panel = document.getElementById("ownerPanel");
   panel.style.display = isOwner ? "" : "none";
+  document.getElementById("migratePanel").style.display = isOwner ? "" : "none";
   if (!isOwner) return;
   document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
     ? "0 GNOT (free)"
@@ -407,6 +440,7 @@ function renderWalletGate() {
     }
   }
   updateMintButton();
+  refreshClaimPanel();
 }
 onWalletChange(renderWalletGate);
 
@@ -506,7 +540,7 @@ function parseCollectionSummary(raw) {
   return body.split("\n").filter(Boolean).map(line => {
     const parts = line.split("|");
     if (parts.length !== 8) return null;
-    const [tid, owner, nameB64, descB64, imageB64, , traitsB64] = parts;
+    const [tid, owner, nameB64, descB64, imageB64, urlB64, traitsB64, bgB64] = parts;
     try {
       const name = atob(nameB64);
       const sealed = name === "Sealed";
@@ -520,7 +554,10 @@ function parseCollectionSummary(raw) {
         const i = pair.indexOf("=");
         return i === -1 ? { trait: pair, value: "" } : { trait: pair.slice(0, i), value: pair.slice(i + 1) };
       });
-      return { tid, owner, name, description: atob(descB64), image: atob(imageB64), traits, sealed };
+      return {
+        tid, owner, name, description: atob(descB64), image: atob(imageB64), traits, sealed,
+        externalUrl: atob(urlB64), backgroundColor: atob(bgB64),
+      };
     } catch (e) {
       return null;
     }
@@ -563,6 +600,171 @@ async function loadGallery() {
     card.addEventListener("click", () => openLightbox(card.dataset.tid));
   });
 }
+
+// ---------- migrate previous iteration (owner) ----------
+
+async function previousQeval(expr) {
+  return abciQuery(NETWORKS.testnet, "vm/qeval", `${PREVIOUS_REALM_PATH}.${expr}`, 10000);
+}
+
+// Provenance(tid)'s qeval result is 3 separate gno-formatted lines (one
+// per return value) -- ("chain" string) / ("tid" string) / (height
+// int64) -- confirmed live, same multi-return shape as any Go function
+// with more than one result. Real provenance is chained forward here
+// rather than re-derived, so a token's history stays intact all the way
+// back through however many iterations it's moved across.
+function parseProvenanceQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  const chainM = lines[0] && lines[0].match(/^\("([^"]*)"/);
+  const tidM = lines[1] && lines[1].match(/^\("([^"]*)"/);
+  const heightM = lines[2] && lines[2].match(/^\((-?\d+)/);
+  if (!chainM || !tidM || !heightM) return null;
+  return { chain: chainM[1], tokenId: tidM[1], height: heightM[1] };
+}
+
+document.getElementById("migrateFromPath").textContent = PREVIOUS_REALM_PATH;
+
+// Each AddMigrationSnapshotEntry message carries a whole image (multi-KB
+// base64) as one of its args -- batching too many into one tx risks the
+// payload getting unreasonably large, so this chunks the submit into
+// several smaller transactions (several Adena approvals) instead of one
+// giant one. ClaimMigrated's own messages are tiny by comparison (two
+// short strings), so no equivalent cap is needed there.
+const MIGRATE_CHUNK_SIZE = 5;
+
+let migrateCandidates = []; // tokens from PREVIOUS_REALM_PATH, revealed + not yet seeded, with real provenance attached
+
+function setMigrateStatus(cls, text) {
+  document.getElementById("migrateStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+document.getElementById("migrateFetchBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("migrateFetchBtn");
+  const preview = document.getElementById("migratePreview");
+  const submitBtn = document.getElementById("migrateSubmitBtn");
+  btn.disabled = true;
+  submitBtn.style.display = "none";
+  preview.innerHTML = `<p class="qty-note">Reading ${escapeHtml(PREVIOUS_REALM_PATH)}…</p>`;
+  try {
+    const raw = await previousQeval("CollectionSummary()");
+    const tokens = parseCollectionSummary(raw);
+    const revealed = tokens.filter(t => !t.sealed);
+    const sealedCount = tokens.length - revealed.length;
+
+    const withProv = await Promise.all(revealed.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
+    const provable = withProv.filter(t => t.prov);
+
+    // There's no direct "is this key already in migrationSnapshot" query
+    // (only IsMigrationClaimed, which only tells us CLAIMED) -- so a
+    // re-run after a partial submit re-seeds anything not yet claimed.
+    // AddMigrationSnapshotEntry itself just overwrites on the same key,
+    // so this is wasteful storage-wise if repeated but never incorrect.
+    const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
+    migrateCandidates = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+
+    if (!migrateCandidates.length) {
+      preview.innerHTML = `<p class="qty-note">Nothing left to migrate${sealedCount ? ` (${sealedCount} still sealed — wait for reveal, or they'll migrate as permanently sealed placeholders)` : ""}.</p>`;
+      return;
+    }
+    preview.innerHTML = `
+      <ul class="migrate-preview-list">
+        ${migrateCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span><span class="owner-addr">${t.owner}</span></li>`).join("")}
+      </ul>
+      <p class="qty-note">${migrateCandidates.length} token${migrateCandidates.length > 1 ? "s" : ""} ready to migrate${sealedCount ? `, ${sealedCount} still sealed and skipped` : ""}.</p>`;
+    submitBtn.style.display = "";
+  } catch (err) {
+    preview.innerHTML = `<p class="qty-note" style="color:#e0596d">${escapeHtml(err.message || String(err))}</p>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("migrateSubmitBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !migrateCandidates.length) return;
+  const btn = document.getElementById("migrateSubmitBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (let i = 0; i < migrateCandidates.length; i += MIGRATE_CHUNK_SIZE) {
+      const chunk = migrateCandidates.slice(i, i + MIGRATE_CHUNK_SIZE);
+      setMigrateStatus("pending", `Waiting for Adena approval — seeding ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
+      const messages = chunk.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationSnapshotEntry",
+          args: [t.owner, t.prov.chain, t.prov.tokenId, t.prov.height, t.name, t.description, t.image, t.externalUrl, t.backgroundColor, t.traits.map(tr => `${tr.trait}=${tr.value}`).join(";")],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `seed migration snapshot (${chunk.length} tokens)`);
+      done += chunk.length;
+      setMigrateStatus("success", `Seeded ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} seeded before this failed — click "Preview" again to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- claim your migrated piece (any connected wallet) ----------
+
+let claimCandidates = []; // this wallet's own unclaimed entries, with real provenance attached
+
+function setClaimStatus(cls, text) {
+  document.getElementById("claimStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+async function refreshClaimPanel() {
+  const w = getWallet();
+  const panel = document.getElementById("claimPanel");
+  if (w.status !== "connected") { panel.style.display = "none"; return; }
+  const sizeRaw = await qeval("MigrationSnapshotSize()").catch(() => null);
+  if (!parseInt64(sizeRaw)) { panel.style.display = "none"; return; } // nothing seeded on REALM_PATH at all yet
+
+  const raw = await previousQeval("CollectionSummary()").catch(() => null);
+  const mine = parseCollectionSummary(raw).filter(t => t.owner === w.address && !t.sealed);
+  if (!mine.length) { panel.style.display = "none"; return; }
+
+  const withProv = await Promise.all(mine.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
+  const provable = withProv.filter(t => t.prov);
+  const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
+  claimCandidates = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+
+  if (!claimCandidates.length) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  document.getElementById("claimList").innerHTML = `
+    <ul class="migrate-preview-list">
+      ${claimCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span></li>`).join("")}
+    </ul>`;
+  const claimBtn = document.getElementById("claimBtn");
+  claimBtn.style.display = "";
+  claimBtn.textContent = claimCandidates.length === 1 ? "Claim my piece" : `Claim my ${claimCandidates.length} pieces`;
+}
+
+document.getElementById("claimBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !claimCandidates.length) return;
+  const btn = document.getElementById("claimBtn");
+  btn.disabled = true;
+  try {
+    const messages = claimCandidates.map(t => ({
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "ClaimMigrated", args: [t.prov.chain, t.prov.tokenId] },
+    }));
+    setClaimStatus("pending", `Waiting for Adena approval — claiming ${claimCandidates.length}…`);
+    const { hash, height } = await doContract(messages, `claim ${claimCandidates.length} migrated piece(s)`);
+    setClaimStatus("success", `Claimed${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+    loadGallery();
+    refreshClaimPanel();
+  } catch (err) {
+    setClaimStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---------- lightbox ----------
 
@@ -678,8 +880,10 @@ document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 renderWalletGate();
 loadStats();
 loadGallery();
+refreshClaimPanel();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);
+setInterval(refreshClaimPanel, 20000);
 </script>
 
 </body>

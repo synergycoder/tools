@@ -237,7 +237,9 @@
     <div class="qty-row">
       <button type="button" id="migrateFetchBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Preview tokens to migrate</button>
       <button type="button" id="migrateSubmitBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px;display:none">Seed migration snapshot</button>
+      <button type="button" id="migrateDeliverBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px;display:none">Deliver directly to holders</button>
     </div>
+    <p class="qty-note" style="margin-top:6px">"Deliver directly" mints straight to each original holder's wallet, owner-paid — no action needed from them. Only works on entries already seeded above (seed first, then deliver).</p>
     <div id="migrateStatusHolder"></div>
   </div>
 
@@ -683,15 +685,37 @@ function parseProvenanceQ(raw) {
 
 document.getElementById("migrateFromPath").textContent = PREVIOUS_REALM_PATH;
 
-// Each AddMigrationSnapshotEntry message carries a whole image (multi-KB
-// base64) as one of its args -- batching too many into one tx risks the
-// payload getting unreasonably large, so this chunks the submit into
-// several smaller transactions (several Adena approvals) instead of one
-// giant one. ClaimMigrated's own messages are tiny by comparison (two
-// short strings), so no equivalent cap is needed there.
-const MIGRATE_CHUNK_SIZE = 5;
+// AddMigrationSnapshotEntry now carries only a compact trait tuple, not
+// a whole rendered image -- so a single message here costs a small
+// fraction of what it used to. Batches can go much larger than the
+// old 5-per-tx image-bearing cap; still chunked (not one giant tx) so
+// a failure partway through doesn't lose everything already approved.
+const MIGRATE_CHUNK_SIZE = 100;
 
-let migrateCandidates = []; // tokens from PREVIOUS_REALM_PATH, revealed + not yet seeded, with real provenance attached
+// AdminDeliverMigrated does a full mint (same shape as MintAssembled's
+// own write work) per call, not a cheap tuple write -- a real 150-message
+// MintAssembled batch measured ~1.22B gas (~8.16M/msg) against a 3B
+// block cap, so this stays a bit under that proven ceiling per tx.
+const DELIVER_CHUNK_SIZE = 100;
+
+// (idx int, ok bool) is FindShapeIndex/FindColorIndex's own multi-return
+// qeval shape -- same two-line pattern as Provenance's 3-line one above,
+// just two lines instead of three.
+function parseIntBoolQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  const idxM = lines[0] && lines[0].match(/^\((-?\d+)/);
+  const okM = lines[1] && lines[1].match(/^\((true|false)/);
+  if (!idxM || !okM) return null;
+  return { idx: parseInt(idxM[1], 10), ok: okM[1] === "true" };
+}
+
+function traitValue(traits, type) {
+  const t = traits.find(tr => tr.trait === type);
+  return t ? t.value : "";
+}
+
+let migrateCandidates = []; // tokens from PREVIOUS_REALM_PATH, revealed + not yet seeded, with real provenance + compact trait tuple attached
 
 function setMigrateStatus(cls, text) {
   document.getElementById("migrateStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
@@ -701,8 +725,10 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
   const btn = document.getElementById("migrateFetchBtn");
   const preview = document.getElementById("migratePreview");
   const submitBtn = document.getElementById("migrateSubmitBtn");
+  const deliverBtn = document.getElementById("migrateDeliverBtn");
   btn.disabled = true;
   submitBtn.style.display = "none";
+  deliverBtn.style.display = "none";
   preview.innerHTML = `<p class="qty-note">Reading ${escapeHtml(PREVIOUS_REALM_PATH)}…</p>`;
   try {
     const raw = await previousQeval("CollectionSummary()");
@@ -719,18 +745,42 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
     // AddMigrationSnapshotEntry itself just overwrites on the same key,
     // so this is wasteful storage-wise if repeated but never incorrect.
     const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
-    migrateCandidates = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+    const unclaimed = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+
+    // A source realm never exposes the raw shapeIdx/colorIdx directly,
+    // only the rendered trait strings -- reverse-map each one back
+    // against THIS (destination) realm's own tables via
+    // FindShapeIndex/FindColorIndex, so a migrated piece can be
+    // regenerated on demand instead of carrying a stored image.
+    const withTuples = await Promise.all(unclaimed.map(async t => {
+      const traitChain = traitValue(t.traits, "Chain");
+      const shapeVal = traitValue(t.traits, "Shape");
+      const colorVal = traitValue(t.traits, "Color");
+      const metal = traitValue(t.traits, "Metal");
+      const active = traitValue(t.traits, "Status") === "Active";
+      const [shapeR, colorR] = await Promise.all([
+        qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),
+        qeval(`FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
+      ]);
+      const shape = parseIntBoolQ(shapeR);
+      const color = parseIntBoolQ(colorR);
+      const tupleOk = !!(traitChain && metal && shape && shape.ok && color && color.ok);
+      return { ...t, traitChain, metal, shapeIdx: shape ? shape.idx : null, colorIdx: color ? color.idx : null, active, tupleOk };
+    }));
+    const tupleFailedCount = withTuples.filter(t => !t.tupleOk).length;
+    migrateCandidates = withTuples.filter(t => t.tupleOk);
 
     if (!migrateCandidates.length) {
-      preview.innerHTML = `<p class="qty-note">Nothing left to migrate${sealedCount ? ` (${sealedCount} still sealed — wait for reveal, or they'll migrate as permanently sealed placeholders)` : ""}.</p>`;
+      preview.innerHTML = `<p class="qty-note">Nothing left to migrate${sealedCount ? ` (${sealedCount} still sealed — wait for reveal, or they'll migrate as permanently sealed placeholders)` : ""}${tupleFailedCount ? `, ${tupleFailedCount} couldn't be trait-matched against this realm's own tables` : ""}.</p>`;
       return;
     }
     preview.innerHTML = `
       <ul class="migrate-preview-list">
         ${migrateCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span><span class="owner-addr">${t.owner}</span></li>`).join("")}
       </ul>
-      <p class="qty-note">${migrateCandidates.length} token${migrateCandidates.length > 1 ? "s" : ""} ready to migrate${sealedCount ? `, ${sealedCount} still sealed and skipped` : ""}.</p>`;
+      <p class="qty-note">${migrateCandidates.length} token${migrateCandidates.length > 1 ? "s" : ""} ready to migrate${sealedCount ? `, ${sealedCount} still sealed and skipped` : ""}${tupleFailedCount ? `, ${tupleFailedCount} skipped (trait mismatch)` : ""}.</p>`;
     submitBtn.style.display = "";
+    deliverBtn.style.display = "";
   } catch (err) {
     preview.innerHTML = `<p class="qty-note" style="color:#e0596d">${escapeHtml(err.message || String(err))}</p>`;
   } finally {
@@ -752,7 +802,7 @@ document.getElementById("migrateSubmitBtn").addEventListener("click", async () =
         type: "/vm.m_call",
         value: {
           caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationSnapshotEntry",
-          args: [t.owner, t.prov.chain, t.prov.tokenId, t.prov.height, t.name, t.description, t.image, t.externalUrl, t.backgroundColor, t.traits.map(tr => `${tr.trait}=${tr.value}`).join(";")],
+          args: [t.owner, t.prov.chain, t.prov.tokenId, t.prov.height, t.traitChain, t.metal, t.shapeIdx, t.colorIdx, t.active],
         },
       }));
       const { hash, height } = await doContract(messages, `seed migration snapshot (${chunk.length} tokens)`);
@@ -761,6 +811,34 @@ document.getElementById("migrateSubmitBtn").addEventListener("click", async () =
     }
   } catch (err) {
     setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} seeded before this failed — click "Preview" again to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("migrateDeliverBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !migrateCandidates.length) return;
+  const btn = document.getElementById("migrateDeliverBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (let i = 0; i < migrateCandidates.length; i += DELIVER_CHUNK_SIZE) {
+      const chunk = migrateCandidates.slice(i, i + DELIVER_CHUNK_SIZE);
+      setMigrateStatus("pending", `Waiting for Adena approval — delivering ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
+      const messages = chunk.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AdminDeliverMigrated",
+          args: [t.prov.chain, t.prov.tokenId],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `deliver migrated pieces (${chunk.length} tokens)`);
+      done += chunk.length;
+      setMigrateStatus("success", `Delivered ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} delivered before this failed — click "Preview" again to retry the rest; entries not yet seeded will fail here until seeded first)`);
   } finally {
     btn.disabled = false;
   }

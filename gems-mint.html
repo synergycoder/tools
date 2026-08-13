@@ -62,6 +62,11 @@
     border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
   .qty-row .qty-note{font-size:11.5px;color:var(--faint)}
 
+  .qty-presets .preset-btn{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:7px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--muted);cursor:pointer}
+  .qty-presets .preset-btn:hover{border-color:var(--accent);color:var(--ink)}
+  .qty-presets .preset-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
+
   .to-row{margin:12px 0}
   .to-row label{font-size:12px;color:var(--muted);font-family:var(--mono);display:block;margin-bottom:5px}
   .to-row input{width:100%;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:8px;
@@ -179,9 +184,10 @@
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
-        <input type="number" id="qtyInput" value="1" min="1" max="25">
-        <span class="qty-note" id="qtyNote">up to 25 in one transaction</span>
+        <input type="number" id="qtyInput" value="1" min="1" max="500">
+        <span class="qty-note" id="qtyNote">up to 500 in one transaction</span>
       </div>
+      <div class="qty-presets" id="qtyPresets" style="display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 12px"></div>
       <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
 
       <div class="to-row">
@@ -296,10 +302,20 @@ const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g5";
 const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g4";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
-// choice for keeping a single Adena approval's tx size reasonable, not
-// an on-chain limit. Raised from 10 to make bulk stress-minting faster
-// (fewer approvals needed to populate the page with lots of tokens).
-const MAX_QTY_PER_TX = 25;
+// choice, not an on-chain limit. Set high on purpose for stress-testing
+// the real ceiling: a single MintAssembled call costs roughly 11-16.5M
+// gas (measured from real mints on this collection's prior iteration),
+// and this chain's own consensus params cap a whole BLOCK at 3B gas
+// (confirmed live via /consensus_params) -- so 500 calls (5.5-8.25B gas)
+// is already past what a single block can hold on its own, deliberately
+// past where this is expected to work, to find the actual real-world
+// ceiling (chain-level, or Adena's own) rather than guess at it.
+const MAX_QTY_PER_TX = 500;
+// Quick-select presets for incremental stress-testing -- click one,
+// still edit the number field by hand afterward for anything in
+// between (e.g. binary-searching between a preset that worked and one
+// that didn't).
+const QTY_PRESETS = [10, 20, 50, 100, 150, 200, 300, 400, 500];
 
 // This page only ever reads/writes sapphire-1, so gnoweb link-building
 // never needs to branch on network -- same reasoning as nft-minter's
@@ -528,8 +544,29 @@ function updateMintButton() {
   if (hardMax >= 1 && qty > hardMax) { qty = hardMax; qtyInput.value = String(qty); }
   btn.disabled = false;
   btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
+
+  document.querySelectorAll("#qtyPresets .preset-btn").forEach(pb => {
+    pb.classList.toggle("on", Number(pb.dataset.qty) === qty);
+  });
 }
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
+
+// Preset quick-select buttons -- for incrementally stress-testing batch
+// size (click 100, mint, click 200, mint, ...) without retyping each
+// number. The plain number field stays available for anything in
+// between (e.g. binary-searching between a preset that worked and one
+// that didn't) -- these just set that same field, they aren't a
+// separate input.
+const qtyPresetsEl = document.getElementById("qtyPresets");
+qtyPresetsEl.innerHTML = QTY_PRESETS.map(n => `<button type="button" class="preset-btn" data-qty="${n}">${n}</button>`).join("");
+qtyPresetsEl.querySelectorAll(".preset-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    const qtyInput = document.getElementById("qtyInput");
+    setter.call(qtyInput, btn.dataset.qty);
+    qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+});
 
 let toInputDebounce = null;
 document.getElementById("toInput").addEventListener("input", (e) => {

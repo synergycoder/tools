@@ -179,8 +179,8 @@
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
-        <input type="number" id="qtyInput" value="1" min="1" max="10">
-        <span class="qty-note" id="qtyNote">up to 10 in one transaction</span>
+        <input type="number" id="qtyInput" value="1" min="1" max="25">
+        <span class="qty-note" id="qtyNote">up to 25 in one transaction</span>
       </div>
       <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
 
@@ -208,6 +208,19 @@
       <button type="button" id="setPriceBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set price</button>
     </div>
     <p class="qty-note" style="margin-top:6px">Converted to ugnot automatically. Set to 0 for a free mint.</p>
+
+    <div class="price-row" style="margin-top:14px">
+      <span class="lbl">Current per-wallet mint cap</span>
+      <span class="val" id="ownerCurrentWalletCap" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <label for="setWalletCapInput">New cap</label>
+      <input type="number" id="setWalletCapInput" min="0" step="1" placeholder="5" style="width:120px">
+      <span class="qty-note">tokens per wallet (0 = unlimited)</span>
+      <button type="button" id="setWalletCapBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set cap</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Applies immediately: raising it lets wallets already at the old cap mint more right away; lowering it only blocks further mints, it doesn't undo anything already minted.</p>
+
     <div id="ownerStatusHolder"></div>
   </div>
 
@@ -281,6 +294,12 @@ const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g5";
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
 const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g4";
+
+// How many MintAssembled calls one transaction queues at most -- a UI
+// choice for keeping a single Adena approval's tx size reasonable, not
+// an on-chain limit. Raised from 10 to make bulk stress-minting faster
+// (fewer approvals needed to populate the page with lots of tokens).
+const MAX_QTY_PER_TX = 25;
 
 // This page only ever reads/writes sapphire-1, so gnoweb link-building
 // never needs to branch on network -- same reasoning as nft-minter's
@@ -396,6 +415,8 @@ function updateOwnerPanel() {
   document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
     ? "0 GNOT (free)"
     : stats.price != null ? `${(stats.price / 1e6).toFixed(6)} GNOT` : "unknown";
+  document.getElementById("ownerCurrentWalletCap").textContent =
+    stats.walletCap == null ? "unknown" : stats.walletCap === 0 ? "unlimited" : `${stats.walletCap} per wallet`;
 }
 
 // how many more pieces the current recipient (the "mint to" address) is
@@ -495,11 +516,11 @@ function updateMintButton() {
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
 
   const remaining = remainingWalletAllowance();
-  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
   qtyInput.max = String(Math.max(1, hardMax));
   document.getElementById("qtyNote").textContent = remaining != null
     ? `up to ${hardMax} in one transaction — this wallet's remaining allowance`
-    : "up to 10 in one transaction";
+    : `up to ${MAX_QTY_PER_TX} in one transaction`;
 
   if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; return; }
 
@@ -820,7 +841,7 @@ function setStatus(cls, text) {
 document.getElementById("mintBtn").addEventListener("click", async () => {
   const w = getWallet();
   const remaining = remainingWalletAllowance();
-  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
   const qty = Math.max(1, Math.min(hardMax, parseInt(document.getElementById("qtyInput").value, 10) || 1));
   const to = currentRecipient();
   const btn = document.getElementById("mintBtn");
@@ -866,6 +887,26 @@ document.getElementById("setPriceBtn").addEventListener("click", async () => {
     const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMintPrice", args: [ugnot] } };
     const { hash, height } = await doContract([msg], `set mint price to ${raw} GNOT`);
     setOwnerStatus("success", `Price updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("setWalletCapBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const raw = document.getElementById("setWalletCapInput").value.trim();
+  if (raw === "" || !/^\d+$/.test(raw)) { setOwnerStatus("error", "Enter a whole number of tokens (0 for unlimited)."); return; }
+  const btn = document.getElementById("setWalletCapBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — setting the per-wallet cap to ${raw === "0" ? "unlimited" : raw}…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMaxMintsPerWallet", args: [raw] } };
+    const { hash, height } = await doContract([msg], `set per-wallet mint cap to ${raw}`);
+    setOwnerStatus("success", `Cap updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
     loadStats();
   } catch (err) {
     setOwnerStatus("error", err.message || String(err));

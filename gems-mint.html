@@ -62,6 +62,11 @@
     border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
   .qty-row .qty-note{font-size:11.5px;color:var(--faint)}
 
+  .qty-presets .preset-btn{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:7px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--muted);cursor:pointer}
+  .qty-presets .preset-btn:hover{border-color:var(--accent);color:var(--ink)}
+  .qty-presets .preset-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
+
   .to-row{margin:12px 0}
   .to-row label{font-size:12px;color:var(--muted);font-family:var(--mono);display:block;margin-bottom:5px}
   .to-row input{width:100%;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:8px;
@@ -80,15 +85,45 @@
   .gallery{margin:50px 0 20px}
   .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
   .gallery-head h2{font-size:18px;margin:0}
+  .gallery-head .links{display:flex;align-items:baseline;gap:14px}
   .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
   .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
-  .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden}
+  .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer}
+  .gcard:hover{border-color:var(--accent-line,var(--hair))}
   .gcard .thumb{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
   .gcard .thumb img{width:78%;height:78%}
   .gcard .meta{padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .gcard .meta .tid{color:var(--ink);font-weight:700;display:block}
   .gcard.sealed .meta{color:var(--faint)}
   .gallery-empty{color:var(--muted);font-size:13.5px;padding:20px 0}
+
+  .lightbox{position:fixed;inset:0;background:#050608e0;display:none;align-items:center;justify-content:center;z-index:500;padding:24px}
+  .lightbox.on{display:flex}
+  .lightbox-panel{display:flex;max-width:880px;width:100%;max-height:88vh;background:var(--panel);border:1px solid var(--hair);border-radius:16px;overflow:hidden;position:relative}
+  .lightbox-art{flex:none;width:320px;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .lightbox-art img{width:82%;height:82%}
+  .lightbox-info{flex:1;padding:26px 28px;overflow-y:auto}
+  .lightbox-info h3{margin:0 0 4px;font-size:19px}
+  .lightbox-info .tid{font-family:var(--mono);font-size:12px;color:var(--faint);margin:0 0 14px}
+  .lightbox-info .desc{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+  .lightbox-info .sealed-note{color:var(--muted);font-size:13px;margin:0 0 16px;font-style:italic}
+  .lightbox-info .owner-row{font-family:var(--mono);font-size:12px;color:var(--ink);margin:0 0 18px;word-break:break-all}
+  .lightbox-info .owner-row .lbl{display:block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .lightbox-traits{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lightbox-traits li{border:1px solid var(--hair);border-radius:8px;padding:7px 10px;background:var(--panel2)}
+  .lightbox-traits .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+  .lightbox-traits .v{font-family:var(--mono);font-size:12.5px}
+  .lightbox-link{display:inline-block;margin-top:18px;font-size:12.5px;color:var(--accent)}
+  .lightbox-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:26px;cursor:pointer;line-height:1;padding:4px}
+  .lightbox-close:hover{color:var(--ink)}
+  @media (max-width:640px){.lightbox-panel{flex-direction:column;max-height:92vh;overflow-y:auto}.lightbox-art{width:100%;aspect-ratio:1}}
+
+  .migrate-preview-list{list-style:none;margin:14px 0;padding:0;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto}
+  .migrate-preview-list li{display:flex;align-items:center;gap:10px;border:1px solid var(--hair);border-radius:8px;padding:7px 10px;background:var(--panel2);font-size:12.5px}
+  .migrate-preview-list img{width:36px;height:36px;border-radius:6px;flex:none;background:#0a0b10}
+  .migrate-preview-list .name{flex:1;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .migrate-preview-list .owner-addr{font-family:var(--mono);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
 
   .howitworks{margin:50px 0 20px}
   .howitworks h2{font-size:18px;margin:0 0 18px}
@@ -105,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g3</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g7</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -149,9 +184,10 @@
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
-        <input type="number" id="qtyInput" value="1" min="1" max="10">
-        <span class="qty-note" id="qtyNote">up to 10 in one transaction</span>
+        <input type="number" id="qtyInput" value="1" min="1" max="500">
+        <span class="qty-note" id="qtyNote">up to 500 in one transaction</span>
       </div>
+      <div class="qty-presets" id="qtyPresets" style="display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 12px"></div>
       <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
 
       <div class="to-row">
@@ -164,10 +200,64 @@
     </div>
   </div>
 
+  <div class="panel" id="ownerPanel" style="display:none;margin:24px 0">
+    <h2>Owner controls</h2>
+    <p class="desc">Visible because you're connected as the collection owner. Changes apply immediately, on-chain.</p>
+    <div class="price-row">
+      <span class="lbl">Current mint price</span>
+      <span class="val" id="ownerCurrentPrice" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <label for="setPriceInput">New price</label>
+      <input type="number" id="setPriceInput" min="0" step="0.000001" placeholder="1.0" style="width:120px">
+      <span class="qty-note">GNOT</span>
+      <button type="button" id="setPriceBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set price</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Converted to ugnot automatically. Set to 0 for a free mint.</p>
+
+    <div class="price-row" style="margin-top:14px">
+      <span class="lbl">Current per-wallet mint cap</span>
+      <span class="val" id="ownerCurrentWalletCap" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <label for="setWalletCapInput">New cap</label>
+      <input type="number" id="setWalletCapInput" min="0" step="1" placeholder="5" style="width:120px">
+      <span class="qty-note">tokens per wallet (0 = unlimited)</span>
+      <button type="button" id="setWalletCapBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set cap</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Applies immediately: raising it lets wallets already at the old cap mint more right away; lowering it only blocks further mints, it doesn't undo anything already minted.</p>
+
+    <div id="ownerStatusHolder"></div>
+  </div>
+
+  <div class="panel" id="migratePanel" style="display:none;margin:24px 0">
+    <h2>Migrate previous iteration's holders</h2>
+    <p class="desc">Reads every revealed token from <code id="migrateFromPath"></code> and seeds this collection's migration snapshot so each original holder can claim their piece here, provenance carried forward.</p>
+    <div id="migratePreview"></div>
+    <div class="qty-row">
+      <button type="button" id="migrateFetchBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Preview tokens to migrate</button>
+      <button type="button" id="migrateSubmitBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px;display:none">Seed migration snapshot</button>
+      <button type="button" id="migrateDeliverBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px;display:none">Deliver directly to holders</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">"Deliver directly" mints straight to each original holder's wallet, owner-paid — no action needed from them. Only works on entries already seeded above (seed first, then deliver).</p>
+    <div id="migrateStatusHolder"></div>
+  </div>
+
+  <div class="panel" id="claimPanel" style="display:none;margin:24px 0">
+    <h2>Claim your migrated piece</h2>
+    <p class="desc">You held a Gem on a previous iteration of this collection, and the owner has seeded it here — claim it below. Same piece, provenance carried forward, no re-mint.</p>
+    <div id="claimList"></div>
+    <button type="button" id="claimBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin-top:10px;font-size:13px;display:none">Claim</button>
+    <div id="claimStatusHolder"></div>
+  </div>
+
   <div class="gallery">
     <div class="gallery-head">
       <h2>Recently minted</h2>
-      <span class="note" id="galleryNote"></span>
+      <div class="links">
+        <a class="collection-link" id="collectionGnowebLink" href="#" target="_blank" rel="noopener">View collection on gno.land →</a>
+        <span class="note" id="galleryNote"></span>
+      </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"><div class="gallery-empty">Loading…</div></div>
   </div>
@@ -183,13 +273,64 @@
   </div>
 </div>
 
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-panel">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close" type="button">×</button>
+    <div class="lightbox-art"><img id="lightboxImg" alt=""></div>
+    <div class="lightbox-info">
+      <h3 id="lightboxName"></h3>
+      <p class="tid" id="lightboxTid"></p>
+      <p class="desc" id="lightboxDesc"></p>
+      <div class="owner-row"><span class="lbl">Owner</span><span id="lightboxOwner"></span></div>
+      <ul class="lightbox-traits" id="lightboxTraits"></ul>
+      <a class="lightbox-link" id="lightboxTokenLink" href="#" target="_blank" rel="noopener">View this piece on gno.land →</a>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g3";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g7";
+
+// The immediately-prior iteration -- read-only, used only as the
+// migration source (see "Migrate previous iteration" below). Hand-
+// maintained the same way REALM_PATH itself is: gno.land packages can't
+// be redeployed in place, so each new iteration means updating both of
+// these by hand, same as nftminter.gno's own realmRelPath constant.
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g6";
+
+// How many MintAssembled calls one transaction queues at most -- a UI
+// choice, not an on-chain limit. Set high on purpose for stress-testing
+// the real ceiling: a single MintAssembled call costs roughly 11-16.5M
+// gas (measured from real mints on this collection's prior iteration),
+// and this chain's own consensus params cap a whole BLOCK at 3B gas
+// (confirmed live via /consensus_params) -- so 500 calls (5.5-8.25B gas)
+// is already past what a single block can hold on its own, deliberately
+// past where this is expected to work, to find the actual real-world
+// ceiling (chain-level, or Adena's own) rather than guess at it.
+const MAX_QTY_PER_TX = 500;
+// Quick-select presets for incremental stress-testing -- click one,
+// still edit the number field by hand afterward for anything in
+// between (e.g. binary-searching between a preset that worked and one
+// that didn't).
+const QTY_PRESETS = [10, 20, 50, 100, 150, 200, 300, 400, 500];
+
+// This page only ever reads/writes sapphire-1, so gnoweb link-building
+// never needs to branch on network -- same reasoning as nft-minter's
+// own gnowebCollectionUrl/gnowebTokenUrl.
+const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
+function gnowebCollectionUrl(pkgPath = REALM_PATH) {
+  return pkgPath.replace(/^gno\.land/, GNOWEB_BASE);
+}
+// Colon (not slash) before the sub-path -- confirmed live via vm/qrender,
+// and it's what nftminter.gno's own Render() uses to link each token.
+function gnowebTokenUrl(tid, pkgPath = REALM_PATH) {
+  return `${gnowebCollectionUrl(pkgPath)}:token/${tid}`;
+}
 
 // gno.land charges a storage deposit for any new on-chain data a call
 // writes, not just for the code deployed initially -- each MintAssembled
@@ -219,12 +360,17 @@ const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 // as a real active-collection state instead of "nothing to query yet".
 function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+// Owner() returns a gno `address`, whose qeval literal is
+// ("g1..." .uverse.address) -- not ("..." string). Matching only the
+// leading quote (not a specific trailing type) handles both -- same
+// gotcha nft-minter/index.html's parseStrQ already hit live.
+function parseStrQ(raw) { const m = raw && raw.match(/^\("([^"]*)"/s); return m ? m[1] : null; }
 
 async function qeval(expr) {
   return abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
 }
 
-let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null };
+let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null, owner: null };
 
 // The per-wallet cap applies to the mint's RECIPIENT (`to`), not
 // whoever signs -- so the count shown/enforced tracks whatever address
@@ -239,13 +385,14 @@ function currentRecipient() {
 
 async function loadStats() {
   const recipient = currentRecipient();
-  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
+  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR, ownerR] = await Promise.all([
     qeval("MintingOpen()").catch(() => null),
     qeval("MintPrice()").catch(() => null),
     qeval("MaxUniqueTraitCombos()").catch(() => null),
     qeval("TokenCount()").catch(() => null),
     qeval("MaxMintsPerWallet()").catch(() => null),
     recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
+    qeval("Owner()").catch(() => null),
   ]);
   stats = {
     mintingOpen: parseBool(openR),
@@ -254,6 +401,7 @@ async function loadStats() {
     supply: parseInt64(supplyR),
     walletCap: parseInt64(walletCapR),
     mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
+    owner: parseStrQ(ownerR),
   };
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
@@ -272,6 +420,21 @@ async function loadStats() {
     youMintedRow.style.display = "none";
   }
   updateMintButton();
+  updateOwnerPanel();
+}
+
+function updateOwnerPanel() {
+  const w = getWallet();
+  const isOwner = stats.owner && w.status === "connected" && w.address === stats.owner;
+  const panel = document.getElementById("ownerPanel");
+  panel.style.display = isOwner ? "" : "none";
+  document.getElementById("migratePanel").style.display = isOwner ? "" : "none";
+  if (!isOwner) return;
+  document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
+    ? "0 GNOT (free)"
+    : stats.price != null ? `${(stats.price / 1e6).toFixed(6)} GNOT` : "unknown";
+  document.getElementById("ownerCurrentWalletCap").textContent =
+    stats.walletCap == null ? "unknown" : stats.walletCap === 0 ? "unlimited" : `${stats.walletCap} per wallet`;
 }
 
 // how many more pieces the current recipient (the "mint to" address) is
@@ -316,6 +479,7 @@ function renderWalletGate() {
     }
   }
   updateMintButton();
+  refreshClaimPanel();
 }
 onWalletChange(renderWalletGate);
 
@@ -370,11 +534,11 @@ function updateMintButton() {
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
 
   const remaining = remainingWalletAllowance();
-  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
   qtyInput.max = String(Math.max(1, hardMax));
   document.getElementById("qtyNote").textContent = remaining != null
     ? `up to ${hardMax} in one transaction — this wallet's remaining allowance`
-    : "up to 10 in one transaction";
+    : `up to ${MAX_QTY_PER_TX} in one transaction`;
 
   if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; return; }
 
@@ -382,8 +546,29 @@ function updateMintButton() {
   if (hardMax >= 1 && qty > hardMax) { qty = hardMax; qtyInput.value = String(qty); }
   btn.disabled = false;
   btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
+
+  document.querySelectorAll("#qtyPresets .preset-btn").forEach(pb => {
+    pb.classList.toggle("on", Number(pb.dataset.qty) === qty);
+  });
 }
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
+
+// Preset quick-select buttons -- for incrementally stress-testing batch
+// size (click 100, mint, click 200, mint, ...) without retyping each
+// number. The plain number field stays available for anything in
+// between (e.g. binary-searching between a preset that worked and one
+// that didn't) -- these just set that same field, they aren't a
+// separate input.
+const qtyPresetsEl = document.getElementById("qtyPresets");
+qtyPresetsEl.innerHTML = QTY_PRESETS.map(n => `<button type="button" class="preset-btn" data-qty="${n}">${n}</button>`).join("");
+qtyPresetsEl.querySelectorAll(".preset-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    const qtyInput = document.getElementById("qtyInput");
+    setter.call(qtyInput, btn.dataset.qty);
+    qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+});
 
 let toInputDebounce = null;
 document.getElementById("toInput").addEventListener("input", (e) => {
@@ -415,14 +600,39 @@ function parseCollectionSummary(raw) {
   return body.split("\n").filter(Boolean).map(line => {
     const parts = line.split("|");
     if (parts.length !== 8) return null;
-    const [tid, owner, nameB64, , imageB64] = parts;
+    const [tid, owner, nameB64, descB64, imageB64, urlB64, traitsB64, bgB64] = parts;
     try {
       const name = atob(nameB64);
-      return { tid, owner, name, image: atob(imageB64), sealed: name === "Sealed" };
+      const sealed = name === "Sealed";
+      // traitsToCSV's own format (nftminter.gno): "Key=Value;Key2=Value2".
+      // A trait value can't itself contain "=" or ";" the way this realm
+      // builds them (chain names, shapes, colors, metals, statuses,
+      // provenance fields) -- a plain split is fine here, unlike
+      // TokenSummary's own field separator which base64-encodes
+      // specifically because user-influenced text can't be trusted that way.
+      const traits = atob(traitsB64).split(";").filter(Boolean).map(pair => {
+        const i = pair.indexOf("=");
+        return i === -1 ? { trait: pair, value: "" } : { trait: pair.slice(0, i), value: pair.slice(i + 1) };
+      });
+      return {
+        tid, owner, name, description: atob(descB64), image: atob(imageB64), traits, sealed,
+        externalUrl: atob(urlB64), backgroundColor: atob(bgB64),
+      };
     } catch (e) {
       return null;
     }
   }).filter(Boolean);
+}
+
+// Populated by loadGallery(), read by the lightbox click handler --
+// re-fetching per-card on click would mean a slower open and a second
+// (redundant) round trip for data already sitting in the page.
+let galleryTokensByTid = new Map();
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
 }
 
 async function loadGallery() {
@@ -430,6 +640,7 @@ async function loadGallery() {
   const tokens = parseCollectionSummary(raw);
   const grid = document.getElementById("galleryGrid");
   const note = document.getElementById("galleryNote");
+  galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
   if (!tokens.length) {
     grid.innerHTML = `<div class="gallery-empty">${raw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
     note.textContent = "";
@@ -441,11 +652,302 @@ async function loadGallery() {
     ? `showing latest ${GALLERY_LIMIT} of ${tokens.length}`
     : `${tokens.length} minted so far`;
   grid.innerHTML = shown.map(t => `
-    <div class="gcard${t.sealed ? " sealed" : ""}">
-      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : t.name.replace(/"/g, "&quot;")}"></div>
-      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : t.name}</div>
+    <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
+      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
+      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>
     </div>`).join("");
+  grid.querySelectorAll(".gcard").forEach(card => {
+    card.addEventListener("click", () => openLightbox(card.dataset.tid));
+  });
 }
+
+// ---------- migrate previous iteration (owner) ----------
+
+async function previousQeval(expr) {
+  return abciQuery(NETWORKS.testnet, "vm/qeval", `${PREVIOUS_REALM_PATH}.${expr}`, 10000);
+}
+
+// Provenance(tid)'s qeval result is 3 separate gno-formatted lines (one
+// per return value) -- ("chain" string) / ("tid" string) / (height
+// int64) -- confirmed live, same multi-return shape as any Go function
+// with more than one result. Real provenance is chained forward here
+// rather than re-derived, so a token's history stays intact all the way
+// back through however many iterations it's moved across.
+function parseProvenanceQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  const chainM = lines[0] && lines[0].match(/^\("([^"]*)"/);
+  const tidM = lines[1] && lines[1].match(/^\("([^"]*)"/);
+  const heightM = lines[2] && lines[2].match(/^\((-?\d+)/);
+  if (!chainM || !tidM || !heightM) return null;
+  return { chain: chainM[1], tokenId: tidM[1], height: heightM[1] };
+}
+
+document.getElementById("migrateFromPath").textContent = PREVIOUS_REALM_PATH;
+
+// AddMigrationSnapshotEntry now carries only a compact trait tuple, not
+// a whole rendered image -- so a single message here costs a small
+// fraction of what it used to. Batches can go much larger than the
+// old 5-per-tx image-bearing cap; still chunked (not one giant tx) so
+// a failure partway through doesn't lose everything already approved.
+const MIGRATE_CHUNK_SIZE = 100;
+
+// AdminDeliverMigrated does a full mint (same shape as MintAssembled's
+// own write work) per call, not a cheap tuple write -- a real 150-message
+// MintAssembled batch measured ~1.22B gas (~8.16M/msg) against a 3B
+// block cap, so this stays a bit under that proven ceiling per tx.
+const DELIVER_CHUNK_SIZE = 100;
+
+// (idx int, ok bool) is FindShapeIndex/FindColorIndex's own multi-return
+// qeval shape -- same two-line pattern as Provenance's 3-line one above,
+// just two lines instead of three.
+function parseIntBoolQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  const idxM = lines[0] && lines[0].match(/^\((-?\d+)/);
+  const okM = lines[1] && lines[1].match(/^\((true|false)/);
+  if (!idxM || !okM) return null;
+  return { idx: parseInt(idxM[1], 10), ok: okM[1] === "true" };
+}
+
+function traitValue(traits, type) {
+  const t = traits.find(tr => tr.trait === type);
+  return t ? t.value : "";
+}
+
+let migrateCandidates = []; // tokens from PREVIOUS_REALM_PATH, revealed + not yet seeded, with real provenance + compact trait tuple attached
+
+function setMigrateStatus(cls, text) {
+  document.getElementById("migrateStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+document.getElementById("migrateFetchBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("migrateFetchBtn");
+  const preview = document.getElementById("migratePreview");
+  const submitBtn = document.getElementById("migrateSubmitBtn");
+  const deliverBtn = document.getElementById("migrateDeliverBtn");
+  btn.disabled = true;
+  submitBtn.style.display = "none";
+  deliverBtn.style.display = "none";
+  preview.innerHTML = `<p class="qty-note">Reading ${escapeHtml(PREVIOUS_REALM_PATH)}…</p>`;
+  try {
+    const raw = await previousQeval("CollectionSummary()");
+    const tokens = parseCollectionSummary(raw);
+    const revealed = tokens.filter(t => !t.sealed);
+    const sealedCount = tokens.length - revealed.length;
+
+    const withProv = await Promise.all(revealed.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
+    const provable = withProv.filter(t => t.prov);
+
+    // There's no direct "is this key already in migrationSnapshot" query
+    // (only IsMigrationClaimed, which only tells us CLAIMED) -- so a
+    // re-run after a partial submit re-seeds anything not yet claimed.
+    // AddMigrationSnapshotEntry itself just overwrites on the same key,
+    // so this is wasteful storage-wise if repeated but never incorrect.
+    const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
+    const unclaimed = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+
+    // A source realm never exposes the raw shapeIdx/colorIdx directly,
+    // only the rendered trait strings -- reverse-map each one back
+    // against THIS (destination) realm's own tables via
+    // FindShapeIndex/FindColorIndex, so a migrated piece can be
+    // regenerated on demand instead of carrying a stored image.
+    const withTuples = await Promise.all(unclaimed.map(async t => {
+      const traitChain = traitValue(t.traits, "Chain");
+      const shapeVal = traitValue(t.traits, "Shape");
+      const colorVal = traitValue(t.traits, "Color");
+      const metal = traitValue(t.traits, "Metal");
+      const active = traitValue(t.traits, "Status") === "Active";
+      const [shapeR, colorR] = await Promise.all([
+        qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),
+        qeval(`FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
+      ]);
+      const shape = parseIntBoolQ(shapeR);
+      const color = parseIntBoolQ(colorR);
+      const tupleOk = !!(traitChain && metal && shape && shape.ok && color && color.ok);
+      return { ...t, traitChain, metal, shapeIdx: shape ? shape.idx : null, colorIdx: color ? color.idx : null, active, tupleOk };
+    }));
+    const tupleFailedCount = withTuples.filter(t => !t.tupleOk).length;
+    migrateCandidates = withTuples.filter(t => t.tupleOk);
+
+    if (!migrateCandidates.length) {
+      preview.innerHTML = `<p class="qty-note">Nothing left to migrate${sealedCount ? ` (${sealedCount} still sealed — wait for reveal, or they'll migrate as permanently sealed placeholders)` : ""}${tupleFailedCount ? `, ${tupleFailedCount} couldn't be trait-matched against this realm's own tables` : ""}.</p>`;
+      return;
+    }
+    preview.innerHTML = `
+      <ul class="migrate-preview-list">
+        ${migrateCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span><span class="owner-addr">${t.owner}</span></li>`).join("")}
+      </ul>
+      <p class="qty-note">${migrateCandidates.length} token${migrateCandidates.length > 1 ? "s" : ""} ready to migrate${sealedCount ? `, ${sealedCount} still sealed and skipped` : ""}${tupleFailedCount ? `, ${tupleFailedCount} skipped (trait mismatch)` : ""}.</p>`;
+    submitBtn.style.display = "";
+    deliverBtn.style.display = "";
+  } catch (err) {
+    preview.innerHTML = `<p class="qty-note" style="color:#e0596d">${escapeHtml(err.message || String(err))}</p>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("migrateSubmitBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !migrateCandidates.length) return;
+  const btn = document.getElementById("migrateSubmitBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (let i = 0; i < migrateCandidates.length; i += MIGRATE_CHUNK_SIZE) {
+      const chunk = migrateCandidates.slice(i, i + MIGRATE_CHUNK_SIZE);
+      setMigrateStatus("pending", `Waiting for Adena approval — seeding ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
+      const messages = chunk.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationSnapshotEntry",
+          args: [t.owner, t.prov.chain, t.prov.tokenId, t.prov.height, t.traitChain, t.metal, t.shapeIdx, t.colorIdx, t.active],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `seed migration snapshot (${chunk.length} tokens)`);
+      done += chunk.length;
+      setMigrateStatus("success", `Seeded ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} seeded before this failed — click "Preview" again to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("migrateDeliverBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !migrateCandidates.length) return;
+  const btn = document.getElementById("migrateDeliverBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (let i = 0; i < migrateCandidates.length; i += DELIVER_CHUNK_SIZE) {
+      const chunk = migrateCandidates.slice(i, i + DELIVER_CHUNK_SIZE);
+      setMigrateStatus("pending", `Waiting for Adena approval — delivering ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
+      const messages = chunk.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AdminDeliverMigrated",
+          args: [t.prov.chain, t.prov.tokenId],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `deliver migrated pieces (${chunk.length} tokens)`);
+      done += chunk.length;
+      setMigrateStatus("success", `Delivered ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} delivered before this failed — click "Preview" again to retry the rest; entries not yet seeded will fail here until seeded first)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- claim your migrated piece (any connected wallet) ----------
+
+let claimCandidates = []; // this wallet's own unclaimed entries, with real provenance attached
+
+function setClaimStatus(cls, text) {
+  document.getElementById("claimStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+async function refreshClaimPanel() {
+  const w = getWallet();
+  const panel = document.getElementById("claimPanel");
+  if (w.status !== "connected") { panel.style.display = "none"; return; }
+  const sizeRaw = await qeval("MigrationSnapshotSize()").catch(() => null);
+  if (!parseInt64(sizeRaw)) { panel.style.display = "none"; return; } // nothing seeded on REALM_PATH at all yet
+
+  const raw = await previousQeval("CollectionSummary()").catch(() => null);
+  const mine = parseCollectionSummary(raw).filter(t => t.owner === w.address && !t.sealed);
+  if (!mine.length) { panel.style.display = "none"; return; }
+
+  const withProv = await Promise.all(mine.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
+  const provable = withProv.filter(t => t.prov);
+  const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
+  claimCandidates = provable.filter((t, i) => !parseBool(claimedFlags[i]));
+
+  if (!claimCandidates.length) { panel.style.display = "none"; return; }
+  panel.style.display = "";
+  document.getElementById("claimList").innerHTML = `
+    <ul class="migrate-preview-list">
+      ${claimCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span></li>`).join("")}
+    </ul>`;
+  const claimBtn = document.getElementById("claimBtn");
+  claimBtn.style.display = "";
+  claimBtn.textContent = claimCandidates.length === 1 ? "Claim my piece" : `Claim my ${claimCandidates.length} pieces`;
+}
+
+document.getElementById("claimBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected" || !claimCandidates.length) return;
+  const btn = document.getElementById("claimBtn");
+  btn.disabled = true;
+  try {
+    const messages = claimCandidates.map(t => ({
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "ClaimMigrated", args: [t.prov.chain, t.prov.tokenId] },
+    }));
+    setClaimStatus("pending", `Waiting for Adena approval — claiming ${claimCandidates.length}…`);
+    const { hash, height } = await doContract(messages, `claim ${claimCandidates.length} migrated piece(s)`);
+    setClaimStatus("success", `Claimed${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+    loadGallery();
+    refreshClaimPanel();
+  } catch (err) {
+    setClaimStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- lightbox ----------
+
+const lightbox = document.getElementById("lightbox");
+
+function openLightbox(tid) {
+  const t = galleryTokensByTid.get(tid);
+  if (!t) return;
+  document.getElementById("lightboxImg").src = t.image;
+  document.getElementById("lightboxImg").alt = t.sealed ? "sealed" : t.name;
+  document.getElementById("lightboxName").textContent = t.sealed ? "Sealed" : t.name;
+  document.getElementById("lightboxTid").textContent = `#${t.tid}`;
+  document.getElementById("lightboxOwner").textContent = t.owner;
+  document.getElementById("lightboxTokenLink").href = gnowebTokenUrl(t.tid);
+
+  const descEl = document.getElementById("lightboxDesc");
+  const traitsEl = document.getElementById("lightboxTraits");
+  if (t.sealed) {
+    descEl.style.display = "none";
+    traitsEl.style.display = "none";
+    let sealedNote = document.getElementById("lightboxSealedNote");
+    if (!sealedNote) {
+      sealedNote = document.createElement("p");
+      sealedNote.id = "lightboxSealedNote";
+      sealedNote.className = "sealed-note";
+      traitsEl.parentElement.insertBefore(sealedNote, traitsEl);
+    }
+    sealedNote.textContent = "Still sealed — the real name, art, and traits reveal 10 blocks after mint.";
+    sealedNote.style.display = "";
+  } else {
+    const sealedNote = document.getElementById("lightboxSealedNote");
+    if (sealedNote) sealedNote.style.display = "none";
+    descEl.style.display = "";
+    descEl.textContent = t.description;
+    traitsEl.style.display = "";
+    traitsEl.innerHTML = t.traits.map(tr => `<li><span class="k">${escapeHtml(tr.trait)}</span><span class="v">${escapeHtml(tr.value)}</span></li>`).join("");
+  }
+  lightbox.classList.add("on");
+}
+
+function closeLightbox() {
+  lightbox.classList.remove("on");
+  document.getElementById("lightboxImg").src = "";
+}
+document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
+lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
 
 function setStatus(cls, text) {
   document.getElementById("statusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
@@ -454,7 +956,7 @@ function setStatus(cls, text) {
 document.getElementById("mintBtn").addEventListener("click", async () => {
   const w = getWallet();
   const remaining = remainingWalletAllowance();
-  const hardMax = remaining != null ? Math.min(10, remaining) : 10;
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
   const qty = Math.max(1, Math.min(hardMax, parseInt(document.getElementById("qtyInput").value, 10) || 1));
   const to = currentRecipient();
   const btn = document.getElementById("mintBtn");
@@ -477,13 +979,67 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
   }
 });
 
+function setOwnerStatus(cls, text) {
+  document.getElementById("ownerStatusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+document.getElementById("setPriceBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const raw = document.getElementById("setPriceInput").value.trim();
+  if (!raw) { setOwnerStatus("error", "Enter a price in GNOT (0 for free)."); return; }
+  let ugnot;
+  try {
+    ugnot = toBaseUnits(raw, NATIVE_DECIMALS);
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+    return;
+  }
+  const btn = document.getElementById("setPriceBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — setting price to ${raw} GNOT…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMintPrice", args: [ugnot] } };
+    const { hash, height } = await doContract([msg], `set mint price to ${raw} GNOT`);
+    setOwnerStatus("success", `Price updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("setWalletCapBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const raw = document.getElementById("setWalletCapInput").value.trim();
+  if (raw === "" || !/^\d+$/.test(raw)) { setOwnerStatus("error", "Enter a whole number of tokens (0 for unlimited)."); return; }
+  const btn = document.getElementById("setWalletCapBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — setting the per-wallet cap to ${raw === "0" ? "unlimited" : raw}…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMaxMintsPerWallet", args: [raw] } };
+    const { hash, height } = await doContract([msg], `set per-wallet mint cap to ${raw}`);
+    setOwnerStatus("success", `Cap updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
+document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 
 renderWalletGate();
 loadStats();
 loadGallery();
+refreshClaimPanel();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);
+setInterval(refreshClaimPanel, 20000);
 </script>
 
 </body>

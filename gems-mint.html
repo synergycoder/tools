@@ -283,7 +283,14 @@
 
   <div class="panel" id="burnPanel" style="display:none;margin:24px 0">
     <h2>Your tokens</h2>
-    <p class="desc">Burning is permanent — there's no undo. It also frees this token's on-chain storage, so part of what minting it cost comes back automatically in the same transaction (a real gno.land refund, not a separate claim step) — how much depends on how many bytes it actually frees.</p>
+    <p class="desc">Burning is permanent — there's no undo. It also frees this token's on-chain storage, so part of what minting it cost comes back automatically in the same transaction (a real gno.land refund, not a separate claim step) — how much depends on how many bytes it actually frees. Select any number below and burn them together in one transaction, one Adena approval.</p>
+    <div class="qty-row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+        <input type="checkbox" id="burnSelectAll">
+        Select all
+      </label>
+      <button type="button" id="burnSelectedBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px" disabled>Burn selected (0)</button>
+    </div>
     <div id="burnList"></div>
     <div id="burnStatusHolder"></div>
   </div>
@@ -966,6 +973,14 @@ document.getElementById("claimBtn").addEventListener("click", async () => {
 
 // ---------- burn (any connected wallet, its own tokens only) ----------
 
+// Burn frees storage (owners/tokenApprovals/extensions/mintProvenance
+// records), it doesn't allocate any -- gas per call should be well
+// under a mint's. Kept conservative and equal to the other bulk actions
+// in this file (MIGRATE_CHUNK_SIZE/DELIVER_CHUNK_SIZE) rather than
+// assuming burns are cheap enough to go higher without a real
+// measurement backing that up.
+const BURN_CHUNK_SIZE = 100;
+
 function setBurnStatus(cls, text) {
   document.getElementById("burnStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
 }
@@ -979,42 +994,80 @@ async function refreshBurnPanel() {
   const mine = parseCollectionSummary(raw);
   if (!mine.length) { panel.style.display = "none"; return; }
 
+  // This also runs on a 20s auto-refresh poll (matching loadStats/
+  // loadGallery/refreshClaimPanel's own interval) -- rebuilding the list
+  // from scratch would otherwise silently drop whatever the user had
+  // already checked if they're still mid-selection when it fires.
+  // Carry the selection forward across the rebuild instead.
+  const previouslyChecked = new Set(
+    Array.from(document.querySelectorAll(".burn-check:checked")).map(cb => cb.dataset.tid)
+  );
+
   panel.style.display = "";
   document.getElementById("burnList").innerHTML = `
     <ul class="migrate-preview-list">
       ${mine.map(t => `
         <li>
+          <input type="checkbox" class="burn-check" data-tid="${t.tid}"${previouslyChecked.has(t.tid) ? " checked" : ""}>
           <img src="${t.image}" alt="">
           <span class="name">#${t.tid} — ${escapeHtml(t.name)}</span>
-          <button type="button" class="mint-btn burn-one-btn" data-tid="${t.tid}" style="width:auto;padding:6px 12px;margin:0;font-size:12px">Burn</button>
         </li>`).join("")}
     </ul>`;
-  document.querySelectorAll(".burn-one-btn").forEach(btn => {
-    btn.addEventListener("click", () => burnToken(btn.dataset.tid, btn));
+  const allChecked = mine.length > 0 && mine.every(t => previouslyChecked.has(t.tid));
+  document.getElementById("burnSelectAll").checked = allChecked;
+  document.querySelectorAll(".burn-check").forEach(cb => {
+    cb.addEventListener("change", updateBurnSelectedBtn);
   });
+  updateBurnSelectedBtn();
 }
 
-async function burnToken(tid, btn) {
+function updateBurnSelectedBtn() {
+  const n = document.querySelectorAll(".burn-check:checked").length;
+  const btn = document.getElementById("burnSelectedBtn");
+  btn.textContent = `Burn selected (${n})`;
+  btn.disabled = n === 0;
+}
+
+document.getElementById("burnSelectAll").addEventListener("change", (e) => {
+  document.querySelectorAll(".burn-check").forEach(cb => { cb.checked = e.target.checked; });
+  updateBurnSelectedBtn();
+});
+
+document.getElementById("burnSelectedBtn").addEventListener("click", async () => {
   const w = getWallet();
   if (w.status !== "connected") return;
+  const tids = Array.from(document.querySelectorAll(".burn-check:checked")).map(cb => cb.dataset.tid);
+  if (!tids.length) return;
   // A real irreversible on-chain action -- confirm before ever prompting
   // Adena, not just relying on Adena's own confirmation screen (which
-  // shows the raw function call, not "this destroys the token forever").
-  if (!window.confirm(`Burn token #${tid}? This is permanent — there is no undo.`)) return;
+  // shows the raw function calls, not "this destroys these tokens
+  // forever").
+  const label = tids.length === 1 ? `token #${tids[0]}` : `${tids.length} tokens`;
+  if (!window.confirm(`Burn ${label}? This is permanent — there is no undo.`)) return;
+  const btn = document.getElementById("burnSelectedBtn");
   btn.disabled = true;
+  let done = 0;
   try {
-    setBurnStatus("pending", `Waiting for Adena approval — burning #${tid}…`);
-    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "Burn", args: [tid] } };
-    const { hash, height } = await doContract([msg], `burn #${tid}`);
-    setBurnStatus("success", `Burned #${tid}${height ? ` at block ${height}` : ""} — tx ${hash}. Any storage-deposit refund landed in the same transaction.`);
+    for (let i = 0; i < tids.length; i += BURN_CHUNK_SIZE) {
+      const chunk = tids.slice(i, i + BURN_CHUNK_SIZE);
+      setBurnStatus("pending", `Waiting for Adena approval — burning ${chunk.length} (${done}/${tids.length} done so far)…`);
+      const messages = chunk.map(tid => ({
+        type: "/vm.m_call",
+        value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "Burn", args: [tid] },
+      }));
+      const { hash, height } = await doContract(messages, `burn ${chunk.length} token${chunk.length > 1 ? "s" : ""}`);
+      done += chunk.length;
+      setBurnStatus("success", `Burned ${done}/${tids.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}. Any storage-deposit refund landed in the same transaction${tids.length > 1 ? "(s)" : ""}.`);
+    }
     loadStats();
     loadGallery();
     refreshBurnPanel();
   } catch (err) {
-    setBurnStatus("error", err.message || String(err));
+    setBurnStatus("error", `${err.message || err} (${done}/${tids.length} burned before this failed — reopen this panel to retry the rest)`);
+  } finally {
     btn.disabled = false;
   }
-}
+});
 
 // ---------- lightbox ----------
 

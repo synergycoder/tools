@@ -281,6 +281,13 @@
     <div id="claimStatusHolder"></div>
   </div>
 
+  <div class="panel" id="burnPanel" style="display:none;margin:24px 0">
+    <h2>Your tokens</h2>
+    <p class="desc">Burning is permanent — there's no undo. It also frees this token's on-chain storage, so part of what minting it cost comes back automatically in the same transaction (a real gno.land refund, not a separate claim step) — how much depends on how many bytes it actually frees.</p>
+    <div id="burnList"></div>
+    <div id="burnStatusHolder"></div>
+  </div>
+
   <div class="gallery">
     <div class="gallery-head">
       <h2>Recently minted</h2>
@@ -532,6 +539,7 @@ function renderWalletGate() {
   }
   updateMintButton();
   refreshClaimPanel();
+  refreshBurnPanel();
 }
 onWalletChange(renderWalletGate);
 
@@ -954,6 +962,58 @@ document.getElementById("claimBtn").addEventListener("click", async () => {
   }
 });
 
+// ---------- burn (any connected wallet, its own tokens only) ----------
+
+function setBurnStatus(cls, text) {
+  document.getElementById("burnStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+async function refreshBurnPanel() {
+  const w = getWallet();
+  const panel = document.getElementById("burnPanel");
+  if (w.status !== "connected") { panel.style.display = "none"; return; }
+
+  const raw = await qeval(`WalletSummary("${w.address}")`).catch(() => null);
+  const mine = parseCollectionSummary(raw);
+  if (!mine.length) { panel.style.display = "none"; return; }
+
+  panel.style.display = "";
+  document.getElementById("burnList").innerHTML = `
+    <ul class="migrate-preview-list">
+      ${mine.map(t => `
+        <li>
+          <img src="${t.image}" alt="">
+          <span class="name">#${t.tid} — ${escapeHtml(t.name)}</span>
+          <button type="button" class="mint-btn burn-one-btn" data-tid="${t.tid}" style="width:auto;padding:6px 12px;margin:0;font-size:12px">Burn</button>
+        </li>`).join("")}
+    </ul>`;
+  document.querySelectorAll(".burn-one-btn").forEach(btn => {
+    btn.addEventListener("click", () => burnToken(btn.dataset.tid, btn));
+  });
+}
+
+async function burnToken(tid, btn) {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  // A real irreversible on-chain action -- confirm before ever prompting
+  // Adena, not just relying on Adena's own confirmation screen (which
+  // shows the raw function call, not "this destroys the token forever").
+  if (!window.confirm(`Burn token #${tid}? This is permanent — there is no undo.`)) return;
+  btn.disabled = true;
+  try {
+    setBurnStatus("pending", `Waiting for Adena approval — burning #${tid}…`);
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "Burn", args: [tid] } };
+    const { hash, height } = await doContract([msg], `burn #${tid}`);
+    setBurnStatus("success", `Burned #${tid}${height ? ` at block ${height}` : ""} — tx ${hash}. Any storage-deposit refund landed in the same transaction.`);
+    loadStats();
+    loadGallery();
+    refreshBurnPanel();
+  } catch (err) {
+    setBurnStatus("error", err.message || String(err));
+    btn.disabled = false;
+  }
+}
+
 // ---------- lightbox ----------
 
 const lightbox = document.getElementById("lightbox");
@@ -1135,9 +1195,11 @@ renderWalletGate();
 loadStats();
 loadGallery();
 refreshClaimPanel();
+refreshBurnPanel();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);
 setInterval(refreshClaimPanel, 20000);
+setInterval(refreshBurnPanel, 20000);
 </script>
 
 </body>

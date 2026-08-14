@@ -328,7 +328,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g8";
@@ -662,7 +662,7 @@ function parseCollectionSummary(raw) {
     if (parts.length !== 8) return null;
     const [tid, owner, nameB64, descB64, imageB64, urlB64, traitsB64, bgB64] = parts;
     try {
-      const name = atob(nameB64);
+      const name = b64ToUtf8(nameB64);
       const sealed = name === "Sealed";
       // traitsToCSV's own format (nftminter.gno): "Key=Value;Key2=Value2".
       // A trait value can't itself contain "=" or ";" the way this realm
@@ -670,13 +670,15 @@ function parseCollectionSummary(raw) {
       // provenance fields) -- a plain split is fine here, unlike
       // TokenSummary's own field separator which base64-encodes
       // specifically because user-influenced text can't be trusted that way.
-      const traits = atob(traitsB64).split(";").filter(Boolean).map(pair => {
+      const traits = b64ToUtf8(traitsB64).split(";").filter(Boolean).map(pair => {
         const i = pair.indexOf("=");
         return i === -1 ? { trait: pair, value: "" } : { trait: pair.slice(0, i), value: pair.slice(i + 1) };
       });
       return {
-        tid, owner, name, description: atob(descB64), image: atob(imageB64), traits, sealed,
-        externalUrl: atob(urlB64), backgroundColor: atob(bgB64),
+        // image/backgroundColor are always ASCII (a data URI, a hex
+        // color) -- plain atob() is correct and cheaper for those.
+        tid, owner, name, description: b64ToUtf8(descB64), image: atob(imageB64), traits, sealed,
+        externalUrl: b64ToUtf8(urlB64), backgroundColor: atob(bgB64),
       };
     } catch (e) {
       return null;

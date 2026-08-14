@@ -96,7 +96,7 @@
   <div class="wallet-gate" id="walletGate">Checking wallet…</div>
 
   <div class="preset-row">
-    <button class="btn ghost" id="loadPresetBtn" type="button">Load Gems deploy preset (avl → grc721 → nftminter@/g3)</button>
+    <button class="btn ghost" id="loadPresetBtn" type="button">Load Gems deploy preset (grc721v2 → nftminter@/g8)</button>
     <button class="btn ghost" id="addPkgBtn" type="button">+ Add empty package</button>
     <span class="hint" id="presetHint"></span>
   </div>
@@ -171,7 +171,7 @@ async function loadPreset() {
   }
   packages = preset.map(p => ({ pkgpath: p.pkgpath, deposit: "1000000ugnot", files: p.files.map(f => ({ ...f })) }));
   renderPkgList();
-  document.getElementById("presetHint").textContent = "Loaded 3 packages — review before deploying, in order.";
+  document.getElementById("presetHint").textContent = `Loaded ${packages.length} packages — review before deploying, in order.`;
 }
 document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset().catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
 

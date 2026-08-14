@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g7</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g8</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -227,6 +227,36 @@
     </div>
     <p class="qty-note" style="margin-top:6px">Applies immediately: raising it lets wallets already at the old cap mint more right away; lowering it only blocks further mints, it doesn't undo anything already minted.</p>
 
+    <div class="price-row" style="margin-top:14px">
+      <span class="lbl">Minting</span>
+      <span class="val" id="ownerCurrentMintingOpen" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <button type="button" id="toggleMintingBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">…</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Closing stops new <code>MintAssembled</code> calls. Doesn't affect <code>ClaimMigrated</code> or any token that already exists — this collection has no fixed supply cap, so this is the actual "end the mint" switch.</p>
+
+    <div class="price-row" style="margin-top:14px">
+      <span class="lbl">Metal tone</span>
+      <span class="val" id="ownerCurrentMetalTone" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px;flex-wrap:wrap">
+      <label for="metalToneSelect">Metal</label>
+      <select id="metalToneSelect" style="padding:8px 10px;border-radius:8px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink)">
+        <option value="Gold">Gold</option>
+        <option value="Silver">Silver</option>
+        <option value="Bronze">Bronze</option>
+        <option value="Platinum">Platinum</option>
+        <option value="Obsidian">Obsidian</option>
+      </select>
+      <label for="metalToneHiInput">Highlight</label>
+      <input type="text" id="metalToneHiInput" placeholder="#a48b3f" style="width:100px">
+      <label for="metalToneLoInput">Shadow</label>
+      <input type="text" id="metalToneLoInput" placeholder="#6a5117" style="width:100px">
+      <button type="button" id="setMetalToneBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set tone</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Hex colors for the ring/label gradient's highlight and shadow stops. Takes effect immediately, including on tokens already minted — the SVG is regenerated fresh from this map on every read.</p>
+
     <div id="ownerStatusHolder"></div>
   </div>
 
@@ -294,14 +324,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g7";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g8";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g6";
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g7";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -435,7 +465,29 @@ function updateOwnerPanel() {
     : stats.price != null ? `${(stats.price / 1e6).toFixed(6)} GNOT` : "unknown";
   document.getElementById("ownerCurrentWalletCap").textContent =
     stats.walletCap == null ? "unknown" : stats.walletCap === 0 ? "unlimited" : `${stats.walletCap} per wallet`;
+  const mintingEl = document.getElementById("ownerCurrentMintingOpen");
+  mintingEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
+  mintingEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
+  const toggleBtn = document.getElementById("toggleMintingBtn");
+  toggleBtn.textContent = stats.mintingOpen === null ? "Toggle" : stats.mintingOpen ? "Close minting" : "Open minting";
+  refreshMetalToneDisplay();
 }
+
+// Reads the currently-selected metal's on-chain tone via MetalToneHex and
+// shows it next to the set-tone control -- separate from loadStats/stats
+// since it depends on the dropdown's current selection, not something
+// worth re-querying on every stats poll.
+async function refreshMetalToneDisplay() {
+  const metal = document.getElementById("metalToneSelect").value;
+  const el = document.getElementById("ownerCurrentMetalTone");
+  el.textContent = "…";
+  const raw = await qeval(`MetalToneHex("${metal}")`).catch(() => null);
+  const s = parseStrQ(raw);
+  if (!s) { el.textContent = "unknown"; return; }
+  const [hi, lo] = s.split(";");
+  el.innerHTML = `<span style="color:${hi}">${hi}</span> / <span style="color:${lo}">${lo}</span>`;
+}
+document.getElementById("metalToneSelect").addEventListener("change", refreshMetalToneDisplay);
 
 // how many more pieces the current recipient (the "mint to" address) is
 // still allowed to receive -- null means "no cap info yet" (assume
@@ -1023,6 +1075,52 @@ document.getElementById("setWalletCapBtn").addEventListener("click", async () =>
     const { hash, height } = await doContract([msg], `set per-wallet mint cap to ${raw}`);
     setOwnerStatus("success", `Cap updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
     loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("toggleMintingBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  if (stats.mintingOpen === null) { setOwnerStatus("error", "Current minting state unknown -- reload and try again."); return; }
+  const target = !stats.mintingOpen;
+  const btn = document.getElementById("toggleMintingBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — ${target ? "opening" : "closing"} minting…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMintingOpen", args: [String(target)] } };
+    const { hash, height } = await doContract([msg], `${target ? "open" : "close"} minting`);
+    setOwnerStatus("success", `Minting ${target ? "opened" : "closed"}${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    loadStats();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+document.getElementById("setMetalToneBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const metal = document.getElementById("metalToneSelect").value;
+  const hi = document.getElementById("metalToneHiInput").value.trim();
+  const lo = document.getElementById("metalToneLoInput").value.trim();
+  if (!HEX_COLOR_RE.test(hi) || !HEX_COLOR_RE.test(lo)) {
+    setOwnerStatus("error", "Enter both colors as 6-digit hex, e.g. #a48b3f.");
+    return;
+  }
+  const btn = document.getElementById("setMetalToneBtn");
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — setting ${metal}'s tone…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMetalTone", args: [metal, hi, lo] } };
+    const { hash, height } = await doContract([msg], `set ${metal} tone to ${hi}/${lo}`);
+    setOwnerStatus("success", `${metal} tone updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    refreshMetalToneDisplay();
   } catch (err) {
     setOwnerStatus("error", err.message || String(err));
   } finally {

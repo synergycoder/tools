@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g9</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g10</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -338,14 +338,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g10";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g8";
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -647,23 +647,24 @@ document.getElementById("toInput").addEventListener("input", (e) => {
   toInputDebounce = setTimeout(loadStats, 400);
 });
 
-// CollectionSummary() has no pagination -- it returns every existing
-// token in one call, which is fine at today's scale but would grow
-// unbounded as the collection does. Cap what's actually rendered and
-// say so, rather than silently truncating.
+// CollectionSummary(page) returns SUMMARY_PAGE_SIZE tokens per call
+// (must match nftminter.gno's own homeRenderLimit -- confirmed live
+// that's the largest page size that fits a single qeval call's gas
+// budget; the old unbounded version failed with "out of gas" at just 21
+// minted tokens). GALLERY_LIMIT is how many the gallery actually shows;
+// loadGallery fetches ceil(GALLERY_LIMIT/SUMMARY_PAGE_SIZE) pages.
+const SUMMARY_PAGE_SIZE = 10;
 const GALLERY_LIMIT = 24;
 
-// CollectionSummary()'s qeval result is one gno string literal
-// containing newline-separated "tid|owner|b64(name)|b64(desc)|b64(image)|
-// b64(url)|b64(traits)|b64(bg)" lines (TokenSummary's own format) --
-// confirmed live against the real deployed realm before writing this
-// parser, not guessed from the .gno source alone. The textual literal
-// escapes real newlines as literal backslash-n.
-function parseCollectionSummary(raw) {
-  if (!raw) return [];
-  const m = raw.match(/^\("([\s\S]*)" string\)$/);
-  const body = (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
-  if (!body.trim()) return [];
+// A CollectionSummary()/WalletSummary() page's qeval result is one gno
+// string literal containing newline-separated
+// "tid|owner|b64(name)|b64(desc)|b64(image)|b64(url)|b64(traits)|b64(bg)"
+// lines (TokenSummary's own format) -- confirmed live against the real
+// deployed realm before writing this parser, not guessed from the .gno
+// source alone. The textual literal escapes real newlines as literal
+// backslash-n.
+function parseSummaryLines(body) {
+  if (!body || !body.trim()) return [];
   return body.split("\n").filter(Boolean).map(line => {
     const parts = line.split("|");
     if (parts.length !== 8) return null;
@@ -693,6 +694,92 @@ function parseCollectionSummary(raw) {
   }).filter(Boolean);
 }
 
+// Unwraps a single-string qeval result (`("..." string)`) and unescapes
+// it back to real newlines/quotes -- the half of the old
+// parseCollectionSummary that's still needed on its own for
+// CollectionSummary(page)'s single-value return.
+function unwrapQevalString(raw) {
+  if (!raw) return "";
+  const m = raw.match(/^\("([\s\S]*)" string\)$/);
+  return (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+}
+
+function parseCollectionSummary(raw) {
+  return parseSummaryLines(unwrapQevalString(raw));
+}
+
+// WalletSummary(owner, startIdx) now returns (summary string, nextIdx
+// int64) instead of a single string -- see nftminter.gno's own comment
+// on why (an unbounded version ran out of gas at just 21 minted tokens).
+// Same one-line-per-return-value qeval shape already confirmed live for
+// Provenance()/FindShapeIndex() elsewhere in this file.
+function parseWalletSummaryQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  const summaryM = lines[0] && lines[0].match(/^\("([\s\S]*)" string\)$/);
+  const nextIdxM = lines[1] && lines[1].match(/^\((-?\d+)/);
+  if (!summaryM || !nextIdxM) return null;
+  const body = summaryM[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  return { tokens: parseSummaryLines(body), nextIdx: parseInt(nextIdxM[1], 10) };
+}
+
+// Calls WalletSummary repeatedly, advancing startIdx by whatever nextIdx
+// comes back, until it stops advancing (the whole mint history has been
+// scanned) -- the chunked-reads counterpart to how this file already
+// chunks writes (MintAssembled/AddMigrationSnapshotEntry/
+// AdminDeliverMigrated batches). Capped at 50 calls (walletScanChunk is
+// 100 on the realm side, so this covers 5000 scanned tokens) purely as a
+// safety backstop against an infinite loop, not an expected real limit.
+async function fetchAllWalletTokens(qevalFn, owner) {
+  const tokens = [];
+  let startIdx = 0;
+  for (let calls = 0; calls < 50; calls++) {
+    const raw = await qevalFn(`WalletSummary("${owner}", ${startIdx})`).catch(() => null);
+    const parsed = parseWalletSummaryQ(raw);
+    if (!parsed) break;
+    tokens.push(...parsed.tokens);
+    if (parsed.nextIdx === startIdx) break; // reached the end of mint history
+    startIdx = parsed.nextIdx;
+  }
+  return tokens;
+}
+
+// TokenSummary(tid)'s qeval result is a 2-value tuple -- ("line" string)
+// on success, ("" string) + a real error value (not "(undefined)") when
+// the tid doesn't exist (never minted, or burned). Confirmed live
+// against the real deployed realm for both cases before writing this.
+function parseTokenSummaryQ(raw) {
+  if (!raw) return null;
+  const lines = raw.split("\n");
+  if (!lines[1] || lines[1].trim() !== "(undefined)") return null;
+  const m = lines[0] && lines[0].match(/^\("([\s\S]*)" string\)$/);
+  if (!m) return null;
+  const body = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  return parseSummaryLines(body)[0] || null;
+}
+
+// PREVIOUS_REALM_PATH predates the CollectionSummary/WalletSummary
+// pagination fix -- gno.land realms are immutable once deployed, so
+// whichever iteration it points at is permanently stuck with the old
+// unbounded version, already confirmed live to fail with "out of gas"
+// at just 21 minted tokens. TokenSummary(tid) itself was always safe
+// per-call (only the aggregate loops were unbounded), so reading the
+// previous realm's tokens goes one tid at a time instead: try every
+// zero-padded tid from "0000000" up until expectedCount live tokens are
+// found (burns leave gaps, so this can't stop at the first miss) or a
+// generous safety cap is hit.
+async function fetchAllTokensPerTid(qevalFn, expectedCount) {
+  const tokens = [];
+  const maxAttempts = Math.max(expectedCount * 3, 50);
+  for (let i = 0; i < maxAttempts && tokens.length < expectedCount; i++) {
+    const tid = String(i).padStart(7, "0");
+    const raw = await qevalFn(`TokenSummary("${tid}")`).catch(() => null);
+    const parsed = parseTokenSummaryQ(raw);
+    if (parsed) tokens.push(parsed);
+  }
+  return tokens;
+}
+
 // Populated by loadGallery(), read by the lightbox click handler --
 // re-fetching per-card on click would mean a slower open and a second
 // (redundant) round trip for data already sitting in the page.
@@ -705,21 +792,32 @@ function escapeHtml(s) {
 }
 
 async function loadGallery() {
-  const raw = await qeval("CollectionSummary()").catch(() => null);
-  const tokens = parseCollectionSummary(raw);
+  const pagesNeeded = Math.ceil(GALLERY_LIMIT / SUMMARY_PAGE_SIZE);
+  const tokens = [];
+  let firstPageRaw = null;
+  for (let page = 1; page <= pagesNeeded; page++) {
+    const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
+    if (page === 1) firstPageRaw = raw;
+    if (raw == null) break;
+    const pageTokens = parseCollectionSummary(raw);
+    if (!pageTokens.length) break; // fewer tokens than GALLERY_LIMIT exist -- no more pages
+    tokens.push(...pageTokens);
+  }
   const grid = document.getElementById("galleryGrid");
   const note = document.getElementById("galleryNote");
+  // Already newest-first (CollectionSummary's own page ordering) --
+  // unlike the old unbounded/mint-order version, no client .reverse().
   galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
   if (!tokens.length) {
-    grid.innerHTML = `<div class="gallery-empty">${raw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
+    grid.innerHTML = `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
     note.textContent = "";
     return;
   }
-  const ordered = tokens.slice().reverse(); // most recently minted first
-  const shown = ordered.slice(0, GALLERY_LIMIT);
-  note.textContent = tokens.length > GALLERY_LIMIT
-    ? `showing latest ${GALLERY_LIMIT} of ${tokens.length}`
-    : `${tokens.length} minted so far`;
+  const shown = tokens.slice(0, GALLERY_LIMIT);
+  const total = stats.supply != null ? stats.supply : shown.length;
+  note.textContent = total > shown.length
+    ? `showing latest ${shown.length} of ${total}`
+    : `${shown.length} minted so far`;
   grid.innerHTML = shown.map(t => `
     <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
       <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
@@ -800,8 +898,9 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
   deliverBtn.style.display = "none";
   preview.innerHTML = `<p class="qty-note">Reading ${escapeHtml(PREVIOUS_REALM_PATH)}…</p>`;
   try {
-    const raw = await previousQeval("CollectionSummary()");
-    const tokens = parseCollectionSummary(raw);
+    const countRaw = await previousQeval("TokenCount()");
+    const expectedCount = parseInt64(countRaw) || 0;
+    const tokens = await fetchAllTokensPerTid(previousQeval, expectedCount);
     const revealed = tokens.filter(t => !t.sealed);
     const sealedCount = tokens.length - revealed.length;
 
@@ -928,8 +1027,10 @@ async function refreshClaimPanel() {
   const sizeRaw = await qeval("MigrationSnapshotSize()").catch(() => null);
   if (!parseInt64(sizeRaw)) { panel.style.display = "none"; return; } // nothing seeded on REALM_PATH at all yet
 
-  const raw = await previousQeval("CollectionSummary()").catch(() => null);
-  const mine = parseCollectionSummary(raw).filter(t => t.owner === w.address && !t.sealed);
+  const countRaw = await previousQeval("TokenCount()").catch(() => null);
+  const expectedCount = parseInt64(countRaw) || 0;
+  const allPrevious = await fetchAllTokensPerTid(previousQeval, expectedCount);
+  const mine = allPrevious.filter(t => t.owner === w.address && !t.sealed);
   if (!mine.length) { panel.style.display = "none"; return; }
 
   const withProv = await Promise.all(mine.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
@@ -990,8 +1091,7 @@ async function refreshBurnPanel() {
   const panel = document.getElementById("burnPanel");
   if (w.status !== "connected") { panel.style.display = "none"; return; }
 
-  const raw = await qeval(`WalletSummary("${w.address}")`).catch(() => null);
-  const mine = parseCollectionSummary(raw);
+  const mine = await fetchAllWalletTokens(qeval, w.address);
   if (!mine.length) { panel.style.display = "none"; return; }
 
   // This also runs on a 20s auto-refresh poll (matching loadStats/

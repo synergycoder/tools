@@ -27,19 +27,24 @@
   .wrap{max-width:1080px;margin:0 auto;padding:0 20px 70px}
 
   .hero{padding:52px 0 8px}
+  .hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .hero-top h1{margin:0}
+  .hero-status{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+  @media (max-width:600px){.hero-top{flex-direction:column}.hero-status{align-items:flex-start}}
+
   .eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
     letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);
-    border:1px solid var(--accent-line);border-radius:99px;padding:5px 12px;margin:0 0 16px}
+    border:1px solid var(--accent-line);border-radius:99px;padding:5px 12px}
   h1{margin:0 0 10px;font-size:38px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace;
     background:linear-gradient(120deg,var(--ink) 40%,var(--accent) 145%);-webkit-background-clip:text;
     background-clip:text;color:transparent}
-  .sub{color:var(--muted);margin:0;max-width:62ch;font-size:15px}
+  .sub{color:var(--muted);margin:14px 0 0;max-width:62ch;font-size:15px}
 
-  .wallet-gate{display:flex;align-items:center;gap:12px;border:1px solid var(--hair);background:var(--panel);
-    border-radius:12px;padding:14px 18px;margin:22px 0;font-size:13.5px}
+  .wallet-gate{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:99px;padding:6px 14px;font-size:12.5px;white-space:nowrap}
   .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
   .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
-  .wallet-gate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--faint)}
   .wallet-gate.ok .dot{background:#7fd88f}
   .wallet-gate.warn .dot{background:var(--amber)}
   .wallet-gate code{font-family:var(--mono)}
@@ -68,22 +73,11 @@
   .facts .k{color:var(--muted)}
   .facts .v{font-family:var(--mono);color:var(--ink)}
 
-  .qty-row{display:flex;align-items:center;gap:10px;margin:16px 0}
+  .qty-row{display:flex;align-items:center;gap:10px;margin:16px 0 12px}
   .qty-row label{font-size:13px;color:var(--muted);font-family:var(--mono)}
   .qty-row input{width:70px;font-family:var(--mono);font-size:14px;padding:8px 10px;border-radius:8px;
     border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
   .qty-row .qty-note{font-size:11.5px;color:var(--faint)}
-
-  .qty-presets{display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 12px}
-  .qty-presets .preset-btn{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:7px;
-    border:1px solid var(--hair);background:var(--panel2);color:var(--muted);cursor:pointer}
-  .qty-presets .preset-btn:hover{border-color:var(--accent);color:var(--ink)}
-  .qty-presets .preset-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
-
-  .to-row{margin:12px 0}
-  .to-row label{font-size:12px;color:var(--muted);font-family:var(--mono);display:block;margin-bottom:5px}
-  .to-row input{width:100%;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:8px;
-    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
 
   .mint-btn{width:100%;padding:16px;border-radius:10px;border:none;background:var(--accent);color:#fff;
     font-size:15.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;
@@ -147,14 +141,17 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · Sapphire-1 testnet · GRC-721 public mint</p>
-    <h1>Mint a Gem</h1>
+    <div class="hero-top">
+      <h1>Mint a Gem</h1>
+      <div class="hero-status">
+        <p class="eyebrow">Gno.land · Sapphire-1 testnet · GRC-721 public mint</p>
+        <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+      </div>
+    </div>
     <p class="sub">Each mint assembles a one-of-a-kind piece on chain — a chain, shape, color, and metal drawn at random from the collection's living rosters the moment you mint. Nothing is pre-rendered, nothing repeats, and no two Gems ever share an exact combination. What you receive stays sealed behind a placeholder for a short delay, then reveals for good.</p>
   </div>
 
   <div id="endpointStatusHolder"></div>
-
-  <div class="wallet-gate" id="walletGate">Checking wallet…</div>
 
   <div class="mint-layout">
     <div class="preview">
@@ -182,8 +179,7 @@
       <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
 
       <ul class="facts" id="factsList">
-        <li><span class="k">Max possible combinations</span><span class="v" id="factMaxCombos">…</span></li>
-        <li><span class="k">Ever minted</span><span class="v" id="factSupply">…</span></li>
+        <li><span class="k">Minted so far</span><span class="v" id="factSupply">…</span></li>
         <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
         <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
         <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
@@ -195,13 +191,7 @@
         <input type="number" id="qtyInput" value="1" min="1">
         <span class="qty-note" id="qtyNote">checking limit…</span>
       </div>
-      <div class="qty-presets" id="qtyPresets"></div>
       <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
-
-      <div class="to-row">
-        <label for="toInput">Mint to (defaults to your connected wallet)</label>
-        <input type="text" id="toInput" placeholder="g1…">
-      </div>
 
       <button class="mint-btn" id="mintBtn" type="button" disabled>Connect Wallet to Mint</button>
       <div id="statusHolder"></div>
@@ -318,25 +308,21 @@ async function qeval(expr) {
   }
 }
 
-let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null };
+let stats = { mintingOpen: null, price: null, supply: null, walletCap: null, mintedByWallet: null };
 
-// The per-wallet cap applies to the mint's RECIPIENT (`to`), not
-// whoever signs -- so the count shown/enforced tracks whatever address
-// is currently in the "mint to" field, defaulting to the connected
-// wallet, not always the connected wallet itself.
+// Mints always go to the connected wallet -- no separate recipient field,
+// so there's no way to accidentally (or deliberately) send a piece
+// somewhere else.
 function currentRecipient() {
-  const v = document.getElementById("toInput").value.trim();
-  if (v) return v;
   const w = getWallet();
   return w.address || null;
 }
 
 async function loadStats() {
   const recipient = currentRecipient();
-  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
+  const [openR, priceR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
     qeval("MintingOpen()").catch(() => null),
     qeval("MintPrice()").catch(() => null),
-    qeval("MaxUniqueTraitCombos()").catch(() => null),
     qeval("TokenCount()").catch(() => null),
     qeval("MaxMintsPerWallet()").catch(() => null),
     recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
@@ -344,7 +330,6 @@ async function loadStats() {
   stats = {
     mintingOpen: parseBool(openR),
     price: parseInt64(priceR),
-    maxCombos: parseInt64(maxCombosR),
     supply: parseInt64(supplyR),
     walletCap: parseInt64(walletCapR),
     mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
@@ -352,7 +337,6 @@ async function loadStats() {
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
     : stats.price != null ? `${(stats.price / 1e6).toFixed(6)}<span class="unit">GNOT</span>` : "unknown";
-  document.getElementById("factMaxCombos").textContent = stats.maxCombos != null ? stats.maxCombos.toLocaleString() : "unknown";
   document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
   const openEl = document.getElementById("factOpen");
   openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
@@ -368,31 +352,34 @@ async function loadStats() {
   updateMintButton();
 }
 
+// Same truncation site-chrome's own wallet pill uses, so the address reads
+// consistently wherever it appears on the page.
+function truncateAddr(addr) {
+  return addr.length > 14 ? `${addr.slice(0, 7)}…${addr.slice(-5)}` : addr;
+}
+
+// Re-fetch MintsByWallet et al. only when the recipient actually changes
+// (connect, disconnect, or switch account) -- renderWalletGate also fires
+// on unrelated wallet-state updates (e.g. a balance refresh).
+let lastStatsAddress;
+
 function renderWalletGate() {
   const w = getWallet();
   const gate = document.getElementById("walletGate");
   if (w.status !== "connected") {
     gate.className = "wallet-gate warn";
-    gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) to mint.`;
+    gate.innerHTML = `<span class="dot"></span> Connect Adena to mint`;
   } else {
     const onSapphire = w.chainId === "sapphire-1";
     gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
     gate.innerHTML = onSapphire
-      ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
-      : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
-    // Only auto-track the connected wallet into "mint to" while the user
-    // hasn't manually typed their own recipient in -- otherwise switching
-    // Adena accounts after a manual edit would clobber an intentional
-    // override. But when it IS still auto-tracking, keep it synced on
-    // EVERY wallet change, not just while empty -- a stale address left in
-    // the field after switching Adena accounts would land tokens on the
-    // wrong account.
-    const toInput = document.getElementById("toInput");
-    if (!toInput.dataset.manual) {
-      const changed = toInput.value !== w.address;
-      toInput.value = w.address;
-      if (changed) loadStats();
-    }
+      ? `<span class="dot"></span> Connected as <code>${truncateAddr(w.address)}</code>`
+      : `<span class="dot"></span> Wrong network — switch to Sapphire-1`;
+  }
+  const addr = w.status === "connected" ? w.address : null;
+  if (addr !== lastStatsAddress) {
+    lastStatsAddress = addr;
+    loadStats();
   }
   updateMintButton();
 }
@@ -432,29 +419,6 @@ function updateCostEstimate() {
   note.textContent = text;
 }
 
-// Quantity presets are capped to whatever the contract actually allows
-// for this wallet right now (hardMax below) -- a collection with a
-// 5-per-wallet cap should never offer 10/20/50 as quick-picks, only
-// whatever's actually mintable.
-function renderQtyPresets(hardMax, currentQty) {
-  const el = document.getElementById("qtyPresets");
-  if (!hardMax || hardMax <= 1) { el.innerHTML = ""; return; }
-  const candidates = [1, 2, 3, 5, 10, 15, 20, MAX_QTY_PER_TX].filter(n => n < hardMax);
-  const presets = [...new Set(candidates)];
-  presets.push(hardMax); // always end on the real ceiling, so "mint the max" is one click
-  el.innerHTML = presets.map(n =>
-    `<button type="button" class="preset-btn${n === currentQty ? " on" : ""}" data-qty="${n}">${n === hardMax ? `Max (${n})` : n}</button>`
-  ).join("");
-  el.querySelectorAll(".preset-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-      const qtyInput = document.getElementById("qtyInput");
-      setter.call(qtyInput, btn.dataset.qty);
-      qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-  });
-}
-
 function updateMintButton() {
   updateCostEstimate();
   const w = getWallet();
@@ -472,14 +436,12 @@ function updateMintButton() {
     ? `up to ${hardMax} in one transaction — this wallet's remaining allowance`
     : `up to ${MAX_QTY_PER_TX} in one transaction`;
 
-  if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; renderQtyPresets(0, 0); return; }
+  if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; return; }
 
   let qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
   if (hardMax >= 1 && qty > hardMax) { qty = hardMax; qtyInput.value = String(qty); }
   btn.disabled = false;
   btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
-
-  renderQtyPresets(hardMax, qty);
 }
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
 
@@ -491,16 +453,6 @@ function remainingWalletAllowance() {
   if (stats.mintedByWallet == null) return null;
   return Math.max(0, stats.walletCap - stats.mintedByWallet);
 }
-
-let toInputDebounce = null;
-document.getElementById("toInput").addEventListener("input", (e) => {
-  // A real "input" event only fires from actual user typing, never from
-  // the programmatic `toInput.value = w.address` sync in renderWalletGate
-  // -- safe to treat this as "the user took over this field".
-  e.target.dataset.manual = "1";
-  clearTimeout(toInputDebounce);
-  toInputDebounce = setTimeout(loadStats, 400);
-});
 
 // CollectionSummary(page) returns SUMMARY_PAGE_SIZE tokens per call
 // (must match nftminter.gno's own homeRenderLimit -- confirmed live
@@ -741,8 +693,7 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
 document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
 document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 
-renderWalletGate();
-loadStats();
+renderWalletGate(); // also triggers the initial loadStats() as a side effect
 loadGallery();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);

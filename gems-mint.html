@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g12</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g13</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -238,27 +238,6 @@
     </div>
     <p class="qty-note" style="margin-top:6px">Closing stops new <code>MintAssembled</code> calls. Doesn't affect <code>ClaimMigrated</code> or any token that already exists — this collection has no fixed supply cap, so this is the actual "end the mint" switch.</p>
 
-    <div class="price-row" style="margin-top:14px">
-      <span class="lbl">Metal tone</span>
-      <span class="val" id="ownerCurrentMetalTone" style="font-size:16px">…</span>
-    </div>
-    <div class="qty-row" style="margin-top:14px;flex-wrap:wrap">
-      <label for="metalToneSelect">Metal</label>
-      <select id="metalToneSelect" style="padding:8px 10px;border-radius:8px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink)">
-        <option value="Gold">Gold</option>
-        <option value="Silver">Silver</option>
-        <option value="Bronze">Bronze</option>
-        <option value="Platinum">Platinum</option>
-        <option value="Obsidian">Obsidian</option>
-      </select>
-      <label for="metalToneHiInput">Highlight</label>
-      <input type="text" id="metalToneHiInput" placeholder="#a48b3f" style="width:100px">
-      <label for="metalToneLoInput">Shadow</label>
-      <input type="text" id="metalToneLoInput" placeholder="#6a5117" style="width:100px">
-      <button type="button" id="setMetalToneBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Set tone</button>
-    </div>
-    <p class="qty-note" style="margin-top:6px">Hex colors for the ring/label gradient's highlight and shadow stops. Takes effect immediately, including on tokens already minted — the SVG is regenerated fresh from this map on every read.</p>
-
     <div id="ownerStatusHolder"></div>
   </div>
 
@@ -354,14 +333,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g12";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g13";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g11";
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g12";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -527,24 +506,7 @@ function updateOwnerPanel() {
   mintingEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
   const toggleBtn = document.getElementById("toggleMintingBtn");
   toggleBtn.textContent = stats.mintingOpen === null ? "Toggle" : stats.mintingOpen ? "Close minting" : "Open minting";
-  refreshMetalToneDisplay();
 }
-
-// Reads the currently-selected metal's on-chain tone via MetalToneHex and
-// shows it next to the set-tone control -- separate from loadStats/stats
-// since it depends on the dropdown's current selection, not something
-// worth re-querying on every stats poll.
-async function refreshMetalToneDisplay() {
-  const metal = document.getElementById("metalToneSelect").value;
-  const el = document.getElementById("ownerCurrentMetalTone");
-  el.textContent = "…";
-  const raw = await qeval(`MetalToneHex("${metal}")`).catch(() => null);
-  const s = parseStrQ(raw);
-  if (!s) { el.textContent = "unknown"; return; }
-  const [hi, lo] = s.split(";");
-  el.innerHTML = `<span style="color:${hi}">${hi}</span> / <span style="color:${lo}">${lo}</span>`;
-}
-document.getElementById("metalToneSelect").addEventListener("change", refreshMetalToneDisplay);
 
 // how many more pieces the current recipient (the "mint to" address) is
 // still allowed to receive -- null means "no cap info yet" (assume
@@ -835,7 +797,70 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+// ---------- recently-minted gallery cache ----------
+//
+// localStorage, keyed by REALM_PATH so a g11->g12 (etc.) bump never shows
+// a stale prior deployment's pieces as if they were this one's. Two
+// things this buys, both real given this session's own RPC outage: (1)
+// the gallery paints instantly from the last-known result on load
+// instead of a blank "loading" state while the live query is still in
+// flight, and (2) if the RPC genuinely can't be reached (see
+// showEndpointUnreachableBanner), the page still shows the last-known
+// recently-minted pieces instead of an empty "Contract not reachable"
+// box -- stale-but-real beats nothing. Caching is a nicety, not a
+// correctness requirement, so any localStorage failure (private
+// browsing, quota, disabled) just silently skips the cache rather than
+// breaking the gallery.
+const GALLERY_CACHE_KEY = `gems-gallery-cache:${REALM_PATH}`;
+
+function saveGalleryCache(tokens, total) {
+  try {
+    localStorage.setItem(GALLERY_CACHE_KEY, JSON.stringify({ tokens, total, savedAt: Date.now() }));
+  } catch (err) { /* best-effort */ }
+}
+
+function loadGalleryCache() {
+  try {
+    const raw = localStorage.getItem(GALLERY_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function relativeTimeFrom(ms) {
+  const secs = Math.round((Date.now() - ms) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+// Shared by the live fetch and the cache fallback -- same markup either
+// way, just a different data source and note text.
+function renderGalleryGrid(tokens, noteText) {
+  const grid = document.getElementById("galleryGrid");
+  const note = document.getElementById("galleryNote");
+  galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
+  note.textContent = noteText;
+  grid.innerHTML = tokens.map(t => `
+    <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
+      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
+      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>
+    </div>`).join("");
+  grid.querySelectorAll(".gcard").forEach(card => {
+    card.addEventListener("click", () => openLightbox(card.dataset.tid));
+  });
+}
+
 async function loadGallery() {
+  const cached = loadGalleryCache();
+  if (cached && cached.tokens && cached.tokens.length) {
+    renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
+  }
+
   const pagesNeeded = Math.ceil(GALLERY_LIMIT / SUMMARY_PAGE_SIZE);
   const tokens = [];
   let firstPageRaw = null;
@@ -847,29 +872,26 @@ async function loadGallery() {
     if (!pageTokens.length) break; // fewer tokens than GALLERY_LIMIT exist -- no more pages
     tokens.push(...pageTokens);
   }
-  const grid = document.getElementById("galleryGrid");
-  const note = document.getElementById("galleryNote");
-  // Already newest-first (CollectionSummary's own page ordering) --
-  // unlike the old unbounded/mint-order version, no client .reverse().
-  galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
+
   if (!tokens.length) {
-    grid.innerHTML = `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
-    note.textContent = "";
+    // Live fetch came back empty. Distinguish "the endpoint is down" from
+    // "the collection genuinely has zero mints" -- only the former should
+    // fall back to cache; a real zero shouldn't keep showing stale cards.
+    if (firstPageRaw == null && cached && cached.tokens && cached.tokens.length) {
+      renderGalleryGrid(cached.tokens, `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`);
+      return;
+    }
+    galleryTokensByTid = new Map();
+    document.getElementById("galleryGrid").innerHTML =
+      `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
+    document.getElementById("galleryNote").textContent = "";
     return;
   }
+
   const shown = tokens.slice(0, GALLERY_LIMIT);
   const total = stats.supply != null ? stats.supply : shown.length;
-  note.textContent = total > shown.length
-    ? `showing latest ${shown.length} of ${total}`
-    : `${shown.length} minted so far`;
-  grid.innerHTML = shown.map(t => `
-    <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
-      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
-      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>
-    </div>`).join("");
-  grid.querySelectorAll(".gcard").forEach(card => {
-    card.addEventListener("click", () => openLightbox(card.dataset.tid));
-  });
+  saveGalleryCache(shown, total);
+  renderGalleryGrid(shown, total > shown.length ? `showing latest ${shown.length} of ${total}` : `${shown.length} minted so far`);
 }
 
 // ---------- migrate previous iteration (owner) ----------
@@ -1213,11 +1235,11 @@ document.getElementById("burnSelectedBtn").addEventListener("click", async () =>
   }
 });
 
-// ---------- burn from previous deployments (g7-g11; the ones whose Burn
+// ---------- burn from previous deployments (g7-g12; the ones whose Burn
 // actually frees metadata storage -- see grc721v2's own Burn doc comment
 // and this realm's matching one). g1-g6 predate that fix (their Burn only
 // frees a sliver of the real storage, not worth surfacing here) and are
-// deliberately excluded. g12 is REALM_PATH itself, already covered by the
+// deliberately excluded. g13 is REALM_PATH itself, already covered by the
 // "Your tokens" panel above -- this section is specifically the OLDER
 // deployments, burnable together across realms in one transaction. ----------
 
@@ -1227,6 +1249,7 @@ const PRIOR_BURNABLE_REALMS = [
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9", label: "g9" },
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g10", label: "g10" },
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g11", label: "g11" },
+  { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g12", label: "g12" },
 ];
 
 function qevalAt(pkgPath, expr) {
@@ -1478,32 +1501,6 @@ document.getElementById("toggleMintingBtn").addEventListener("click", async () =
     const { hash, height } = await doContract([msg], `${target ? "open" : "close"} minting`);
     setOwnerStatus("success", `Minting ${target ? "opened" : "closed"}${height ? ` at block ${height}` : ""} — tx ${hash}.`);
     loadStats();
-  } catch (err) {
-    setOwnerStatus("error", err.message || String(err));
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-document.getElementById("setMetalToneBtn").addEventListener("click", async () => {
-  const w = getWallet();
-  if (w.status !== "connected") return;
-  const metal = document.getElementById("metalToneSelect").value;
-  const hi = document.getElementById("metalToneHiInput").value.trim();
-  const lo = document.getElementById("metalToneLoInput").value.trim();
-  if (!HEX_COLOR_RE.test(hi) || !HEX_COLOR_RE.test(lo)) {
-    setOwnerStatus("error", "Enter both colors as 6-digit hex, e.g. #a48b3f.");
-    return;
-  }
-  const btn = document.getElementById("setMetalToneBtn");
-  btn.disabled = true;
-  setOwnerStatus("pending", `Waiting for Adena approval — setting ${metal}'s tone…`);
-  try {
-    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "SetMetalTone", args: [metal, hi, lo] } };
-    const { hash, height } = await doContract([msg], `set ${metal} tone to ${hi}/${lo}`);
-    setOwnerStatus("success", `${metal} tone updated${height ? ` at block ${height}` : ""} — tx ${hash}.`);
-    refreshMetalToneDisplay();
   } catch (err) {
     setOwnerStatus("error", err.message || String(err));
   } finally {

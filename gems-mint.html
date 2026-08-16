@@ -238,6 +238,19 @@
     </div>
     <p class="qty-note" style="margin-top:6px">Closing stops new <code>MintAssembled</code> calls. Doesn't affect <code>AdminDeliverMigrated</code> or any token that already exists — this collection has no fixed supply cap, so this is the actual "end the mint" switch.</p>
 
+    <div class="price-row" style="margin-top:14px">
+      <span class="lbl">Realm balance</span>
+      <span class="val" id="ownerRealmBalance" style="font-size:16px">…</span>
+    </div>
+    <div class="qty-row" style="margin-top:14px">
+      <button type="button" id="withdrawAllBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px" disabled>Withdraw all</button>
+      <label for="withdrawAmountInput" style="margin-left:10px">or</label>
+      <input type="number" id="withdrawAmountInput" min="0" step="0.000001" placeholder="amount" style="width:110px">
+      <span class="qty-note">GNOT</span>
+      <button type="button" id="withdrawAmountBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Withdraw</button>
+    </div>
+    <p class="qty-note" style="margin-top:6px">Since <code>MintAssembled</code> now forwards each mint's payment straight to your wallet, this should normally sit at 0 — it only matters for a balance that landed here some other way (a stray direct send, or funds from before that auto-forward existed).</p>
+
     <div id="ownerStatusHolder"></div>
   </div>
 
@@ -384,7 +397,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8, fetchNativeBalance } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g16";
@@ -562,6 +575,29 @@ function updateOwnerPanel() {
   mintingEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
   const toggleBtn = document.getElementById("toggleMintingBtn");
   toggleBtn.textContent = stats.mintingOpen === null ? "Toggle" : stats.mintingOpen ? "Close minting" : "Open minting";
+  refreshRealmBalance();
+}
+
+// Separate from loadStats' own qeval batch -- owner-only, and needs a
+// second real bank-balance query (fetchNativeBalance) beyond qeval, not
+// just another contract read. realmBalanceUgnot is cached at module
+// scope so the withdraw-all handler doesn't need to re-fetch it.
+let realmBalanceUgnot = null;
+async function refreshRealmBalance() {
+  const el = document.getElementById("ownerRealmBalance");
+  const allBtn = document.getElementById("withdrawAllBtn");
+  try {
+    const addrR = await qeval("RealmAddress()");
+    const addr = parseStrQ(addrR);
+    if (!addr) throw new Error("no address");
+    realmBalanceUgnot = parseInt(await fetchNativeBalance(NETWORKS.testnet, addr), 10) || 0;
+    el.textContent = `${fromBaseUnits(realmBalanceUgnot, NATIVE_DECIMALS)} GNOT`;
+    allBtn.disabled = realmBalanceUgnot <= 0;
+  } catch {
+    el.textContent = "unknown";
+    realmBalanceUgnot = null;
+    allBtn.disabled = true;
+  }
 }
 
 // how many more pieces the current recipient (the "mint to" address) is
@@ -1624,6 +1660,41 @@ document.getElementById("setPriceBtn").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+async function doWithdraw(ugnot, btn) {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  btn.disabled = true;
+  setOwnerStatus("pending", `Waiting for Adena approval — withdrawing ${fromBaseUnits(ugnot, NATIVE_DECIMALS)} GNOT…`);
+  try {
+    const msg = { type: "/vm.m_call", value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "WithdrawFunds", args: [String(ugnot)] } };
+    const { hash, height } = await doContract([msg], `withdraw ${fromBaseUnits(ugnot, NATIVE_DECIMALS)} GNOT`);
+    setOwnerStatus("success", `Withdrawn${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    refreshRealmBalance();
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = realmBalanceUgnot <= 0;
+  }
+}
+
+document.getElementById("withdrawAllBtn").addEventListener("click", () => {
+  if (!realmBalanceUgnot || realmBalanceUgnot <= 0) return;
+  doWithdraw(realmBalanceUgnot, document.getElementById("withdrawAllBtn"));
+});
+
+document.getElementById("withdrawAmountBtn").addEventListener("click", () => {
+  const raw = document.getElementById("withdrawAmountInput").value.trim();
+  if (!raw) { setOwnerStatus("error", "Enter an amount in GNOT."); return; }
+  let ugnot;
+  try {
+    ugnot = toBaseUnits(raw, NATIVE_DECIMALS);
+  } catch (err) {
+    setOwnerStatus("error", err.message || String(err));
+    return;
+  }
+  doWithdraw(ugnot, document.getElementById("withdrawAmountBtn"));
 });
 
 document.getElementById("setWalletCapBtn").addEventListener("click", async () => {

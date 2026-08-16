@@ -236,7 +236,7 @@
     <div class="qty-row" style="margin-top:14px">
       <button type="button" id="toggleMintingBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">…</button>
     </div>
-    <p class="qty-note" style="margin-top:6px">Closing stops new <code>MintAssembled</code> calls. Doesn't affect <code>ClaimMigrated</code> or any token that already exists — this collection has no fixed supply cap, so this is the actual "end the mint" switch.</p>
+    <p class="qty-note" style="margin-top:6px">Closing stops new <code>MintAssembled</code> calls. Doesn't affect <code>AdminDeliverMigrated</code> or any token that already exists — this collection has no fixed supply cap, so this is the actual "end the mint" switch.</p>
 
     <div id="ownerStatusHolder"></div>
   </div>
@@ -252,14 +252,6 @@
     </div>
     <p class="qty-note" style="margin-top:6px">"Deliver directly" mints straight to each original holder's wallet, owner-paid — no action needed from them. Only works on entries already seeded above (seed first, then deliver).</p>
     <div id="migrateStatusHolder"></div>
-  </div>
-
-  <div class="panel" id="claimPanel" style="display:none;margin:24px 0">
-    <h2>Claim your migrated piece</h2>
-    <p class="desc">You held a Gem on a previous iteration of this collection, and the owner has seeded it here — claim it below. Same piece, provenance carried forward, no re-mint.</p>
-    <div id="claimList"></div>
-    <button type="button" id="claimBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin-top:10px;font-size:13px;display:none">Claim</button>
-    <div id="claimStatusHolder"></div>
   </div>
 
   <div class="panel" id="burnPanel" style="display:none;margin:24px 0">
@@ -550,7 +542,6 @@ function renderWalletGate() {
     }
   }
   updateMintButton();
-  refreshClaimPanel();
   refreshBurnPanel();
   refreshPriorBurnPanel();
 }
@@ -1090,66 +1081,6 @@ document.getElementById("migrateDeliverBtn").addEventListener("click", async () 
   }
 });
 
-// ---------- claim your migrated piece (any connected wallet) ----------
-
-let claimCandidates = []; // this wallet's own unclaimed entries, with real provenance attached
-
-function setClaimStatus(cls, text) {
-  document.getElementById("claimStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
-}
-
-async function refreshClaimPanel() {
-  const w = getWallet();
-  const panel = document.getElementById("claimPanel");
-  if (w.status !== "connected") { panel.style.display = "none"; return; }
-  const sizeRaw = await qeval("MigrationSnapshotSize()").catch(() => null);
-  if (!parseInt64(sizeRaw)) { panel.style.display = "none"; return; } // nothing seeded on REALM_PATH at all yet
-
-  const countRaw = await previousQeval("TokenCount()").catch(() => null);
-  const expectedCount = parseInt64(countRaw) || 0;
-  const allPrevious = await fetchAllTokensPerTid(previousQeval, expectedCount);
-  const mine = allPrevious.filter(t => t.owner === w.address && !t.sealed);
-  if (!mine.length) { panel.style.display = "none"; return; }
-
-  const withProv = await Promise.all(mine.map(async t => ({ ...t, prov: parseProvenanceQ(await previousQeval(`Provenance("${t.tid}")`).catch(() => null)) })));
-  const provable = withProv.filter(t => t.prov);
-  const claimedFlags = await Promise.all(provable.map(t => qeval(`IsMigrationClaimed("${t.prov.chain}", "${t.prov.tokenId}")`).catch(() => null)));
-  claimCandidates = provable.filter((t, i) => !parseBool(claimedFlags[i]));
-
-  if (!claimCandidates.length) { panel.style.display = "none"; return; }
-  panel.style.display = "";
-  document.getElementById("claimList").innerHTML = `
-    <ul class="migrate-preview-list">
-      ${claimCandidates.map(t => `<li><img src="${t.image}" alt=""><span class="name">#${t.tid} — ${escapeHtml(t.name)}</span></li>`).join("")}
-    </ul>`;
-  const claimBtn = document.getElementById("claimBtn");
-  claimBtn.style.display = "";
-  claimBtn.textContent = claimCandidates.length === 1 ? "Claim my piece" : `Claim my ${claimCandidates.length} pieces`;
-}
-
-document.getElementById("claimBtn").addEventListener("click", async () => {
-  const w = getWallet();
-  if (w.status !== "connected" || !claimCandidates.length) return;
-  const btn = document.getElementById("claimBtn");
-  btn.disabled = true;
-  try {
-    const messages = claimCandidates.map(t => ({
-      type: "/vm.m_call",
-      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "ClaimMigrated", args: [t.prov.chain, t.prov.tokenId] },
-    }));
-    setClaimStatus("pending", `Waiting for Adena approval — claiming ${claimCandidates.length}…`);
-    const { hash, height } = await doContract(messages, `claim ${claimCandidates.length} migrated piece(s)`);
-    setClaimStatus("success", `Claimed${height ? ` at block ${height}` : ""} — tx ${hash}.`);
-    loadStats();
-    loadGallery();
-    refreshClaimPanel();
-  } catch (err) {
-    setClaimStatus("error", err.message || String(err));
-  } finally {
-    btn.disabled = false;
-  }
-});
-
 // ---------- burn (any connected wallet, its own tokens only) ----------
 
 // Burn frees storage (owners/tokenApprovals/extensions/mintProvenance
@@ -1173,7 +1104,7 @@ async function refreshBurnPanel() {
   if (!mine.length) { panel.style.display = "none"; return; }
 
   // This also runs on a 20s auto-refresh poll (matching loadStats/
-  // loadGallery/refreshClaimPanel's own interval) -- rebuilding the list
+  // loadGallery's own interval) -- rebuilding the list
   // from scratch would otherwise silently drop whatever the user had
   // already checked if they're still mid-selection when it fires.
   // Carry the selection forward across the rebuild instead.
@@ -1528,12 +1459,10 @@ document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 renderWalletGate();
 loadStats();
 loadGallery();
-refreshClaimPanel();
 refreshBurnPanel();
 refreshPriorBurnPanel();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);
-setInterval(refreshClaimPanel, 20000);
 setInterval(refreshBurnPanel, 20000);
 setInterval(refreshPriorBurnPanel, 20000);
 </script>

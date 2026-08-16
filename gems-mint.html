@@ -145,6 +145,8 @@
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
 
+  <div id="endpointStatusHolder"></div>
+
   <div class="wallet-gate" id="walletGate">Checking wallet…</div>
 
   <div class="mint-layout">
@@ -424,8 +426,35 @@ function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\
 // gotcha nft-minter/index.html's parseStrQ already hit live.
 function parseStrQ(raw) { const m = raw && raw.match(/^\("([^"]*)"/s); return m ? m[1] : null; }
 
+// One page-wide banner for "the RPC endpoint itself is unreachable" --
+// shared by qeval/previousQeval/qevalAt below rather than duplicated at
+// each of their many call sites, most of which already swallow failures
+// into null via .catch(() => null) for their own (unrelated) fallback
+// UI. Clears itself on the next successful call, so a transient outage
+// doesn't leave a stale banner up after the endpoint recovers.
+function showEndpointUnreachableBanner(endpoint) {
+  document.getElementById("endpointStatusHolder").innerHTML =
+    `<div class="status-line error">The gno.land RPC endpoint (${escapeHtml(endpoint)}) isn't reachable right now, so this page can't load live data. Please try again later.</div>`;
+}
+
+function clearEndpointUnreachableBanner() {
+  const holder = document.getElementById("endpointStatusHolder");
+  if (holder) holder.innerHTML = "";
+}
+
+async function qevalReportable(pkgPath, expr) {
+  try {
+    const result = await abciQuery(NETWORKS.testnet, "vm/qeval", `${pkgPath}.${expr}`, 10000);
+    clearEndpointUnreachableBanner();
+    return result;
+  } catch (err) {
+    if (err.isEndpointUnreachable) showEndpointUnreachableBanner(err.endpoint);
+    throw err;
+  }
+}
+
 async function qeval(expr) {
-  return abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+  return qevalReportable(REALM_PATH, expr);
 }
 
 let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null, owner: null };
@@ -846,7 +875,7 @@ async function loadGallery() {
 // ---------- migrate previous iteration (owner) ----------
 
 async function previousQeval(expr) {
-  return abciQuery(NETWORKS.testnet, "vm/qeval", `${PREVIOUS_REALM_PATH}.${expr}`, 10000);
+  return qevalReportable(PREVIOUS_REALM_PATH, expr);
 }
 
 // Provenance(tid)'s qeval result is 3 separate gno-formatted lines (one
@@ -1201,7 +1230,7 @@ const PRIOR_BURNABLE_REALMS = [
 ];
 
 function qevalAt(pkgPath, expr) {
-  return abciQuery(NETWORKS.testnet, "vm/qeval", `${pkgPath}.${expr}`, 10000);
+  return qevalReportable(pkgPath, expr);
 }
 
 // g7/g8/g9 all predate the CollectionSummary/WalletSummary pagination fix

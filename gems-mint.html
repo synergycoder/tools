@@ -948,6 +948,18 @@ function traitValue(traits, type) {
   return t ? t.value : "";
 }
 
+// Chain/Metal trait VALUES carry a display suffix ("TEST-3 Chain",
+// "Gold Ring") the underlying chain/metal names themselves don't (see
+// assembledMetadata in nftminter.gno) -- strip it back off before using
+// a rendered trait value as a real lookup key (AddMigrationSnapshotEntry
+// validates metal against the bare metalNames list, and stoneForChain
+// needs the bare chain name too, or it silently falls through to "Not
+// Set"'s palette instead of the chain's real one). Same pattern the
+// realm's own tests already use server-side (strings.TrimSuffix).
+function stripTraitSuffix(value, suffix) {
+  return value.endsWith(suffix) ? value.slice(0, -suffix.length) : value;
+}
+
 let migrateCandidates = []; // tokens from PREVIOUS_REALM_PATH, revealed + not yet seeded, with real provenance + compact trait tuple attached
 
 function setMigrateStatus(cls, text) {
@@ -987,10 +999,10 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
     // FindShapeIndex/FindColorIndex, so a migrated piece can be
     // regenerated on demand instead of carrying a stored image.
     const withTuples = await Promise.all(unclaimed.map(async t => {
-      const traitChain = traitValue(t.traits, "Chain");
+      const traitChain = stripTraitSuffix(traitValue(t.traits, "Chain"), " Chain");
       const shapeVal = traitValue(t.traits, "Shape");
       const colorVal = traitValue(t.traits, "Color");
-      const metal = traitValue(t.traits, "Metal");
+      const metal = stripTraitSuffix(traitValue(t.traits, "Metal"), " Ring");
       const active = traitValue(t.traits, "Status") === "Active";
       const [shapeR, colorR] = await Promise.all([
         qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),

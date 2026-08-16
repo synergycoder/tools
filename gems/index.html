@@ -24,7 +24,7 @@
   :root { color-scheme: light dark; }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
-  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 70px}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 20px 70px}
 
   .hero{padding:52px 0 8px}
   .hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
@@ -42,7 +42,7 @@
     animation:gemRainbow 48s linear infinite}
   @keyframes gemRainbow{0%{background-position:0% 50%}100%{background-position:700% 50%}}
   @media (prefers-reduced-motion: reduce){h1{animation:none}}
-  .sub{color:var(--muted);margin:14px 0 0;max-width:62ch;font-size:15px}
+  .sub{color:var(--muted);margin:14px 0 0;font-size:15px}
 
   .wallet-gate{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);background:var(--panel);
     border-radius:99px;padding:6px 14px;font-size:12.5px;white-space:nowrap}
@@ -53,8 +53,7 @@
   .wallet-gate.warn .dot{background:var(--amber)}
   .wallet-gate code{font-family:var(--mono)}
 
-  .mint-layout{display:grid;grid-template-columns:300px 1fr;gap:36px;margin:20px 0 60px;align-items:start}
-  @media (max-width:760px){.mint-layout{grid-template-columns:1fr}}
+  .mint-layout{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:36px;margin:28px 0 60px;align-items:start}
 
   .preview{border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden;
     position:sticky;top:80px;box-shadow:0 30px 60px -35px var(--accent-line)}
@@ -62,6 +61,10 @@
     display:flex;align-items:center;justify-content:center}
   .preview .art svg{width:46%;height:46%}
   .preview .cap{padding:12px 16px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
+  @media (max-width:800px){
+    .mint-layout{grid-template-columns:1fr}
+    .preview{position:static;max-width:420px;margin:0 auto;width:100%}
+  }
 
   .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:22px 24px}
   .panel h2{margin:0 0 4px;font-size:16px}
@@ -72,10 +75,11 @@
   .price-row .val{font-family:var(--mono);font-size:22px;font-weight:700}
   .price-row .val .unit{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
 
-  .facts{list-style:none;margin:16px 0;padding:0;display:flex;flex-direction:column;gap:9px}
-  .facts li{display:flex;justify-content:space-between;font-size:13px}
-  .facts .k{color:var(--muted)}
-  .facts .v{font-family:var(--mono);color:var(--ink)}
+  .facts{list-style:none;margin:16px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .facts li{display:flex;flex-direction:column;gap:4px;border:1px solid var(--hair);border-radius:10px;
+    background:var(--panel2);padding:10px 12px}
+  .facts .k{color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+  .facts .v{font-family:var(--mono);color:var(--ink);font-size:14.5px;font-weight:700}
 
   .qty-row{display:flex;align-items:center;gap:10px;margin:16px 0 12px}
   .qty-row label{font-size:13px;color:var(--muted);font-family:var(--mono)}

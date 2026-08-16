@@ -254,6 +254,52 @@
     <div id="migrateStatusHolder"></div>
   </div>
 
+  <div class="panel" id="burnGapPanel" style="display:none;margin:24px 0">
+    <h2>Reserve a burned index</h2>
+    <p class="desc">For a token that was already burned on the previous iteration before migration — its exact index and trait combination get permanently reserved here too, so a fresh mint or a different migrated piece can never take them. <code>Render()</code> doesn't expose a burned token's original chain/traits over <code>qeval</code> the way a live one does, so these have to come from reading <code id="burnGapFromPath"></code>'s own <a id="burnGapPreviousBurnedLink" href="#" target="_blank" rel="noopener">burned tokens page →</a> by hand.</p>
+    <p class="qty-note" style="margin-top:2px">Active/Sunset status isn't shown on that page either — best guess is fine, it only affects which exact combo variant gets reserved, not the reservation itself.</p>
+    <div class="qty-row" style="flex-wrap:wrap;gap:10px 16px;margin-top:10px">
+      <div>
+        <label for="gapOriginalChain">Original chain</label><br>
+        <input type="text" id="gapOriginalChain" placeholder="sapphire-1" style="width:140px">
+      </div>
+      <div>
+        <label for="gapOriginalTokenId">Original token id</label><br>
+        <input type="text" id="gapOriginalTokenId" placeholder="0000003" style="width:110px">
+      </div>
+      <div>
+        <label for="gapOriginalMintHeight">Original mint height</label><br>
+        <input type="number" id="gapOriginalMintHeight" placeholder="0" min="0" step="1" style="width:110px">
+      </div>
+      <div>
+        <label for="gapTraitChain">Trait chain</label><br>
+        <input type="text" id="gapTraitChain" placeholder="TEST-3" style="width:110px">
+      </div>
+      <div>
+        <label for="gapShape">Shape</label><br>
+        <input type="text" id="gapShape" placeholder="Princess Cut" style="width:130px">
+      </div>
+      <div>
+        <label for="gapColor">Color</label><br>
+        <input type="text" id="gapColor" placeholder="Deep Blue" style="width:110px">
+      </div>
+      <div>
+        <label for="gapMetal">Metal</label><br>
+        <input type="text" id="gapMetal" placeholder="Gold" style="width:100px">
+      </div>
+      <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+          <input type="checkbox" id="gapActive">
+          Active (unchecked = Sunset)
+        </label>
+      </div>
+    </div>
+    <div class="qty-row" style="margin-top:12px">
+      <button type="button" id="burnGapSubmitBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Reserve this index</button>
+    </div>
+    <div id="burnGapStatusHolder"></div>
+  </div>
+
   <div class="panel" id="burnPanel" style="display:none;margin:24px 0">
     <h2>Your tokens</h2>
     <p class="desc">Burning is permanent — there's no undo. It also frees this token's on-chain storage, so part of what minting it cost comes back automatically in the same transaction (a real gno.land refund, not a separate claim step) — how much depends on how many bytes it actually frees. Select any number below and burn them together in one transaction, one Adena approval.</p>
@@ -487,6 +533,7 @@ function updateOwnerPanel() {
   const panel = document.getElementById("ownerPanel");
   panel.style.display = isOwner ? "" : "none";
   document.getElementById("migratePanel").style.display = isOwner ? "" : "none";
+  document.getElementById("burnGapPanel").style.display = isOwner ? "" : "none";
   if (!isOwner) return;
   document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
     ? "0 GNOT (free)"
@@ -908,6 +955,8 @@ function parseProvenanceQ(raw) {
 }
 
 document.getElementById("migrateFromPath").textContent = PREVIOUS_REALM_PATH;
+document.getElementById("burnGapFromPath").textContent = PREVIOUS_REALM_PATH;
+document.getElementById("burnGapPreviousBurnedLink").href = gnowebCollectionUrl(PREVIOUS_REALM_PATH) + ":burned";
 
 // AddMigrationSnapshotEntry now carries only a compact trait tuple, not
 // a whole rendered image -- so a single message here costs a small
@@ -1076,6 +1125,62 @@ document.getElementById("migrateDeliverBtn").addEventListener("click", async () 
     }
   } catch (err) {
     setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} delivered before this failed — click "Preview" again to retry the rest; entries not yet seeded will fail here until seeded first)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- reserve a burned index (owner only) ----------
+
+function setBurnGapStatus(cls, text) {
+  document.getElementById("burnGapStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+document.getElementById("burnGapSubmitBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const btn = document.getElementById("burnGapSubmitBtn");
+
+  const originalChain = document.getElementById("gapOriginalChain").value.trim();
+  const originalTokenId = document.getElementById("gapOriginalTokenId").value.trim();
+  const originalMintHeight = document.getElementById("gapOriginalMintHeight").value.trim() || "0";
+  const traitChain = document.getElementById("gapTraitChain").value.trim();
+  const shapeVal = document.getElementById("gapShape").value.trim();
+  const colorVal = document.getElementById("gapColor").value.trim();
+  const metal = document.getElementById("gapMetal").value.trim();
+  const active = document.getElementById("gapActive").checked;
+
+  if (!originalChain || !originalTokenId || !traitChain || !shapeVal || !colorVal || !metal) {
+    setBurnGapStatus("error", "Fill in every field except mint height (defaults to 0 if left blank).");
+    return;
+  }
+
+  btn.disabled = true;
+  setBurnGapStatus("pending", "Resolving shape/color against this realm's own tables…");
+  try {
+    // Same reverse-lookup this realm's tables always use for a rendered
+    // trait string -- see the migrate-fetch handler above.
+    const [shapeR, colorR] = await Promise.all([
+      qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),
+      qeval(`FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
+    ]);
+    const shape = parseIntBoolQ(shapeR);
+    const color = parseIntBoolQ(colorR);
+    if (!shape || !shape.ok) throw new Error(`"${shapeVal}" isn't a recognized shape name on this realm.`);
+    if (!color || !color.ok) throw new Error(`"${colorVal}" isn't a recognized color for chain "${traitChain}" on this realm.`);
+
+    setBurnGapStatus("pending", "Waiting for Adena approval…");
+    const messages = [{
+      type: "/vm.m_call",
+      value: {
+        caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationBurnGap",
+        args: [originalChain, originalTokenId, originalMintHeight, traitChain, metal, String(shape.idx), String(color.idx), String(active)],
+      },
+    }];
+    const { hash, height } = await doContract(messages, "reserve a burned index");
+    setBurnGapStatus("success", `Reserved${height ? ` at block ${height}` : ""} — tx ${hash}. It now shows up in this realm's own burned-tokens list.`);
+  } catch (err) {
+    setBurnGapStatus("error", err.message || String(err));
   } finally {
     btn.disabled = false;
   }

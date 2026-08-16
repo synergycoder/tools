@@ -315,6 +315,20 @@
       <div class="step"><div class="n">04</div><h3>Multiple in one transaction</h3><p>Minting more than one queues that many <code>MintAssembled</code> calls into a single signed transaction — one Adena approval, not one per piece. Since messages in a transaction are atomic, if any one call fails (e.g. you'd exceed the per-wallet limit partway through) none of them commit.</p></div>
     </div>
   </div>
+
+  <div class="panel" id="priorBurnPanel" style="display:none;margin:24px 0">
+    <h2>Burn from previous deployments</h2>
+    <p class="desc">Each gno.land testnet generation before this one is its own separate, permanent on-chain package — <code>g7</code>, <code>g8</code>, and <code>g9</code> are the ones whose <code>Burn</code> actually frees the token's stored metadata (the real storage-deposit refund), not just a sliver of it. <code>g1</code>–<code>g6</code> predate that fix, so burning there barely recovers anything and isn't offered here. Tokens from different deployments can be burned together in one Adena approval — you don't need a separate transaction per deployment.</p>
+    <div class="qty-row">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer">
+        <input type="checkbox" id="priorBurnSelectAll">
+        Select all
+      </label>
+      <button type="button" id="priorBurnSelectedBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px" disabled>Burn selected (0)</button>
+    </div>
+    <div id="priorBurnList"></div>
+    <div id="priorBurnStatusHolder"></div>
+  </div>
 </div>
 
 <div class="lightbox" id="lightbox">
@@ -547,6 +561,7 @@ function renderWalletGate() {
   updateMintButton();
   refreshClaimPanel();
   refreshBurnPanel();
+  refreshPriorBurnPanel();
 }
 onWalletChange(renderWalletGate);
 
@@ -1169,6 +1184,128 @@ document.getElementById("burnSelectedBtn").addEventListener("click", async () =>
   }
 });
 
+// ---------- burn from previous deployments (g7-g9; the ones whose Burn
+// actually frees metadata storage -- see grc721v2's own Burn doc comment
+// and this realm's matching one). g1-g6 predate that fix (their Burn only
+// frees a sliver of the real storage, not worth surfacing here) and are
+// deliberately excluded. g10 is REALM_PATH itself, already covered by the
+// "Your tokens" panel above -- this section is specifically the OLDER
+// deployments, burnable together across realms in one transaction. ----------
+
+const PRIOR_BURNABLE_REALMS = [
+  { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g7", label: "g7" },
+  { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g8", label: "g8" },
+  { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9", label: "g9" },
+];
+
+function qevalAt(pkgPath, expr) {
+  return abciQuery(NETWORKS.testnet, "vm/qeval", `${pkgPath}.${expr}`, 10000);
+}
+
+// g7/g8/g9 all predate the CollectionSummary/WalletSummary pagination fix
+// (single-string, unbounded WalletSummary(owner) -- confirmed out-of-gas
+// past ~21 tokens, same reasoning as PREVIOUS_REALM_PATH's own
+// fetchAllTokensPerTid usage above) -- so this reads each realm one tid at
+// a time, exactly like the migrate panel already does for g9-as-
+// PREVIOUS_REALM_PATH, then filters to this wallet's own tokens
+// client-side.
+async function fetchMyTokensFromPriorRealm(realm, owner) {
+  const countRaw = await qevalAt(realm.path, "TokenCount()").catch(() => null);
+  const expectedCount = parseInt64(countRaw) || 0;
+  if (!expectedCount) return [];
+  const all = await fetchAllTokensPerTid((expr) => qevalAt(realm.path, expr), expectedCount);
+  return all.filter(t => t.owner === owner).map(t => ({ ...t, realmPath: realm.path, realmLabel: realm.label }));
+}
+
+function setPriorBurnStatus(cls, text) {
+  document.getElementById("priorBurnStatusHolder").innerHTML = `<div class="status-line ${cls}">${escapeHtml(text)}</div>`;
+}
+
+async function refreshPriorBurnPanel() {
+  const w = getWallet();
+  const panel = document.getElementById("priorBurnPanel");
+  if (w.status !== "connected") { panel.style.display = "none"; return; }
+
+  const perRealm = await Promise.all(PRIOR_BURNABLE_REALMS.map(realm => fetchMyTokensFromPriorRealm(realm, w.address)));
+  const mine = perRealm.flat();
+  if (!mine.length) { panel.style.display = "none"; return; }
+
+  // Same "carry the selection across an auto-refresh rebuild" reasoning
+  // as refreshBurnPanel above -- keyed by realmPath+tid since tids reset
+  // per deployment (g7's #0000001 and g9's #0000001 are different tokens).
+  const previouslyChecked = new Set(
+    Array.from(document.querySelectorAll(".prior-burn-check:checked")).map(cb => cb.dataset.key)
+  );
+
+  panel.style.display = "";
+  document.getElementById("priorBurnList").innerHTML = `
+    <ul class="migrate-preview-list">
+      ${mine.map(t => {
+        const key = `${t.realmPath}|${t.tid}`;
+        return `
+        <li>
+          <input type="checkbox" class="prior-burn-check" data-key="${escapeHtml(key)}"${previouslyChecked.has(key) ? " checked" : ""}>
+          <img src="${t.image}" alt="">
+          <span class="name">[${t.realmLabel}] #${t.tid} — ${escapeHtml(t.name)}</span>
+        </li>`;
+      }).join("")}
+    </ul>`;
+  const allChecked = mine.every(t => previouslyChecked.has(`${t.realmPath}|${t.tid}`));
+  document.getElementById("priorBurnSelectAll").checked = allChecked;
+  document.querySelectorAll(".prior-burn-check").forEach(cb => {
+    cb.addEventListener("change", updatePriorBurnSelectedBtn);
+  });
+  updatePriorBurnSelectedBtn();
+}
+
+function updatePriorBurnSelectedBtn() {
+  const n = document.querySelectorAll(".prior-burn-check:checked").length;
+  const btn = document.getElementById("priorBurnSelectedBtn");
+  btn.textContent = `Burn selected (${n})`;
+  btn.disabled = n === 0;
+}
+
+document.getElementById("priorBurnSelectAll").addEventListener("change", (e) => {
+  document.querySelectorAll(".prior-burn-check").forEach(cb => { cb.checked = e.target.checked; });
+  updatePriorBurnSelectedBtn();
+});
+
+document.getElementById("priorBurnSelectedBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  const keys = Array.from(document.querySelectorAll(".prior-burn-check:checked")).map(cb => cb.dataset.key);
+  if (!keys.length) return;
+  const items = keys.map(k => { const i = k.indexOf("|"); return { realmPath: k.slice(0, i), tid: k.slice(i + 1) }; });
+  const label = items.length === 1 ? "1 token" : `${items.length} tokens across ${new Set(items.map(i => i.realmPath)).size} deployment(s)`;
+  if (!window.confirm(`Burn ${label}? This is permanent — there is no undo.`)) return;
+  const btn = document.getElementById("priorBurnSelectedBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    for (let i = 0; i < items.length; i += BURN_CHUNK_SIZE) {
+      const chunk = items.slice(i, i + BURN_CHUNK_SIZE);
+      setPriorBurnStatus("pending", `Waiting for Adena approval — burning ${chunk.length} (${done}/${items.length} done so far)…`);
+      // One transaction, messages targeting whichever deployment each
+      // token actually lives on -- gno.land's addpkg/m_call messages
+      // aren't restricted to a single pkg_path per transaction, so this
+      // is a genuine single Adena approval across g7/g8/g9 together, not
+      // one approval per deployment.
+      const messages = chunk.map(it => ({
+        type: "/vm.m_call",
+        value: { caller: w.address, send: "", pkg_path: it.realmPath, func: "Burn", args: [it.tid] },
+      }));
+      const { hash, height } = await doContract(messages, `burn ${chunk.length} token${chunk.length > 1 ? "s" : ""} across prior deployments`);
+      done += chunk.length;
+      setPriorBurnStatus("success", `Burned ${done}/${items.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}. Any storage-deposit refund landed in the same transaction.`);
+    }
+    refreshPriorBurnPanel();
+  } catch (err) {
+    setPriorBurnStatus("error", `${err.message || err} (${done}/${items.length} burned before this failed — reopen this panel to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- lightbox ----------
 
 const lightbox = document.getElementById("lightbox");
@@ -1351,10 +1488,12 @@ loadStats();
 loadGallery();
 refreshClaimPanel();
 refreshBurnPanel();
+refreshPriorBurnPanel();
 setInterval(loadStats, 20000);
 setInterval(loadGallery, 20000);
 setInterval(refreshClaimPanel, 20000);
 setInterval(refreshBurnPanel, 20000);
+setInterval(refreshPriorBurnPanel, 20000);
 </script>
 
 </body>

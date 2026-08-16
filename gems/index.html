@@ -6,6 +6,27 @@
 <title>Gems — gno.tools</title>
 <meta name="description" content="Mint a Gem — a one-of-a-kind GRC-721 piece assembled on chain, live on gno.land.">
 <meta name="robots" content="noindex, nofollow">
+<!-- Kept even though robots is noindex -- these only affect *link
+     previews* (Discord/X/etc. unfurl a shared URL directly, bypassing
+     any search-engine index), which we still want to look right while
+     staying out of search results. og:image is a real static PNG
+     (/assets/og-gems.png), not the on-chain data-URI SVG -- most
+     unfurlers don't reliably fetch/render inline SVG or data: URIs for
+     link previews, so this is a one-time render of an actual on-chain
+     Gem (SAPPHIRE-1, Gold) via gems.gno's own renderTokenSVG, captured
+     at 1200x630. Won't auto-update if the art changes -- regenerate by
+     hand if that ever matters. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Gems">
+<meta property="og:description" content="Mint a Gem — a one-of-a-kind GRC-721 piece assembled on chain, live on gno.land.">
+<meta property="og:image" content="https://gno.tools/assets/og-gems.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://gno.tools/gems">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Gems">
+<meta name="twitter:description" content="Mint a Gem — a one-of-a-kind GRC-721 piece assembled on chain, live on gno.land.">
+<meta name="twitter:image" content="https://gno.tools/assets/og-gems.png">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">

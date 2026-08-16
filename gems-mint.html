@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g10</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym…hgems/g11</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -352,14 +352,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g10";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g11";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9";
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g10";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -1184,11 +1184,11 @@ document.getElementById("burnSelectedBtn").addEventListener("click", async () =>
   }
 });
 
-// ---------- burn from previous deployments (g7-g9; the ones whose Burn
+// ---------- burn from previous deployments (g7-g10; the ones whose Burn
 // actually frees metadata storage -- see grc721v2's own Burn doc comment
 // and this realm's matching one). g1-g6 predate that fix (their Burn only
 // frees a sliver of the real storage, not worth surfacing here) and are
-// deliberately excluded. g10 is REALM_PATH itself, already covered by the
+// deliberately excluded. g11 is REALM_PATH itself, already covered by the
 // "Your tokens" panel above -- this section is specifically the OLDER
 // deployments, burnable together across realms in one transaction. ----------
 
@@ -1196,6 +1196,7 @@ const PRIOR_BURNABLE_REALMS = [
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g7", label: "g7" },
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g8", label: "g8" },
   { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g9", label: "g9" },
+  { path: "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g10", label: "g10" },
 ];
 
 function qevalAt(pkgPath, expr) {

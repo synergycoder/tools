@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gems — gno.tools</title>
+<meta name="description" content="Mint a Gem — a one-of-a-kind GRC-721 piece assembled on chain, live on gno.land.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<!-- Some extensions (Adena's wallet-connect dialog included — confirmed via
+     gno-observer, which Adena does pick up) fetch /favicon.ico at the site
+     root directly instead of parsing the <link rel="icon"> tags above, so
+     both need to exist and agree. -->
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<!-- Works around a real bug in Adena's own extension (a window.adena that
+     never gets set on some page-load orderings), not this code — must
+     stay an external <script src>, not inlined. -->
+<script src="/adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px 70px}
+
+  .hero{padding:52px 0 8px}
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);
+    border:1px solid var(--accent-line);border-radius:99px;padding:5px 12px;margin:0 0 16px}
+  h1{margin:0 0 10px;font-size:38px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace;
+    background:linear-gradient(120deg,var(--ink) 40%,var(--accent) 145%);-webkit-background-clip:text;
+    background-clip:text;color:transparent}
+  .sub{color:var(--muted);margin:0;max-width:62ch;font-size:15px}
+
+  .wallet-gate{display:flex;align-items:center;gap:12px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:12px;padding:14px 18px;margin:22px 0;font-size:13.5px}
+  .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
+  .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
+  .wallet-gate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate.ok .dot{background:#7fd88f}
+  .wallet-gate.warn .dot{background:var(--amber)}
+  .wallet-gate code{font-family:var(--mono)}
+
+  .mint-layout{display:grid;grid-template-columns:300px 1fr;gap:36px;margin:20px 0 60px;align-items:start}
+  @media (max-width:760px){.mint-layout{grid-template-columns:1fr}}
+
+  .preview{border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden;
+    position:sticky;top:80px;box-shadow:0 30px 60px -35px var(--accent-line)}
+  .preview .art{aspect-ratio:1;background:radial-gradient(circle at 50% 42%,var(--accent-soft),var(--bg2) 72%);
+    display:flex;align-items:center;justify-content:center}
+  .preview .art svg{width:46%;height:46%}
+  .preview .cap{padding:12px 16px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
+
+  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:22px 24px}
+  .panel h2{margin:0 0 4px;font-size:16px}
+  .panel .desc{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+
+  .price-row{display:flex;align-items:baseline;justify-content:space-between;padding:14px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+  .price-row .lbl{font-size:13px;color:var(--muted)}
+  .price-row .val{font-family:var(--mono);font-size:22px;font-weight:700}
+  .price-row .val .unit{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+
+  .facts{list-style:none;margin:16px 0;padding:0;display:flex;flex-direction:column;gap:9px}
+  .facts li{display:flex;justify-content:space-between;font-size:13px}
+  .facts .k{color:var(--muted)}
+  .facts .v{font-family:var(--mono);color:var(--ink)}
+
+  .qty-row{display:flex;align-items:center;gap:10px;margin:16px 0}
+  .qty-row label{font-size:13px;color:var(--muted);font-family:var(--mono)}
+  .qty-row input{width:70px;font-family:var(--mono);font-size:14px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+  .qty-row .qty-note{font-size:11.5px;color:var(--faint)}
+
+  .qty-presets{display:flex;flex-wrap:wrap;gap:6px;margin:-6px 0 12px}
+  .qty-presets .preset-btn{font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:7px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--muted);cursor:pointer}
+  .qty-presets .preset-btn:hover{border-color:var(--accent);color:var(--ink)}
+  .qty-presets .preset-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:700}
+
+  .to-row{margin:12px 0}
+  .to-row label{font-size:12px;color:var(--muted);font-family:var(--mono);display:block;margin-bottom:5px}
+  .to-row input{width:100%;font-family:var(--mono);font-size:12.5px;padding:8px 10px;border-radius:8px;
+    border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+
+  .mint-btn{width:100%;padding:16px;border-radius:10px;border:none;background:var(--accent);color:#fff;
+    font-size:15.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;
+    box-shadow:0 10px 30px -12px var(--accent-line)}
+  .mint-btn:hover:not(:disabled){filter:brightness(1.08)}
+  .mint-btn:disabled{background:var(--panel2);color:var(--faint);cursor:not-allowed;border:1px solid var(--hair);box-shadow:none}
+
+  .status-line{font-family:var(--mono);font-size:12px;margin-top:12px;padding:9px 11px;border-radius:8px;word-break:break-word}
+  .status-line.pending{background:var(--accent-soft);color:var(--accent)}
+  .status-line.success{background:#7fd88f1a;color:#7fd88f}
+  .status-line.error{background:#e0596d1a;color:#e0596d}
+
+  .gallery{margin:50px 0 20px}
+  .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+  .gallery-head h2{font-size:18px;margin:0}
+  .gallery-head .links{display:flex;align-items:baseline;gap:14px}
+  .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
+  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
+    transition:transform .12s ease,border-color .12s ease}
+  .gcard:hover{border-color:var(--accent-line);transform:translateY(-2px)}
+  .gcard .thumb{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .gcard .thumb img{width:78%;height:78%}
+  .gcard .meta{padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gcard .meta .tid{color:var(--ink);font-weight:700;display:block}
+  .gcard.sealed .meta{color:var(--faint)}
+  .gallery-empty{color:var(--muted);font-size:13.5px;padding:20px 0}
+
+  .lightbox{position:fixed;inset:0;background:#050608e0;display:none;align-items:center;justify-content:center;z-index:500;padding:24px}
+  .lightbox.on{display:flex}
+  .lightbox-panel{display:flex;max-width:880px;width:100%;max-height:88vh;background:var(--panel);border:1px solid var(--hair);border-radius:16px;overflow:hidden;position:relative}
+  .lightbox-art{flex:none;width:320px;background:#0a0b10;display:flex;align-items:center;justify-content:center}
+  .lightbox-art img{width:82%;height:82%}
+  .lightbox-info{flex:1;padding:26px 28px;overflow-y:auto}
+  .lightbox-info h3{margin:0 0 4px;font-size:19px}
+  .lightbox-info .tid{font-family:var(--mono);font-size:12px;color:var(--faint);margin:0 0 14px}
+  .lightbox-info .desc{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px}
+  .lightbox-info .sealed-note{color:var(--muted);font-size:13px;margin:0 0 16px;font-style:italic}
+  .lightbox-info .owner-row{font-family:var(--mono);font-size:12px;color:var(--ink);margin:0 0 18px;word-break:break-all}
+  .lightbox-info .owner-row .lbl{display:block;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .lightbox-traits{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .lightbox-traits li{border:1px solid var(--hair);border-radius:8px;padding:7px 10px;background:var(--panel2)}
+  .lightbox-traits .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+  .lightbox-traits .v{font-family:var(--mono);font-size:12.5px}
+  .lightbox-link{display:inline-block;margin-top:18px;font-size:12.5px;color:var(--accent)}
+  .lightbox-close{position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:26px;cursor:pointer;line-height:1;padding:4px}
+  .lightbox-close:hover{color:var(--ink)}
+  @media (max-width:640px){.lightbox-panel{flex-direction:column;max-height:92vh;overflow-y:auto}.lightbox-art{width:100%;aspect-ratio:1}}
+
+  .howitworks{margin:50px 0 20px}
+  .howitworks h2{font-size:18px;margin:0 0 18px}
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .step{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:16px 18px}
+  .step .n{font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:6px}
+  .step h3{margin:0 0 6px;font-size:14px}
+  .step p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · Sapphire-1 testnet · GRC-721 public mint</p>
+    <h1>Mint a Gem</h1>
+    <p class="sub">Each mint assembles a one-of-a-kind piece on chain — a chain, shape, color, and metal drawn at random from the collection's living rosters the moment you mint. Nothing is pre-rendered, nothing repeats, and no two Gems ever share an exact combination. What you receive stays sealed behind a placeholder for a short delay, then reveals for good.</p>
+  </div>
+
+  <div id="endpointStatusHolder"></div>
+
+  <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+
+  <div class="mint-layout">
+    <div class="preview">
+      <div class="art" id="sealedArt">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 8 L8 4 L16 4 L20 8 L12 21 Z" stroke="var(--accent)" stroke-width="1" opacity="0.65" stroke-linejoin="round"/>
+          <path d="M4 8 H20 M8 4 L12 8 L16 4 M12 8 V21" stroke="var(--accent)" stroke-width="0.6" opacity="0.45"/>
+        </svg>
+      </div>
+      <div class="cap">Sealed — reveals ~10 blocks after mint</div>
+    </div>
+
+    <div class="panel">
+      <h2>Mint a randomly assembled piece</h2>
+      <p class="desc">Connect your wallet to mint. The realm assembles each piece at random from the on-chain trait rosters — you can't choose traits, and no two Gems ever share an exact combination.</p>
+
+      <div class="price-row">
+        <span class="lbl">Price (per piece)</span>
+        <span class="val" id="priceVal">…</span>
+      </div>
+      <div class="price-row">
+        <span class="lbl">Est. network cost (per piece)</span>
+        <span class="val" id="costVal" style="font-size:14px">…</span>
+      </div>
+      <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
+
+      <ul class="facts" id="factsList">
+        <li><span class="k">Max possible combinations</span><span class="v" id="factMaxCombos">…</span></li>
+        <li><span class="k">Ever minted</span><span class="v" id="factSupply">…</span></li>
+        <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
+        <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
+        <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
+        <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
+      </ul>
+
+      <div class="qty-row">
+        <label for="qtyInput">Quantity</label>
+        <input type="number" id="qtyInput" value="1" min="1">
+        <span class="qty-note" id="qtyNote">checking limit…</span>
+      </div>
+      <div class="qty-presets" id="qtyPresets"></div>
+      <p class="qty-note" id="totalCostNote" style="margin:-8px 0 14px"></p>
+
+      <div class="to-row">
+        <label for="toInput">Mint to (defaults to your connected wallet)</label>
+        <input type="text" id="toInput" placeholder="g1…">
+      </div>
+
+      <button class="mint-btn" id="mintBtn" type="button" disabled>Connect Wallet to Mint</button>
+      <div id="statusHolder"></div>
+    </div>
+  </div>
+
+  <div class="gallery">
+    <div class="gallery-head">
+      <h2>Recently minted</h2>
+      <div class="links">
+        <a class="collection-link" id="collectionGnowebLink" href="#" target="_blank" rel="noopener">View collection on gno.land →</a>
+        <span class="note" id="galleryNote"></span>
+      </div>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"><div class="gallery-empty">Loading…</div></div>
+  </div>
+
+  <div class="howitworks">
+    <h2>How minting works</h2>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><h3>Assembled on the fly</h3><p>Your mint randomly draws a chain, shape, color, and metal from the on-chain rosters at the moment you mint — never previewable, never pre-curated.</p></div>
+      <div class="step"><div class="n">02</div><h3>Sealed reveal</h3><p>You receive a real token immediately, but its art and traits stay behind a shared placeholder for a short delay — long enough that no one can snipe based on the outcome.</p></div>
+      <div class="step"><div class="n">03</div><h3>Guaranteed unique</h3><p>If the random draw collides with a combination that's already been minted, the contract automatically retries with a new draw — no two Gems ever share an exact (chain, shape, color, metal, status) combination, enforced on-chain, permanently, across the whole collection.</p></div>
+      <div class="step"><div class="n">04</div><h3>Multiple in one transaction</h3><p>Minting more than one queues that many <code>MintAssembled</code> calls into a single signed transaction — one Adena approval, not one per piece. Since messages in a transaction are atomic, if any one call fails (e.g. you'd exceed the per-wallet limit partway through) none of them commit.</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-panel">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close" type="button">×</button>
+    <div class="lightbox-art"><img id="lightboxImg" alt=""></div>
+    <div class="lightbox-info">
+      <h3 id="lightboxName"></h3>
+      <p class="tid" id="lightboxTid"></p>
+      <p class="desc" id="lightboxDesc"></p>
+      <div class="owner-row"><span class="lbl">Owner</span><span id="lightboxOwner"></span></div>
+      <ul class="lightbox-traits" id="lightboxTraits"></ul>
+      <a class="lightbox-link" id="lightboxTokenLink" href="#" target="_blank" rel="noopener">View this piece on gno.land →</a>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome, getWallet, onWalletChange } from "/lib/site-chrome.js";
+import { doContract } from "/lib/adena-connect.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "/lib/gno-rpc.js";
+initSiteChrome();
+
+// gno.land packages can't be redeployed in place, so this points at
+// whichever Gems iteration is the current live one — updating it by hand
+// on redeploy is the same pattern nft-minter's own realmRelPath uses.
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g15";
+
+// UI safety ceiling on how many MintAssembled calls one transaction queues
+// -- not itself an on-chain limit. The real ceiling most wallets hit is
+// each collection's own per-wallet cap (MaxMintsPerWallet), enforced below
+// via remainingWalletAllowance() -- this just stops a single approval from
+// getting unreasonably large.
+const MAX_QTY_PER_TX = 25;
+
+const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
+function gnowebCollectionUrl() {
+  return REALM_PATH.replace(/^gno\.land/, GNOWEB_BASE);
+}
+// Colon (not slash) before the sub-path -- confirmed live via vm/qrender,
+// and it's what nftminter.gno's own Render() uses to link each token.
+function gnowebTokenUrl(tid) {
+  return `${gnowebCollectionUrl()}:token/${tid}`;
+}
+
+// gno.land charges a storage deposit for any new on-chain data a call
+// writes, not just for the code deployed initially -- each MintAssembled
+// call creates several new records (token ownership, provenance, sealed
+// trait tuple, combo-uniqueness entry, wallet mint count), so minting
+// itself costs GNOT beyond gas, separate from MintPrice. No SVG/image
+// data is ever stored -- TokenURI renders it fresh from the small trait
+// tuple on every read, by design.
+//
+// Calibrated from a real 5-piece batch mint on this exact realm: the FIRST
+// mint to a wallet that's never minted here before costs more (it also
+// creates that wallet's first mintCountByWallet entry) than a repeat mint
+// to an already-tracked wallet. Both tiers padded ~12% for variance rather
+// than quoting the bare observed numbers as a guarantee.
+const FIRST_MINT_UGNOT = 2_383_836; // this recipient's very first mint on this realm
+const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
+
+// Returns null (not false) when the query itself failed -- e.g. the
+// realm isn't deployed yet -- so callers can tell "unknown" apart from
+// a real on-chain false. Collapsing both to false previously made an
+// undeployed/unreachable realm show as "Minting Closed", which reads
+// as a real active-collection state instead of "nothing to query yet".
+function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
+function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+
+function showEndpointUnreachableBanner(endpoint) {
+  document.getElementById("endpointStatusHolder").innerHTML =
+    `<div class="status-line error">The gno.land RPC endpoint (${escapeHtml(endpoint)}) isn't reachable right now, so this page can't load live data. Please try again later.</div>`;
+}
+
+function clearEndpointUnreachableBanner() {
+  const holder = document.getElementById("endpointStatusHolder");
+  if (holder) holder.innerHTML = "";
+}
+
+async function qeval(expr) {
+  try {
+    const result = await abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+    clearEndpointUnreachableBanner();
+    return result;
+  } catch (err) {
+    if (err.isEndpointUnreachable) showEndpointUnreachableBanner(err.endpoint);
+    throw err;
+  }
+}
+
+let stats = { mintingOpen: null, price: null, maxCombos: null, supply: null, walletCap: null, mintedByWallet: null };
+
+// The per-wallet cap applies to the mint's RECIPIENT (`to`), not
+// whoever signs -- so the count shown/enforced tracks whatever address
+// is currently in the "mint to" field, defaulting to the connected
+// wallet, not always the connected wallet itself.
+function currentRecipient() {
+  const v = document.getElementById("toInput").value.trim();
+  if (v) return v;
+  const w = getWallet();
+  return w.address || null;
+}
+
+async function loadStats() {
+  const recipient = currentRecipient();
+  const [openR, priceR, maxCombosR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
+    qeval("MintingOpen()").catch(() => null),
+    qeval("MintPrice()").catch(() => null),
+    qeval("MaxUniqueTraitCombos()").catch(() => null),
+    qeval("TokenCount()").catch(() => null),
+    qeval("MaxMintsPerWallet()").catch(() => null),
+    recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
+  ]);
+  stats = {
+    mintingOpen: parseBool(openR),
+    price: parseInt64(priceR),
+    maxCombos: parseInt64(maxCombosR),
+    supply: parseInt64(supplyR),
+    walletCap: parseInt64(walletCapR),
+    mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
+  };
+  document.getElementById("priceVal").innerHTML = stats.price === 0
+    ? `0<span class="unit">GNOT (free)</span>`
+    : stats.price != null ? `${(stats.price / 1e6).toFixed(6)}<span class="unit">GNOT</span>` : "unknown";
+  document.getElementById("factMaxCombos").textContent = stats.maxCombos != null ? stats.maxCombos.toLocaleString() : "unknown";
+  document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
+  const openEl = document.getElementById("factOpen");
+  openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
+  openEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
+  document.getElementById("factWalletCap").textContent = stats.walletCap == null ? "unknown" : stats.walletCap === 0 ? "unlimited" : stats.walletCap;
+  const youMintedRow = document.getElementById("factYouMintedRow");
+  if (recipient && stats.mintedByWallet != null) {
+    youMintedRow.style.display = "";
+    document.getElementById("factYouMinted").textContent = stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
+  } else {
+    youMintedRow.style.display = "none";
+  }
+  updateMintButton();
+}
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.className = "wallet-gate warn";
+    gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) to mint.`;
+  } else {
+    const onSapphire = w.chainId === "sapphire-1";
+    gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
+    gate.innerHTML = onSapphire
+      ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
+      : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+    // Only auto-track the connected wallet into "mint to" while the user
+    // hasn't manually typed their own recipient in -- otherwise switching
+    // Adena accounts after a manual edit would clobber an intentional
+    // override. But when it IS still auto-tracking, keep it synced on
+    // EVERY wallet change, not just while empty -- a stale address left in
+    // the field after switching Adena accounts would land tokens on the
+    // wrong account.
+    const toInput = document.getElementById("toInput");
+    if (!toInput.dataset.manual) {
+      const changed = toInput.value !== w.address;
+      toInput.value = w.address;
+      if (changed) loadStats();
+    }
+  }
+  updateMintButton();
+}
+onWalletChange(renderWalletGate);
+
+// Total network cost (storage deposit + gas, per FIRST_MINT_UGNOT/
+// REPEAT_MINT_UGNOT above) plus MintPrice if one's set -- shown
+// regardless of connection state so even a not-yet-connected visitor can
+// see what to expect. Compares against the connected wallet's own
+// balance when available and warns if it looks short, rather than
+// letting the mint fail silently.
+function estimateMintCostUgnot(qty, recipientAlreadyMinted) {
+  let total = 0;
+  for (let i = 0; i < qty; i++) {
+    const isRecipientsFirstEver = !recipientAlreadyMinted && i === 0;
+    total += isRecipientsFirstEver ? FIRST_MINT_UGNOT : REPEAT_MINT_UGNOT;
+  }
+  return total;
+}
+
+function updateCostEstimate() {
+  const qty = Math.max(1, parseInt(document.getElementById("qtyInput").value, 10) || 1);
+  const priceUgnot = stats.price || 0;
+  const recipientAlreadyMinted = stats.mintedByWallet != null && stats.mintedByWallet > 0;
+  const totalUgnot = estimateMintCostUgnot(qty, recipientAlreadyMinted) + qty * priceUgnot;
+  const note = document.getElementById("totalCostNote");
+  const w = getWallet();
+  let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${fromBaseUnits(totalUgnot, NATIVE_DECIMALS)} GNOT`;
+  note.style.color = "";
+  if (w.status === "connected" && w.balanceRaw != null) {
+    const balanceUgnot = parseInt(w.balanceRaw, 10);
+    if (!Number.isNaN(balanceUgnot) && balanceUgnot < totalUgnot) {
+      text += ` — your balance (${fromBaseUnits(w.balanceRaw, NATIVE_DECIMALS)} GNOT) looks short. Mint fewer, or add funds first.`;
+      note.style.color = "#e0596d";
+    }
+  }
+  note.textContent = text;
+}
+
+// Quantity presets are capped to whatever the contract actually allows
+// for this wallet right now (hardMax below) -- a collection with a
+// 5-per-wallet cap should never offer 10/20/50 as quick-picks, only
+// whatever's actually mintable.
+function renderQtyPresets(hardMax, currentQty) {
+  const el = document.getElementById("qtyPresets");
+  if (!hardMax || hardMax <= 1) { el.innerHTML = ""; return; }
+  const candidates = [1, 2, 3, 5, 10, 15, 20, MAX_QTY_PER_TX].filter(n => n < hardMax);
+  const presets = [...new Set(candidates)];
+  presets.push(hardMax); // always end on the real ceiling, so "mint the max" is one click
+  el.innerHTML = presets.map(n =>
+    `<button type="button" class="preset-btn${n === currentQty ? " on" : ""}" data-qty="${n}">${n === hardMax ? `Max (${n})` : n}</button>`
+  ).join("");
+  el.querySelectorAll(".preset-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      const qtyInput = document.getElementById("qtyInput");
+      setter.call(qtyInput, btn.dataset.qty);
+      qtyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  });
+}
+
+function updateMintButton() {
+  updateCostEstimate();
+  const w = getWallet();
+  const btn = document.getElementById("mintBtn");
+  const qtyInput = document.getElementById("qtyInput");
+  if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
+  if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (stats.mintingOpen === null) { btn.disabled = true; btn.textContent = "Contract Not Reachable Yet"; return; }
+  if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
+
+  const remaining = remainingWalletAllowance();
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
+  qtyInput.max = String(Math.max(1, hardMax));
+  document.getElementById("qtyNote").textContent = remaining != null
+    ? `up to ${hardMax} in one transaction — this wallet's remaining allowance`
+    : `up to ${MAX_QTY_PER_TX} in one transaction`;
+
+  if (remaining === 0) { btn.disabled = true; btn.textContent = "Wallet Mint Limit Reached"; renderQtyPresets(0, 0); return; }
+
+  let qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+  if (hardMax >= 1 && qty > hardMax) { qty = hardMax; qtyInput.value = String(qty); }
+  btn.disabled = false;
+  btn.textContent = qty === 1 ? "Mint 1 Gem" : `Mint ${qty} Gems (1 transaction)`;
+
+  renderQtyPresets(hardMax, qty);
+}
+document.getElementById("qtyInput").addEventListener("input", updateMintButton);
+
+// how many more pieces the current recipient (the "mint to" address) is
+// still allowed to receive -- null means "no cap info yet" (assume
+// unrestricted rather than blocking the button on a slow/failed query).
+function remainingWalletAllowance() {
+  if (stats.walletCap == null || stats.walletCap === 0) return null;
+  if (stats.mintedByWallet == null) return null;
+  return Math.max(0, stats.walletCap - stats.mintedByWallet);
+}
+
+let toInputDebounce = null;
+document.getElementById("toInput").addEventListener("input", (e) => {
+  // A real "input" event only fires from actual user typing, never from
+  // the programmatic `toInput.value = w.address` sync in renderWalletGate
+  // -- safe to treat this as "the user took over this field".
+  e.target.dataset.manual = "1";
+  clearTimeout(toInputDebounce);
+  toInputDebounce = setTimeout(loadStats, 400);
+});
+
+// CollectionSummary(page) returns SUMMARY_PAGE_SIZE tokens per call
+// (must match nftminter.gno's own homeRenderLimit -- confirmed live
+// that's the largest page size that fits a single qeval call's gas
+// budget; the old unbounded version failed with "out of gas" at just 21
+// minted tokens). GALLERY_LIMIT is how many the gallery actually shows;
+// loadGallery fetches ceil(GALLERY_LIMIT/SUMMARY_PAGE_SIZE) pages.
+const SUMMARY_PAGE_SIZE = 10;
+const GALLERY_LIMIT = 24;
+
+// A CollectionSummary() page's qeval result is one gno string literal
+// containing newline-separated
+// "tid|owner|b64(name)|b64(desc)|b64(image)|b64(url)|b64(traits)|b64(bg)"
+// lines (TokenSummary's own format) -- confirmed live against the real
+// deployed realm before writing this parser, not guessed from the .gno
+// source alone. The textual literal escapes real newlines as literal
+// backslash-n.
+function parseSummaryLines(body) {
+  if (!body || !body.trim()) return [];
+  return body.split("\n").filter(Boolean).map(line => {
+    const parts = line.split("|");
+    if (parts.length !== 8) return null;
+    const [tid, owner, nameB64, descB64, imageB64, urlB64, traitsB64, bgB64] = parts;
+    try {
+      const name = b64ToUtf8(nameB64);
+      const sealed = name === "Sealed";
+      // traitsToCSV's own format: "Key=Value;Key2=Value2". A trait value
+      // can't itself contain "=" or ";" the way this realm builds them, so
+      // a plain split is fine here.
+      const traits = b64ToUtf8(traitsB64).split(";").filter(Boolean).map(pair => {
+        const i = pair.indexOf("=");
+        return i === -1 ? { trait: pair, value: "" } : { trait: pair.slice(0, i), value: pair.slice(i + 1) };
+      });
+      return {
+        // image/backgroundColor are always ASCII (a data URI, a hex
+        // color) -- plain atob() is correct and cheaper for those.
+        tid, owner, name, description: b64ToUtf8(descB64), image: atob(imageB64), traits, sealed,
+        externalUrl: b64ToUtf8(urlB64), backgroundColor: atob(bgB64),
+      };
+    } catch (e) {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+function unwrapQevalString(raw) {
+  if (!raw) return "";
+  const m = raw.match(/^\("([\s\S]*)" string\)$/);
+  return (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+}
+
+function parseCollectionSummary(raw) {
+  return parseSummaryLines(unwrapQevalString(raw));
+}
+
+// Populated by loadGallery(), read by the lightbox click handler --
+// re-fetching per-card on click would mean a slower open and a second
+// (redundant) round trip for data already sitting in the page.
+let galleryTokensByTid = new Map();
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
+}
+
+// ---------- recently-minted gallery cache ----------
+//
+// localStorage, keyed by REALM_PATH so a redeploy to a new iteration never
+// shows a stale prior deployment's pieces as if they were this one's. Two
+// things this buys: (1) the gallery paints instantly from the last-known
+// result on load instead of a blank "loading" state while the live query
+// is still in flight, and (2) if the RPC genuinely can't be reached, the
+// page still shows the last-known recently-minted pieces instead of an
+// empty "Contract not reachable" box -- stale-but-real beats nothing.
+// Caching is a nicety, not a correctness requirement, so any localStorage
+// failure (private browsing, quota, disabled) just silently skips it.
+const GALLERY_CACHE_KEY = `gems-gallery-cache:${REALM_PATH}`;
+
+function saveGalleryCache(tokens, total) {
+  try {
+    localStorage.setItem(GALLERY_CACHE_KEY, JSON.stringify({ tokens, total, savedAt: Date.now() }));
+  } catch (err) { /* best-effort */ }
+}
+
+function loadGalleryCache() {
+  try {
+    const raw = localStorage.getItem(GALLERY_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function relativeTimeFrom(ms) {
+  const secs = Math.round((Date.now() - ms) / 1000);
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+// Shared by the live fetch and the cache fallback -- same markup either
+// way, just a different data source and note text.
+function renderGalleryGrid(tokens, noteText) {
+  const grid = document.getElementById("galleryGrid");
+  const note = document.getElementById("galleryNote");
+  galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
+  note.textContent = noteText;
+  grid.innerHTML = tokens.map(t => `
+    <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
+      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
+      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>
+    </div>`).join("");
+  grid.querySelectorAll(".gcard").forEach(card => {
+    card.addEventListener("click", () => openLightbox(card.dataset.tid));
+  });
+}
+
+async function loadGallery() {
+  const cached = loadGalleryCache();
+  if (cached && cached.tokens && cached.tokens.length) {
+    renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
+  }
+
+  const pagesNeeded = Math.ceil(GALLERY_LIMIT / SUMMARY_PAGE_SIZE);
+  const tokens = [];
+  let firstPageRaw = null;
+  for (let page = 1; page <= pagesNeeded; page++) {
+    const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
+    if (page === 1) firstPageRaw = raw;
+    if (raw == null) break;
+    const pageTokens = parseCollectionSummary(raw);
+    if (!pageTokens.length) break; // fewer tokens than GALLERY_LIMIT exist -- no more pages
+    tokens.push(...pageTokens);
+  }
+
+  if (!tokens.length) {
+    // Live fetch came back empty. Distinguish "the endpoint is down" from
+    // "the collection genuinely has zero mints" -- only the former should
+    // fall back to cache; a real zero shouldn't keep showing stale cards.
+    if (firstPageRaw == null && cached && cached.tokens && cached.tokens.length) {
+      renderGalleryGrid(cached.tokens, `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`);
+      return;
+    }
+    galleryTokensByTid = new Map();
+    document.getElementById("galleryGrid").innerHTML =
+      `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
+    document.getElementById("galleryNote").textContent = "";
+    return;
+  }
+
+  const shown = tokens.slice(0, GALLERY_LIMIT);
+  const total = stats.supply != null ? stats.supply : shown.length;
+  saveGalleryCache(shown, total);
+  renderGalleryGrid(shown, total > shown.length ? `showing latest ${shown.length} of ${total}` : `${shown.length} minted so far`);
+}
+
+// ---------- lightbox ----------
+
+const lightbox = document.getElementById("lightbox");
+
+function openLightbox(tid) {
+  const t = galleryTokensByTid.get(tid);
+  if (!t) return;
+  document.getElementById("lightboxImg").src = t.image;
+  document.getElementById("lightboxImg").alt = t.sealed ? "sealed" : t.name;
+  document.getElementById("lightboxName").textContent = t.sealed ? "Sealed" : t.name;
+  document.getElementById("lightboxTid").textContent = `#${t.tid}`;
+  document.getElementById("lightboxOwner").textContent = t.owner;
+  document.getElementById("lightboxTokenLink").href = gnowebTokenUrl(t.tid);
+
+  const descEl = document.getElementById("lightboxDesc");
+  const traitsEl = document.getElementById("lightboxTraits");
+  if (t.sealed) {
+    descEl.style.display = "none";
+    traitsEl.style.display = "none";
+    let sealedNote = document.getElementById("lightboxSealedNote");
+    if (!sealedNote) {
+      sealedNote = document.createElement("p");
+      sealedNote.id = "lightboxSealedNote";
+      sealedNote.className = "sealed-note";
+      traitsEl.parentElement.insertBefore(sealedNote, traitsEl);
+    }
+    sealedNote.textContent = "Still sealed — the real name, art, and traits reveal 10 blocks after mint.";
+    sealedNote.style.display = "";
+  } else {
+    const sealedNote = document.getElementById("lightboxSealedNote");
+    if (sealedNote) sealedNote.style.display = "none";
+    descEl.style.display = "";
+    descEl.textContent = t.description;
+    traitsEl.style.display = "";
+    traitsEl.innerHTML = t.traits.map(tr => `<li><span class="k">${escapeHtml(tr.trait)}</span><span class="v">${escapeHtml(tr.value)}</span></li>`).join("");
+  }
+  lightbox.classList.add("on");
+}
+
+function closeLightbox() {
+  lightbox.classList.remove("on");
+  document.getElementById("lightboxImg").src = "";
+}
+document.getElementById("lightboxClose").addEventListener("click", closeLightbox);
+lightbox.addEventListener("click", (e) => { if (e.target === lightbox) closeLightbox(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeLightbox(); });
+
+function setStatus(cls, text) {
+  document.getElementById("statusHolder").innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+document.getElementById("mintBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  const remaining = remainingWalletAllowance();
+  const hardMax = remaining != null ? Math.min(MAX_QTY_PER_TX, remaining) : MAX_QTY_PER_TX;
+  const qty = Math.max(1, Math.min(hardMax, parseInt(document.getElementById("qtyInput").value, 10) || 1));
+  const to = currentRecipient();
+  const btn = document.getElementById("mintBtn");
+  btn.disabled = true;
+  setStatus("pending", `Waiting for Adena approval — minting ${qty}…`);
+  try {
+    const send = stats.price ? `${stats.price}ugnot` : "";
+    const messages = Array.from({ length: qty }, () => ({
+      type: "/vm.m_call",
+      value: { caller: w.address, send, pkg_path: REALM_PATH, func: "MintAssembled", args: [to] },
+    }));
+    const { hash, height } = await doContract(messages, `mint ${qty} Gem${qty > 1 ? "s" : ""}`);
+    setStatus("success", `Minted${height ? ` at block ${height}` : ""} — tx ${hash}. Sealed for 10 blocks, then check TokenURI to see what you got.`);
+    loadStats();
+    loadGallery();
+  } catch (err) {
+    setStatus("error", err.message || String(err));
+  } finally {
+    updateMintButton();
+  }
+});
+
+document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
+document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
+
+renderWalletGate();
+loadStats();
+loadGallery();
+setInterval(loadStats, 20000);
+setInterval(loadGallery, 20000);
+</script>
+
+</body>
+</html>

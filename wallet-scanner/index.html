@@ -120,6 +120,7 @@
   .nft-card .top{display:flex; align-items:center; justify-content:space-between; gap:8px}
   .nft-card .cname{font-weight:700; font-size:13.5px}
   .nft-card .sym{font-family:var(--mono); font-size:11px; color:var(--faint); border:1px solid var(--hair2); border-radius:6px; padding:1px 6px}
+  .nft-card .realm-path{font-family:var(--mono); font-size:10.5px; color:var(--faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help}
   .nft-card .balance{font-family:var(--mono); font-size:22px; color:var(--accent)}
   .nft-card .balance .lbl{font-size:11px; color:var(--faint); font-family:var(--sans); margin-left:6px}
   .thumbs{display:flex; gap:6px; flex-wrap:wrap; margin-top:2px}
@@ -188,7 +189,7 @@
 </div>
 
 <script type="module">
-import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, abciQuery } from "/lib/gno-rpc.js";
+import { NETWORKS, loadFungibleTokens, fetchBalance, fetchTokenDecimals, fetchNativeBalance, fromBaseUnits, mapLimit, createLimiter, abciQuery } from "/lib/gno-rpc.js";
 import { checkNftBalance, fetchOwnedTokenIds, fetchOwnedTokenMetadata, bruteForceOwnedTokenIds } from "/lib/gno-nft.js";
 import { discoverNftCollections } from "/lib/nft-discovery.js";
 import { initSiteChrome, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
@@ -423,38 +424,69 @@ function submitOtherAddress() {
 otherScanBtn.addEventListener("click", submitOtherAddress);
 otherAddrInput.addEventListener("keydown", (e) => { if (e.key === "Enter") submitOtherAddress(); });
 
-function renderTokenRows(rows) {
-  tokenBody.innerHTML = rows.map(r => `
+function tokenRowHTML(r) {
+  return `
     <tr>
       <td>${escapeHtml(r.name)}</td>
       <td>${escapeHtml(r.symbol)}</td>
       <td class="num">${escapeHtml(r.balance)}</td>
       <td class="realm" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</td>
-    </tr>
-  `).join("");
+    </tr>`;
+}
+
+// Full, one-shot render — used for the cache-instant load path, where the
+// whole list is already known and there's nothing to progressively reveal.
+function renderTokenRows(rows) {
+  tokenBody.innerHTML = rows.map(tokenRowHTML).join("");
   tokenTable.style.display = rows.length ? "table" : "none";
   tokenEmpty.style.display = rows.length ? "none" : "block";
   tokenEmpty.textContent = rows.length ? "" : "No token balances found on this network.";
-  tokenCount.textContent = `${rows.length} held`;
+  tokenCount.textContent = rows.length ? `${rows.length} held` : "";
+}
+
+// Appends a single row to whatever's already there — the live-scan
+// counterpart to renderTokenRows, so a balance found early doesn't sit
+// waiting behind every other token still being checked.
+function appendTokenRow(r) {
+  tokenTable.style.display = "table";
+  tokenEmpty.style.display = "none";
+  tokenBody.insertAdjacentHTML("beforeend", tokenRowHTML(r));
 }
 
 async function scanTokens(net, address) {
   tokenTable.style.display = "none";
+  tokenBody.innerHTML = "";
   tokenEmpty.style.display = "block";
   tokenEmpty.innerHTML = '<span class="pulse"></span>Loading token registry…';
   tokenCount.textContent = "";
 
+  // Rows land in whatever order their checks happen to finish in, not
+  // necessarily the registry's own order — the tradeoff progressive
+  // rendering makes: a token found early shows up immediately instead of
+  // waiting for every other token's check to also finish first.
   const rows = [];
+
   try {
     const nativeRaw = await fetchNativeBalance(net, address);
     if (nativeRaw !== "0") {
-      rows.push({ name: "Native GNOT", symbol: "GNOT", balance: fromBaseUnits(nativeRaw, 6), path: "—" });
+      const r = { name: "Native GNOT", symbol: "GNOT", balance: fromBaseUnits(nativeRaw, 6), path: "—" };
+      rows.push(r);
+      appendTokenRow(r);
     }
   } catch {}
 
   const tokens = await loadFungibleTokens(net);
-  tokenEmpty.innerHTML = `<span class="pulse"></span>Checking ${tokens.length} GRC20 tokens…`;
-  const results = await mapLimit(tokens, 8, async (t) => {
+  let checked = 0;
+  const updateStatus = () => {
+    if (rows.length) {
+      tokenCount.innerHTML = `${rows.length} held${checked < tokens.length ? ' <span class="spinner"></span>' : ""}`;
+    } else {
+      tokenEmpty.innerHTML = `<span class="pulse"></span>Checking ${tokens.length} GRC20 tokens… (${checked}/${tokens.length})`;
+    }
+  };
+  updateStatus();
+
+  await mapLimit(tokens, 8, async (t) => {
     try {
       const [balance, decimals] = await Promise.all([
         fetchBalance(net, t.path, address),
@@ -464,14 +496,21 @@ async function scanTokens(net, address) {
     } catch {
       return { ...t, balance: null };
     }
-  });
-  for (const t of results) {
+  }, (t) => {
+    checked++;
     if (t.balance != null && t.balance > 0) {
-      rows.push({ name: t.name, symbol: t.symbol, balance: fromBaseUnits(String(t.balance), t.decimals ?? 6), path: t.path });
+      const r = { name: t.name, symbol: t.symbol, balance: fromBaseUnits(String(t.balance), t.decimals ?? 6), path: t.path };
+      rows.push(r);
+      appendTokenRow(r);
     }
-  }
+    updateStatus();
+  });
 
-  renderTokenRows(rows);
+  if (!rows.length) {
+    tokenEmpty.style.display = "block";
+    tokenEmpty.textContent = "No token balances found on this network.";
+  }
+  tokenCount.textContent = rows.length ? `${rows.length} held` : "";
   return rows;
 }
 
@@ -489,25 +528,55 @@ function nftThumbsHTML(entry) {
   ).join("") + (tokenIds.length > shown.length ? `<span class="ph">+${tokenIds.length - shown.length}</span>` : "");
 }
 
-function renderNftShell(held, net, netKey, checkedCount, errorCount) {
-  nftEmpty.style.display = held.length ? "none" : "block";
-  nftEmpty.textContent = held.length ? "" : "No NFTs found in any known collection.";
-  nftCount.textContent = held.length ? `${held.length} collection(s)` : "";
-  nftCoverageNote.style.display = "block";
+// "Beginning…end" truncation so two collections that share (or nearly
+// share) a display name -- a real gno.land pattern, since anyone can
+// deploy a realm called anything -- stay visually distinguishable without
+// hovering for the full path every time; the tail in particular tends to
+// carry the actual distinguishing bit (a version suffix, a differently-cased
+// deployer segment).
+function shortenRealmPath(path) {
+  const HEAD = 22, TAIL = 16;
+  return path.length > HEAD + TAIL + 1 ? `${path.slice(0, HEAD)}…${path.slice(-TAIL)}` : path;
+}
+
+function nftCardHTML(r) {
+  return `
+    <div class="nft-card" data-path="${escapeHtml(r.path)}">
+      <div class="top"><span class="cname">${escapeHtml(r.name)}</span>${r.symbol ? `<span class="sym">${escapeHtml(r.symbol)}</span>` : ""}</div>
+      <div class="realm-path" title="${escapeHtml(r.path)}">${escapeHtml(shortenRealmPath(r.path))}</div>
+      <div class="balance">${r.count}<span class="lbl">held</span></div>
+      <div class="thumbs" data-thumbs>${nftThumbsHTML(r)}</div>
+    </div>`;
+}
+
+function nftCountHTML(heldCount, scanning) {
+  if (!heldCount) return scanning ? '<span class="spinner"></span>' : "";
+  return `${heldCount} collection(s)${scanning ? ' <span class="spinner"></span>' : ""}`;
+}
+
+function nftCoverageHTML(checked, total, errorCount, net, netKey, scanning) {
   const scannedAt = nftCollectionsScannedAt[netKey];
   const freshness = scannedAt
     ? `collection list last refreshed ${formatAgo(scannedAt)} (auto-refreshes in the background every ${NFT_COLLECTIONS_REFRESH_COOLDOWN_MS / 60000} min, or click Rescan for the latest now)`
     : "collection list still loading";
-  nftCoverageNote.innerHTML = `Checked against ${checkedCount} collection(s) found by scanning the whole chain on ${escapeHtml(net.label)}` +
+  const checkedText = scanning
+    ? `Checking ${checked}${total ? `/${total}` : ""} known collection(s)`
+    : `Checked against ${checked} collection(s) found by scanning the whole chain`;
+  return `${checkedText} on ${escapeHtml(net.label)}` +
     (errorCount ? ` (${errorCount} couldn't be checked)` : "") +
     ` — ${freshness}. Detection is heuristic (source pattern match), so a genuinely non-standard collection could still be missed.`;
-  nftGrid.innerHTML = held.map(r => `
-    <div class="nft-card" data-path="${escapeHtml(r.path)}">
-      <div class="top"><span class="cname">${escapeHtml(r.name)}</span>${r.symbol ? `<span class="sym">${escapeHtml(r.symbol)}</span>` : ""}</div>
-      <div class="balance">${r.count}<span class="lbl">held</span></div>
-      <div class="thumbs" data-thumbs>${nftThumbsHTML(r)}</div>
-    </div>
-  `).join("");
+}
+
+// Full, one-shot render — used for the cache-instant load path, where the
+// whole `held` list is already known and there's nothing to progressively
+// reveal.
+function renderNftShell(held, net, netKey, checkedCount, errorCount) {
+  nftEmpty.style.display = held.length ? "none" : "block";
+  if (!held.length) nftEmpty.textContent = "No NFTs found in any known collection.";
+  nftCount.innerHTML = nftCountHTML(held.length, false);
+  nftCoverageNote.style.display = "block";
+  nftCoverageNote.innerHTML = nftCoverageHTML(checkedCount, checkedCount, errorCount, net, netKey, false);
+  nftGrid.innerHTML = held.map(nftCardHTML).join("");
 }
 
 // Renders instantly from a cached scan — no RPC calls at all.
@@ -515,6 +584,71 @@ function renderNftFromCache(held, net, netKey, checkedCount, errorCount) {
   nftGrid.innerHTML = "";
   nftCoverageNote.style.display = "none";
   renderNftShell(held, net, netKey, checkedCount ?? held.length, errorCount ?? 0);
+}
+
+// Text-only counterpart to renderNftShell, for a live scan in progress —
+// never touches nftGrid, so it can be called on every single collection
+// checked (not just held ones) without disturbing cards already appended.
+function updateNftScanStatus(heldCount, checked, total, errorCount, net, netKey, scanning) {
+  nftEmpty.style.display = heldCount ? "none" : "block";
+  if (!heldCount) {
+    nftEmpty.innerHTML = scanning
+      ? `<span class="pulse"></span>Checking known NFT collections… (${checked}/${total})`
+      : "No NFTs found in any known collection.";
+  }
+  nftCount.innerHTML = nftCountHTML(heldCount, scanning);
+  nftCoverageNote.style.display = "block";
+  nftCoverageNote.innerHTML = nftCoverageHTML(checked, total, errorCount, net, netKey, scanning);
+}
+
+function appendNftCard(r) {
+  nftGrid.insertAdjacentHTML("beforeend", nftCardHTML(r));
+}
+
+function updateNftCardThumbs(path, r) {
+  const el = nftGrid.querySelector(`[data-path="${CSS.escape(path)}"] [data-thumbs]`);
+  if (el) el.innerHTML = nftThumbsHTML(r);
+}
+
+// Best-effort per-collection token-id + image fetch — a collection that
+// doesn't emit Mint/Transfer/Burn events with a tokenId attr (not
+// guaranteed by the GRC721 standard) yields nothing here even though the
+// balance is real; say so honestly rather than leaving a card looking
+// broken. Results are attached onto `r` itself so the whole thing
+// (including fetched thumbs) can be cached. Kicked off the moment a
+// collection is confirmed held (see scanNfts below), not after every other
+// collection's own balance check has also finished — concurrency across
+// collections is bounded by the caller's limiter, not by this function.
+async function fetchThumbsForHeldCollection(net, address, r) {
+  let tokenIds = [];
+  try {
+    tokenIds = await fetchOwnedTokenIds(net, r.path, address);
+  } catch {}
+  if (!tokenIds.length) {
+    // Event-log replay is best-effort and misses collections that don't
+    // emit Mint/Transfer/Burn with a tokenId attribute — OwnerOf(id) is
+    // part of the standard GRC721 surface and reads live ownership
+    // directly, so it finds tokens the event scrape can miss entirely.
+    // Progress text (not a static spinner) so a scan across dozens of
+    // ids doesn't read as a frozen/looping page.
+    r.loading = "Looking up token IDs…";
+    updateNftCardThumbs(r.path, r);
+    try {
+      tokenIds = await bruteForceOwnedTokenIds(net, r.path, address, r.count, {
+        onProgress: (checked, total) => {
+          r.loading = `Looking up token IDs… (${checked}/${total})`;
+          updateNftCardThumbs(r.path, r);
+        },
+      });
+    } catch {}
+    delete r.loading;
+  }
+  r.tokenIds = tokenIds;
+  if (tokenIds.length) {
+    const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
+    r.metas = await mapLimit(shown, 3, (tid) => fetchOwnedTokenMetadata(net, r.path, tid).catch(() => ({ tokenId: tid, image: null })));
+  }
+  updateNftCardThumbs(r.path, r);
 }
 
 async function scanNfts(net, netKey, address, { forceCollectionsRefresh = false } = {}) {
@@ -531,58 +665,44 @@ async function scanNfts(net, netKey, address, { forceCollectionsRefresh = false 
     return { held: [], checkedCount: 0, errorCount: 0 };
   }
 
-  const balances = await mapLimit(realms, 6, async (r) => {
+  // Cards land in whatever order their balance checks happen to finish in
+  // (mapLimit's own concurrency, not the realms list order) — the point of
+  // this whole rewrite is showing each one the moment it's found instead of
+  // waiting for the full sweep across every known collection.
+  const held = [];
+  let checked = 0, errorCount = 0;
+  // Bounded separately from the balance-check pass below (limit 6) —
+  // thumbnail fetching is heavier (token-id lookup + per-token metadata),
+  // so this keeps it to 3 concurrent collections even though a collection
+  // can now start its own thumbnail fetch the moment it's found held,
+  // rather than after every other collection's balance has also been
+  // checked.
+  const runThumbTask = createLimiter(3);
+  const thumbTasks = [];
+
+  updateNftScanStatus(0, 0, realms.length, 0, net, netKey, true);
+
+  await mapLimit(realms, 6, async (r) => {
     try {
       const count = await checkNftBalance(net, r.path, address);
       return { ...r, count };
     } catch {
       return { ...r, count: null, error: true };
     }
+  }, (result) => {
+    checked++;
+    if (result.error) errorCount++;
+    if (result.count != null && result.count > 0) {
+      held.push(result);
+      appendNftCard(result);
+      thumbTasks.push(runThumbTask(() => fetchThumbsForHeldCollection(net, address, result)));
+    }
+    updateNftScanStatus(held.length, checked, realms.length, errorCount, net, netKey, checked < realms.length);
   });
-  const held = balances.filter(r => r.count != null && r.count > 0);
-  const checkedCount = balances.length;
-  const errorCount = balances.filter(r => r.error).length;
-  renderNftShell(held, net, netKey, checkedCount, errorCount);
-  if (!held.length) return { held, checkedCount, errorCount };
 
-  // Best-effort per-collection token-id + image fetch — a collection
-  // that doesn't emit Mint/Transfer/Burn events with a tokenId attr
-  // (not guaranteed by the GRC721 standard) yields nothing here even
-  // though the balance above is real; say so honestly rather than
-  // leaving a card looking broken. Results are attached onto each `held`
-  // entry so the whole thing (including fetched thumbs) can be cached.
-  await mapLimit(held, 3, async (r) => {
-    const card = nftGrid.querySelector(`[data-path="${CSS.escape(r.path)}"] [data-thumbs]`);
-    let tokenIds = [];
-    try {
-      tokenIds = await fetchOwnedTokenIds(net, r.path, address);
-    } catch {}
-    if (!tokenIds.length) {
-      // Event-log replay is best-effort and misses collections that don't
-      // emit Mint/Transfer/Burn with a tokenId attribute — OwnerOf(id) is
-      // part of the standard GRC721 surface and reads live ownership
-      // directly, so it finds tokens the event scrape can miss entirely.
-      // Progress text (not a static spinner) so a scan across dozens of
-      // ids doesn't read as a frozen/looping page.
-      r.loading = "Looking up token IDs…";
-      if (card) card.innerHTML = nftThumbsHTML(r);
-      try {
-        tokenIds = await bruteForceOwnedTokenIds(net, r.path, address, r.count, {
-          onProgress: (checked, total) => {
-            r.loading = `Looking up token IDs… (${checked}/${total})`;
-            if (card) card.innerHTML = nftThumbsHTML(r);
-          },
-        });
-      } catch {}
-      delete r.loading;
-    }
-    r.tokenIds = tokenIds;
-    if (tokenIds.length) {
-      const shown = tokenIds.slice(0, MAX_THUMBS_PER_COLLECTION);
-      r.metas = await mapLimit(shown, 3, (tid) => fetchOwnedTokenMetadata(net, r.path, tid).catch(() => ({ tokenId: tid, image: null })));
-    }
-    if (card) card.innerHTML = nftThumbsHTML(r);
-  });
+  updateNftScanStatus(held.length, checked, realms.length, errorCount, net, netKey, false);
+  const checkedCount = checked;
+  await Promise.all(thumbTasks);
   return { held, checkedCount, errorCount };
 }
 

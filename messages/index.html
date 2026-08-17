@@ -152,12 +152,12 @@ import { doContract, waitForAdena } from "/lib/adena-connect.js";
 import { abciQuery, NETWORKS, b64ToUtf8 } from "/lib/gno-rpc.js";
 initSiteChrome();
 
-// PLACEHOLDER — swap once the realm is actually deployed. See
-// gno-nft-minter's gno.land/r/PLACEHOLDER_YOUR_ADDRESS/messages/DEPLOY.md
-// for the full checklist (deploy avl first, then messages, paste the
-// real resulting path here). Until then every qeval/doContract call
-// below just fails gracefully ("Contract not reachable yet").
-const REALM_PATH = "gno.land/r/PLACEHOLDER_YOUR_ADDRESS/messages";
+// Deploy identity: g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls. Not deployed
+// yet as of this commit -- see gno-nft-minter's
+// gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messages/DEPLOY.md.
+// Until the deploy lands, every qeval/doContract call below just fails
+// gracefully ("Contract not reachable yet").
+const REALM_PATH = "gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messages";
 
 // Must match messages.gno's own MaxMessageLen/pageSize constants —
 // same "the frontend hardcodes a number that has to match the contract"

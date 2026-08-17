@@ -97,6 +97,7 @@
 
   <div class="preset-row">
     <button class="btn ghost" id="loadPresetBtn" type="button">Load Gems deploy preset (grc721v2 → nftminter@nym-gemsnft000/g17)</button>
+    <button class="btn ghost" id="loadMessagesPresetBtn" type="button">Load Messages deploy preset (avl → messages@g1lyuc4…z00ls)</button>
     <button class="btn ghost" id="addPkgBtn" type="button">+ Add empty package</button>
     <span class="hint" id="presetHint"></span>
   </div>
@@ -111,7 +112,7 @@ import { abciQuery, NETWORKS } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 let packages = []; // [{pkgpath, deposit, files: [{name, body}]}]
-let preset = null;
+const presetCache = {}; // url -> parsed JSON, fetched once per URL
 
 // Reported back with "Already deployed" instead of leaving someone to
 // guess after a page refresh loses the in-memory deploy results --
@@ -164,16 +165,18 @@ function renderWalletGate() {
 }
 onWalletChange(renderWalletGate);
 
-async function loadPreset() {
-  if (!preset) {
-    const res = await fetch("gems-deploy-preset.json");
-    preset = await res.json();
+async function loadPreset(url) {
+  if (!presetCache[url]) {
+    const res = await fetch(url);
+    presetCache[url] = await res.json();
   }
+  const preset = presetCache[url];
   packages = preset.map(p => ({ pkgpath: p.pkgpath, deposit: "1000000ugnot", files: p.files.map(f => ({ ...f })) }));
   renderPkgList();
   document.getElementById("presetHint").textContent = `Loaded ${packages.length} packages — review before deploying, in order.`;
 }
-document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset().catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
+document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset("gems-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
+document.getElementById("loadMessagesPresetBtn").addEventListener("click", () => loadPreset("messages-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
 
 document.getElementById("addPkgBtn").addEventListener("click", () => {
   packages.push({ pkgpath: "gno.land/r/<your-address>/<name>", deposit: "1000000ugnot", files: [] });

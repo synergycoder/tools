@@ -548,7 +548,15 @@ async function loadStats() {
   const youMintedRow = document.getElementById("factYouMintedRow");
   if (recipient && stats.mintedByWallet != null) {
     youMintedRow.style.display = "";
-    document.getElementById("factYouMinted").textContent = stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
+    // The owner is exempt from the per-wallet cap as CALLER (see
+    // remainingWalletAllowance's own doc comment) -- say so here too, or
+    // "3 / 3" reads as "you're capped" even once the button itself no
+    // longer actually blocks them.
+    const w = getWallet();
+    const isOwnerCaller = stats.owner && w.status === "connected" && w.address === stats.owner;
+    document.getElementById("factYouMinted").textContent = isOwnerCaller
+      ? `${stats.mintedByWallet} (no cap — owner)`
+      : stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
   } else {
     youMintedRow.style.display = "none";
   }
@@ -600,10 +608,22 @@ async function refreshRealmBalance() {
   }
 }
 
-// how many more pieces the current recipient (the "mint to" address) is
-// still allowed to receive -- null means "no cap info yet" (assume
-// unrestricted rather than blocking the button on a slow/failed query).
+// how many more pieces this connected wallet is still allowed to mint --
+// null means no cap applies at all: no cap info yet (assume unrestricted
+// rather than blocking the button on a slow/failed query), walletCap is
+// 0 (unlimited by design), or the connected wallet IS the collection
+// owner. MintAssembled exempts the owner as CALLER from the per-wallet
+// cap entirely (see its own doc comment) regardless of which address
+// ends up receiving the token -- so this checks the CONNECTED wallet
+// against stats.owner, not currentRecipient()/"mint to", which can be a
+// different address entirely (the owner gifting to someone else).
+// Without this check the UI used to silently clamp/disable minting for
+// the owner at the normal per-wallet cap even though the contract itself
+// would have allowed it -- confirmed live: an owner wallet blocked at 3
+// when the contract had no cap on it at all.
 function remainingWalletAllowance() {
+  const w = getWallet();
+  if (stats.owner && w.status === "connected" && w.address === stats.owner) return null;
   if (stats.walletCap == null || stats.walletCap === 0) return null;
   if (stats.mintedByWallet == null) return null;
   return Math.max(0, stats.walletCap - stats.mintedByWallet);

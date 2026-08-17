@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onchain Messages — gno.tools</title>
+<meta name="description" content="A public, fully-threaded on-chain guestbook on gno.land — post a message, reply to anyone, see replies to your own posts.">
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Onchain Messages">
+<meta property="og:description" content="A public, fully-threaded on-chain guestbook on gno.land — post a message, reply to anyone, see replies to your own posts.">
+<meta property="og:url" content="https://gno.tools/messages">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Onchain Messages">
+<meta name="twitter:description" content="A public, fully-threaded on-chain guestbook on gno.land — post a message, reply to anyone, see replies to your own posts.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="/adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px 70px}
+
+  .hero{padding:52px 0 8px}
+  .hero-top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .hero-top h1{margin:0;font-size:40px;letter-spacing:-0.01em}
+  .hero-status{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none}
+  @media (max-width:600px){.hero-top{flex-direction:column}.hero-status{align-items:flex-start}}
+
+  .eyebrow{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);
+    border:1px solid var(--accent-line);border-radius:99px;padding:5px 12px}
+  .sub{color:var(--muted);margin:14px 0 0;font-size:15px;max-width:65ch}
+
+  .wallet-gate{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:99px;padding:6px 14px;font-size:12.5px;white-space:nowrap}
+  .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
+  .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
+  .wallet-gate .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate.ok .dot{background:#7fd88f}
+  .wallet-gate.warn .dot{background:var(--amber)}
+  .wallet-gate code{font-family:var(--mono)}
+
+  .status-line{font-family:var(--mono);font-size:12px;margin-top:12px;padding:9px 11px;border-radius:8px;word-break:break-word}
+  .status-line.pending{background:var(--accent-soft);color:var(--accent)}
+  .status-line.success{background:#7fd88f1a;color:#7fd88f}
+  .status-line.error{background:#e0596d1a;color:#e0596d}
+  .status-line.warn{background:var(--amber-soft);color:var(--amber)}
+
+  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:24px 26px;margin:24px 0}
+  .panel h2{margin:0 0 6px;font-size:18px}
+  .panel .desc{color:var(--muted);font-size:13.5px;margin:0 0 16px}
+
+  .composer textarea{width:100%;min-height:88px;resize:vertical;font-family:inherit;font-size:14px;
+    padding:12px 14px;border-radius:10px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink)}
+  .composer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+  .char-count{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .char-count.over{color:#e0596d}
+  .post-btn{padding:10px 20px;border-radius:9px;border:none;background:var(--accent);color:#fff;
+    font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+  .post-btn:hover:not(:disabled){filter:brightness(1.08)}
+  .post-btn:disabled{background:var(--panel2);color:var(--faint);cursor:not-allowed;border:1px solid var(--hair)}
+
+  .section{margin:40px 0 20px}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
+  .section-head h2{font-size:18px;margin:0}
+  .section-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .empty-note{color:var(--muted);font-size:13.5px;padding:16px 0}
+
+  .msg-list{display:flex;flex-direction:column;gap:14px}
+  .msg-node{border:1px solid var(--hair);border-radius:12px;background:var(--panel);padding:14px 16px}
+  .msg-node .msg-node{background:var(--panel2);margin-top:12px}
+  .msg-meta{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .msg-author{color:var(--accent);font-weight:700}
+  .msg-text{font-size:14px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+  .msg-actions{display:flex;align-items:center;gap:14px;margin-top:10px}
+  .msg-actions button{background:none;border:none;padding:0;font-family:var(--mono);font-size:11.5px;
+    color:var(--muted);cursor:pointer}
+  .msg-actions button:hover{color:var(--accent)}
+  .msg-reply-composer{margin-top:10px;display:none}
+  .msg-reply-composer.on{display:block}
+  .msg-reply-composer textarea{width:100%;min-height:60px;resize:vertical;font-family:inherit;font-size:13px;
+    padding:9px 11px;border-radius:8px;border:1px solid var(--hair);background:var(--bg);color:var(--ink)}
+  .msg-reply-composer .composer-row{margin-top:6px}
+  .msg-reply-composer .post-btn{padding:7px 14px;font-size:12.5px}
+  .msg-replies{margin-top:4px}
+  .msg-replies-children{margin-left:18px;border-left:1px solid var(--hair);padding-left:14px}
+  .load-more-btn{width:100%;padding:11px;border-radius:9px;border:1px dashed var(--hair);background:none;
+    color:var(--muted);font-family:var(--mono);font-size:12.5px;cursor:pointer;margin-top:10px}
+  .load-more-btn:hover{color:var(--accent);border-color:var(--accent-line)}
+  .load-more-btn:disabled{opacity:.5;cursor:default}
+
+  .inbox-reply-to{font-size:11.5px;color:var(--faint);margin-bottom:4px;font-style:italic}
+
+  .connect-prompt{color:var(--muted);font-size:13.5px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-top">
+      <h1>Onchain Messages</h1>
+      <div class="hero-status">
+        <p class="eyebrow">Gno.land · Sapphire-1 testnet · Public &amp; threaded</p>
+        <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+      </div>
+    </div>
+    <p class="sub">A shared public board, stored entirely on chain. Anyone can post; anyone can reply to any message, as deep as the conversation goes. Reading is open to everyone — connect Adena to post, or to see every reply to your own messages in your inbox below.</p>
+  </div>
+
+  <div id="networkMismatchHolder"></div>
+  <div id="endpointStatusHolder"></div>
+
+  <div class="panel composer">
+    <h2>Post a message</h2>
+    <p class="desc">Goes straight to the public board below — no draft, no edit, no delete.</p>
+    <textarea id="composerText" placeholder="Say something…" maxlength="2000"></textarea>
+    <div class="composer-row">
+      <span class="char-count" id="composerCount">0 / 1000</span>
+      <button class="post-btn" id="composerPostBtn" type="button" disabled>Connect Wallet to Post</button>
+    </div>
+    <div id="composerStatusHolder"></div>
+  </div>
+
+  <div class="section" id="inboxSection">
+    <div class="section-head">
+      <h2>My inbox</h2>
+      <span class="note" id="inboxNote"></span>
+    </div>
+    <div id="inboxList"><p class="connect-prompt">Connect Adena to see replies to your own messages.</p></div>
+  </div>
+
+  <div class="section">
+    <div class="section-head">
+      <h2>Public feed</h2>
+      <span class="note" id="feedNote"></span>
+    </div>
+    <div class="msg-list" id="feedList"><p class="empty-note">Loading…</p></div>
+    <button class="load-more-btn" id="feedLoadMoreBtn" type="button" style="display:none">Load more</button>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome, getWallet, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
+import { doContract, waitForAdena } from "/lib/adena-connect.js";
+import { abciQuery, NETWORKS, b64ToUtf8 } from "/lib/gno-rpc.js";
+initSiteChrome();
+
+// PLACEHOLDER — swap once the realm is actually deployed. See
+// gno-nft-minter's gno.land/r/PLACEHOLDER_YOUR_ADDRESS/messages/DEPLOY.md
+// for the full checklist (deploy avl first, then messages, paste the
+// real resulting path here). Until then every qeval/doContract call
+// below just fails gracefully ("Contract not reachable yet").
+const REALM_PATH = "gno.land/r/PLACEHOLDER_YOUR_ADDRESS/messages";
+
+// Must match messages.gno's own MaxMessageLen/pageSize constants —
+// same "the frontend hardcodes a number that has to match the contract"
+// pattern gems/index.html's SUMMARY_PAGE_SIZE already uses.
+const MAX_MESSAGE_LEN = 1000;
+const PAGE_SIZE = 20;
+
+function escapeHtml(s) {
+  const d = document.createElement("div");
+  d.textContent = s ?? "";
+  return d.innerHTML;
+}
+
+function truncateAddr(addr) {
+  return addr && addr.length > 14 ? `${addr.slice(0, 7)}…${addr.slice(-5)}` : addr;
+}
+
+// This realm only exists on Sapphire-1 testnet, same reasoning as
+// gems/index.html's own updateNetworkMismatchBanner.
+function updateNetworkMismatchBanner() {
+  const holder = document.getElementById("networkMismatchHolder");
+  const key = getActiveNetworkKey();
+  holder.innerHTML = key && key !== "testnet"
+    ? `<div class="status-line warn">You have ${escapeHtml(NETWORKS[key]?.label || key)} selected (top right). Onchain Messages only exists on gno.land's Sapphire-1 testnet — switch the network picker to Sapphire-1 to see live data and post.</div>`
+    : "";
+}
+updateNetworkMismatchBanner();
+window.addEventListener("gnotools:activenetwork", updateNetworkMismatchBanner);
+
+function showEndpointUnreachableBanner(endpoint) {
+  document.getElementById("endpointStatusHolder").innerHTML =
+    `<div class="status-line error">The gno.land RPC endpoint (${escapeHtml(endpoint)}) isn't reachable right now, so this page can't load live data. Please try again later.</div>`;
+}
+function clearEndpointUnreachableBanner() {
+  const holder = document.getElementById("endpointStatusHolder");
+  if (holder) holder.innerHTML = "";
+}
+
+async function qeval(expr) {
+  try {
+    const result = await abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+    clearEndpointUnreachableBanner();
+    return result;
+  } catch (err) {
+    if (err.isEndpointUnreachable) showEndpointUnreachableBanner(err.endpoint);
+    throw err;
+  }
+}
+
+// Every *Summary function on the contract returns ONE gno string literal
+// containing newline-separated "id|author|parentID|createdHeight|
+// replyCount|b64(text)" lines (messageSummaryLine's own format) — same
+// unwrap-then-split shape as gems/index.html's parseCollectionSummary,
+// confirmed against that realm's real deployed output before this
+// pattern was reused here (see that file's own doc comment).
+function unwrapQevalString(raw) {
+  if (!raw) return "";
+  const m = raw.match(/^\("([\s\S]*)" string\)$/);
+  return (m ? m[1] : raw).replace(/\\n/g, "\n").replace(/\\"/g, '"');
+}
+
+function parseMessageLines(raw) {
+  const body = unwrapQevalString(raw);
+  if (!body || !body.trim()) return [];
+  return body.split("\n").filter(Boolean).map((line) => {
+    const parts = line.split("|");
+    if (parts.length !== 6) return null;
+    const [id, author, parentId, createdHeight, replyCount, textB64] = parts;
+    try {
+      return {
+        id, author, parentId,
+        createdHeight: parseInt(createdHeight, 10),
+        replyCount: parseInt(replyCount, 10),
+        text: b64ToUtf8(textB64),
+      };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+function currentAddress() {
+  const w = getWallet();
+  return w.status === "connected" ? w.address : null;
+}
+
+// statusHolder is the actual element to write into, not an id -- an
+// inline reply composer has no unique id (there can be many on one page
+// at once), so every caller passes its own element reference directly.
+function setComposerStatus(statusHolder, cls, text) {
+  statusHolder.innerHTML = text ? `<div class="status-line ${cls}">${text}</div>` : "";
+}
+
+// Shared by the top-level composer and every inline reply composer —
+// posts, and on success calls onDone(newId) so the caller can refresh
+// whatever list should now include it.
+async function postMessage({ text, parentId, btn, statusHolder, onDone }) {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = "Posting…";
+  setComposerStatus(statusHolder, "pending", "Waiting for Adena approval…");
+  try {
+    const messages = [{
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "Post", args: [text, String(parentId)] },
+    }];
+    const { hash, height } = await doContract(messages, "post message");
+    setComposerStatus(statusHolder, "success", `Posted${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    onDone?.();
+  } catch (err) {
+    setComposerStatus(statusHolder, "error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+// ---------- top-level composer ----------
+
+const composerText = document.getElementById("composerText");
+const composerCount = document.getElementById("composerCount");
+const composerPostBtn = document.getElementById("composerPostBtn");
+
+function updateComposerState() {
+  const w = getWallet();
+  const len = composerText.value.length;
+  composerCount.textContent = `${len} / ${MAX_MESSAGE_LEN}`;
+  composerCount.classList.toggle("over", len > MAX_MESSAGE_LEN);
+  if (w.status !== "connected") {
+    composerPostBtn.disabled = true;
+    composerPostBtn.textContent = "Connect Wallet to Post";
+    return;
+  }
+  if (w.chainId !== "sapphire-1") {
+    composerPostBtn.disabled = true;
+    composerPostBtn.textContent = "Switch to Sapphire-1";
+    return;
+  }
+  composerPostBtn.textContent = "Post";
+  composerPostBtn.disabled = len === 0 || len > MAX_MESSAGE_LEN;
+}
+composerText.addEventListener("input", updateComposerState);
+
+const composerStatusHolder = document.getElementById("composerStatusHolder");
+composerPostBtn.addEventListener("click", () => {
+  const text = composerText.value.trim();
+  if (!text) return;
+  postMessage({
+    text, parentId: 0, btn: composerPostBtn, statusHolder: composerStatusHolder,
+    onDone: () => {
+      composerText.value = "";
+      updateComposerState();
+      resetFeed();
+    },
+  });
+});
+
+// ---------- message node rendering (recursive, lazy-loaded replies) ----------
+
+// Purely presentational — the contract's own threading is unbounded, a
+// page can't visually indent forever, so nesting flattens past this depth
+// instead of drifting off-screen.
+const MAX_VISUAL_DEPTH = 6;
+
+function renderMessageNode(msg, depth) {
+  const node = document.createElement("div");
+  node.className = "msg-node";
+
+  const repliesLoaded = { page: 1, count: 0 };
+
+  node.innerHTML = `
+    <div class="msg-meta"><span class="msg-author">${escapeHtml(truncateAddr(msg.author))}</span><span>block ${msg.createdHeight}</span></div>
+    <div class="msg-text">${escapeHtml(msg.text)}</div>
+    <div class="msg-actions">
+      <button class="reply-toggle-btn" type="button">Reply</button>
+      ${msg.replyCount > 0 ? `<button class="expand-btn" type="button">${msg.replyCount} repl${msg.replyCount === 1 ? "y" : "ies"} ▾</button>` : ""}
+    </div>
+    <div class="msg-reply-composer">
+      <textarea placeholder="Write a reply…" maxlength="2000"></textarea>
+      <div class="composer-row">
+        <span class="char-count">0 / ${MAX_MESSAGE_LEN}</span>
+        <button class="post-btn" type="button" disabled>Connect Wallet to Post</button>
+      </div>
+      <div class="reply-status-holder"></div>
+    </div>
+    <div class="msg-replies"></div>
+  `;
+
+  const replyToggleBtn = node.querySelector(".reply-toggle-btn");
+  const replyComposer = node.querySelector(".msg-reply-composer");
+  const replyTextarea = replyComposer.querySelector("textarea");
+  const replyCharCount = replyComposer.querySelector(".char-count");
+  const replyPostBtn = replyComposer.querySelector(".post-btn");
+  const replyStatusHolder = replyComposer.querySelector(".reply-status-holder");
+  const repliesHolder = node.querySelector(".msg-replies");
+
+  replyToggleBtn.addEventListener("click", () => {
+    replyComposer.classList.toggle("on");
+    if (replyComposer.classList.contains("on")) replyTextarea.focus();
+  });
+
+  function updateReplyComposerState() {
+    const w = getWallet();
+    const len = replyTextarea.value.length;
+    replyCharCount.textContent = `${len} / ${MAX_MESSAGE_LEN}`;
+    replyCharCount.classList.toggle("over", len > MAX_MESSAGE_LEN);
+    if (w.status !== "connected") { replyPostBtn.disabled = true; replyPostBtn.textContent = "Connect Wallet to Post"; return; }
+    if (w.chainId !== "sapphire-1") { replyPostBtn.disabled = true; replyPostBtn.textContent = "Switch to Sapphire-1"; return; }
+    replyPostBtn.textContent = "Reply";
+    replyPostBtn.disabled = len === 0 || len > MAX_MESSAGE_LEN;
+  }
+  replyTextarea.addEventListener("input", updateReplyComposerState);
+  onWalletChange(updateReplyComposerState);
+  updateReplyComposerState();
+
+  replyPostBtn.addEventListener("click", () => {
+    const text = replyTextarea.value.trim();
+    if (!text) return;
+    postMessage({
+      text, parentId: msg.id, btn: replyPostBtn, statusHolder: replyStatusHolder,
+      onDone: () => {
+        replyTextarea.value = "";
+        replyComposer.classList.remove("on");
+        msg.replyCount += 1;
+        repliesLoaded.page = 1;
+        repliesHolder.innerHTML = "";
+        loadReplies();
+      },
+    });
+  });
+
+  let loadMoreRepliesBtn = null;
+  function loadReplies() {
+    qeval(`RepliesSummary(${msg.id}, ${repliesLoaded.page})`).then((raw) => {
+      const replies = parseMessageLines(raw);
+      const childWrap = repliesHolder.querySelector(".msg-replies-children") || (() => {
+        const w = document.createElement("div");
+        w.className = "msg-replies-children";
+        repliesHolder.insertBefore(w, loadMoreRepliesBtn || null);
+        return w;
+      })();
+      replies.forEach((r) => {
+        childWrap.appendChild(renderMessageNode(r, depth + 1));
+      });
+      repliesLoaded.count += replies.length;
+
+      if (loadMoreRepliesBtn) loadMoreRepliesBtn.remove();
+      if (repliesLoaded.count < msg.replyCount && replies.length > 0) {
+        loadMoreRepliesBtn = document.createElement("button");
+        loadMoreRepliesBtn.type = "button";
+        loadMoreRepliesBtn.className = "load-more-btn";
+        loadMoreRepliesBtn.textContent = `Load more replies (${msg.replyCount - repliesLoaded.count} left)`;
+        loadMoreRepliesBtn.addEventListener("click", () => {
+          repliesLoaded.page += 1;
+          loadReplies();
+        });
+        repliesHolder.appendChild(loadMoreRepliesBtn);
+      }
+    }).catch(() => {});
+  }
+
+  const expandBtn = node.querySelector(".expand-btn");
+  if (expandBtn) {
+    let expanded = false;
+    expandBtn.addEventListener("click", () => {
+      expanded = !expanded;
+      if (expanded) {
+        expandBtn.textContent = expandBtn.textContent.replace("▾", "▴");
+        loadReplies();
+      } else {
+        expandBtn.textContent = expandBtn.textContent.replace("▴", "▾");
+        repliesHolder.innerHTML = "";
+        repliesLoaded.page = 1;
+        repliesLoaded.count = 0;
+      }
+    });
+  }
+
+  return node;
+}
+
+// ---------- public feed (top-level messages, load-more paginated) ----------
+
+const feedList = document.getElementById("feedList");
+const feedLoadMoreBtn = document.getElementById("feedLoadMoreBtn");
+let feedPage = 1;
+let feedLoadedAny = false;
+
+async function loadFeedPage() {
+  feedLoadMoreBtn.disabled = true;
+  const raw = await qeval(`FeedSummary(${feedPage})`).catch(() => null);
+  if (raw == null) {
+    if (!feedLoadedAny) feedList.innerHTML = `<p class="empty-note">Contract not reachable yet.</p>`;
+    feedLoadMoreBtn.style.display = "none";
+    return;
+  }
+  const msgs = parseMessageLines(raw);
+  if (!feedLoadedAny) feedList.innerHTML = "";
+  if (!msgs.length) {
+    if (!feedLoadedAny) feedList.innerHTML = `<p class="empty-note">No messages yet — be the first to post.</p>`;
+    feedLoadMoreBtn.style.display = "none";
+    return;
+  }
+  feedLoadedAny = true;
+  msgs.forEach((m) => feedList.appendChild(renderMessageNode(m, 0)));
+  feedPage += 1;
+  feedLoadMoreBtn.style.display = msgs.length < PAGE_SIZE ? "none" : "";
+  feedLoadMoreBtn.disabled = false;
+}
+feedLoadMoreBtn.addEventListener("click", loadFeedPage);
+
+function resetFeed() {
+  feedPage = 1;
+  feedLoadedAny = false;
+  feedList.innerHTML = `<p class="empty-note">Loading…</p>`;
+  loadFeedPage();
+}
+
+// ---------- my inbox ----------
+
+const inboxList = document.getElementById("inboxList");
+const inboxNote = document.getElementById("inboxNote");
+let lastInboxAddress;
+
+async function loadInbox() {
+  const addr = currentAddress();
+  if (!addr) {
+    inboxList.innerHTML = `<p class="connect-prompt">Connect Adena to see replies to your own messages.</p>`;
+    inboxNote.textContent = "";
+    return;
+  }
+  inboxList.innerHTML = `<p class="empty-note">Loading…</p>`;
+  const raw = await qeval(`InboxSummary("${addr}", 1)`).catch(() => null);
+  if (raw == null) {
+    inboxList.innerHTML = `<p class="empty-note">Contract not reachable yet.</p>`;
+    return;
+  }
+  const replies = parseMessageLines(raw);
+  if (!replies.length) {
+    inboxList.innerHTML = `<p class="empty-note">No replies to your messages yet.</p>`;
+    inboxNote.textContent = "";
+    return;
+  }
+  // "In reply to: …" context for each row — the LAST line of
+  // ParentChainSummary(reply.id) is exactly the reply's own immediate
+  // parent (the message it replied to), so this reuses that single-
+  // string-returning function instead of MessageSummary's own (string,
+  // error) tuple, which this v1 frontend doesn't parse (see this file's
+  // own note near REALM_PATH/MAX_MESSAGE_LEN on why).
+  const withContext = await Promise.all(replies.map(async (r) => {
+    const chainRaw = await qeval(`ParentChainSummary(${r.id})`).catch(() => null);
+    const chain = parseMessageLines(chainRaw);
+    const parent = chain.length ? chain[chain.length - 1] : null;
+    return { reply: r, parent };
+  }));
+  inboxList.innerHTML = "";
+  withContext.forEach(({ reply, parent }) => {
+    const wrap = document.createElement("div");
+    if (parent) {
+      const ctx = document.createElement("div");
+      ctx.className = "inbox-reply-to";
+      ctx.textContent = `In reply to your message: "${parent.text.slice(0, 80)}${parent.text.length > 80 ? "…" : ""}"`;
+      wrap.appendChild(ctx);
+    }
+    wrap.appendChild(renderMessageNode(reply, 0));
+    inboxList.appendChild(wrap);
+  });
+  inboxNote.textContent = `${replies.length} repl${replies.length === 1 ? "y" : "ies"}`;
+}
+
+function refreshInboxIfAddressChanged() {
+  const addr = currentAddress();
+  if (addr !== lastInboxAddress) {
+    lastInboxAddress = addr;
+    loadInbox();
+  }
+}
+
+// ---------- wallet gate + wiring ----------
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.className = "wallet-gate warn";
+    gate.innerHTML = `<span class="dot"></span> Connect Adena to post`;
+  } else {
+    const onSapphire = w.chainId === "sapphire-1";
+    gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
+    gate.innerHTML = onSapphire
+      ? `<span class="dot"></span> Connected as <code>${escapeHtml(truncateAddr(w.address))}</code>`
+      : `<span class="dot"></span> Wrong network — switch to Sapphire-1`;
+  }
+  updateComposerState();
+  refreshInboxIfAddressChanged();
+}
+onWalletChange(renderWalletGate);
+
+waitForAdena();
+renderWalletGate();
+resetFeed();
+</script>
+
+</body>
+</html>

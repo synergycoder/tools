@@ -88,6 +88,10 @@
   .price-row .lbl{font-size:13px;color:var(--muted)}
   .price-row .val{font-family:var(--mono);font-size:22px;font-weight:700}
   .price-row .val .unit{font-size:12px;color:var(--muted);font-weight:400;margin-left:4px}
+  .info-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;
+    border-radius:50%;border:1px solid var(--faint);color:var(--faint);font-size:10px;font-style:normal;
+    cursor:help;margin-left:4px;vertical-align:middle}
+  .info-icon:hover,.info-icon:focus{color:var(--accent);border-color:var(--accent-line)}
 
   .facts{list-style:none;margin:16px 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
   .facts li{display:flex;flex-direction:column;gap:4px;border:1px solid var(--hair);border-radius:10px;
@@ -111,6 +115,7 @@
   .status-line.pending{background:var(--accent-soft);color:var(--accent)}
   .status-line.success{background:#7fd88f1a;color:#7fd88f}
   .status-line.error{background:#e0596d1a;color:#e0596d}
+  .status-line.warn{background:var(--amber-soft);color:var(--amber)}
 
   .gallery{margin:50px 0 20px}
   .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
@@ -177,6 +182,11 @@
   .getstarted .step.done .n{display:none}
   .getstarted .step.done .check{display:inline}
   .getstarted .step.done .step-action{display:none}
+  /* Faucet is the one step worth re-doing -- a wallet that already has
+     SOME balance can still always use more, unlike Adena (install once)
+     or the mint action itself (its own big button lives in the panel
+     below regardless of this step's state). */
+  #stepFaucet.done .step-action{display:inline-flex}
 </style>
 </head>
 <body>
@@ -192,6 +202,8 @@
     </div>
     <p class="sub">Each mint assembles a one-of-a-kind piece on chain — a chain, shape, color, and metal drawn at random from the collection's living rosters the moment you mint. Nothing is pre-rendered, nothing repeats, and no two Gems ever share an exact combination. What you receive stays sealed behind a placeholder for a short delay, then reveals for good.</p>
   </div>
+
+  <div id="networkMismatchHolder"></div>
 
   <div class="getstarted">
     <h2>New here? Get started in 3 steps</h2>
@@ -239,10 +251,9 @@
         <span class="val" id="priceVal">…</span>
       </div>
       <div class="price-row">
-        <span class="lbl">Est. network cost (per piece)</span>
+        <span class="lbl">Est. network cost (per piece) <span class="info-icon" tabindex="0" title="gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.">ⓘ</span></span>
         <span class="val" id="costVal" style="font-size:14px">…</span>
       </div>
-      <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
@@ -294,7 +305,7 @@
 </div>
 
 <script type="module">
-import { initSiteChrome, getWallet, onWalletChange } from "/lib/site-chrome.js";
+import { initSiteChrome, getWallet, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
 import { doContract, INSTALL_URL, waitForAdena } from "/lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "/lib/gno-rpc.js";
 initSiteChrome();
@@ -345,6 +356,32 @@ const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
 function parseStrQ(raw) { const m = raw && raw.match(/^\("([^"]*)"/s); return m ? m[1] : null; }
+
+// GNOT amounts round to at most 2 decimal places for display -- full
+// on-chain precision (fromBaseUnits can return up to 6 digits) reads as
+// noise here ("1.000000" for a flat 1 GNOT price), and a whole-number
+// result drops the decimal point entirely rather than show a pointless
+// ".00". Accepts either a number or a numeric string (fromBaseUnits
+// returns strings).
+function formatGnot(amount) {
+  const n = typeof amount === "string" ? parseFloat(amount) : amount;
+  return (Math.round(n * 100) / 100).toString();
+}
+
+// This realm only exists on Sapphire-1 testnet -- every qeval/mint call
+// below hardcodes NETWORKS.testnet regardless of what's selected, so the
+// page still works even if the header's own network picker is pointed
+// elsewhere, but a visitor who's on e.g. betanet for some other tool and
+// then lands here would otherwise see no signal that anything's off.
+function updateNetworkMismatchBanner() {
+  const holder = document.getElementById("networkMismatchHolder");
+  const key = getActiveNetworkKey();
+  holder.innerHTML = key && key !== "testnet"
+    ? `<div class="status-line warn">You have ${escapeHtml(NETWORKS[key]?.label || key)} selected (top right). Gems only exists on gno.land's Sapphire-1 testnet — switch the network picker to Sapphire-1 to see live data and mint.</div>`
+    : "";
+}
+updateNetworkMismatchBanner();
+window.addEventListener("gnotools:activenetwork", updateNetworkMismatchBanner);
 
 function showEndpointUnreachableBanner(endpoint) {
   document.getElementById("endpointStatusHolder").innerHTML =
@@ -397,7 +434,7 @@ async function loadStats() {
   };
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
-    : stats.price != null ? `${(stats.price / 1e6).toFixed(6)}<span class="unit">GNOT</span>` : "unknown";
+    : stats.price != null ? `${formatGnot(stats.price / 1e6)}<span class="unit">GNOT</span>` : "unknown";
   document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
   const openEl = document.getElementById("factOpen");
   openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
@@ -490,12 +527,12 @@ function updateCostEstimate() {
   const totalUgnot = estimateMintCostUgnot(qty, recipientAlreadyMinted) + qty * priceUgnot;
   const note = document.getElementById("totalCostNote");
   const w = getWallet();
-  let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${fromBaseUnits(totalUgnot, NATIVE_DECIMALS)} GNOT`;
+  let text = `Estimated total for ${qty} piece${qty > 1 ? "s" : ""}: ~${formatGnot(fromBaseUnits(totalUgnot, NATIVE_DECIMALS))} GNOT`;
   note.style.color = "";
   if (w.status === "connected" && w.balanceRaw != null) {
     const balanceUgnot = parseInt(w.balanceRaw, 10);
     if (!Number.isNaN(balanceUgnot) && balanceUgnot < totalUgnot) {
-      text += ` — your balance (${fromBaseUnits(w.balanceRaw, NATIVE_DECIMALS)} GNOT) looks short. Mint fewer, or add funds first.`;
+      text += ` — your balance (${formatGnot(fromBaseUnits(w.balanceRaw, NATIVE_DECIMALS))} GNOT) looks short. Mint fewer, or add funds first.`;
       note.style.color = "#e0596d";
     }
   }
@@ -781,7 +818,7 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("costVal").textContent = `~${fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS)} GNOT (~${fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS)} for a wallet's first-ever piece)`;
+document.getElementById("costVal").textContent = `~${formatGnot(fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS))} GNOT (~${formatGnot(fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS))} for a wallet's first-ever piece)`;
 document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 document.getElementById("installAdenaLink").href = INSTALL_URL;
 

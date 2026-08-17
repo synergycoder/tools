@@ -238,6 +238,7 @@
 
       <ul class="facts" id="factsList">
         <li><span class="k">Minted so far</span><span class="v" id="factSupply">…</span></li>
+        <li><span class="k">Unique owners</span><span class="v" id="factUniqueOwners">…</span></li>
         <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
         <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
         <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
@@ -307,7 +308,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
 import { doContract, INSTALL_URL, waitForAdena } from "/lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "/lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8, mapLimit } from "/lib/gno-rpc.js";
 initSiteChrome();
 
 // gno.land packages can't be redeployed in place, so this points at
@@ -436,6 +437,7 @@ async function loadStats() {
     ? `0<span class="unit">GNOT (free)</span>`
     : stats.price != null ? `${formatGnot(stats.price / 1e6)}<span class="unit">GNOT</span>` : "unknown";
   document.getElementById("factSupply").textContent = stats.supply != null ? stats.supply : "unknown";
+  loadOwnerStats(stats.supply);
   const openEl = document.getElementById("factOpen");
   openEl.textContent = stats.mintingOpen === null ? "unknown" : stats.mintingOpen ? "Open" : "Closed";
   openEl.style.color = stats.mintingOpen ? "#7fd88f" : "#e0596d";
@@ -634,6 +636,38 @@ function unwrapQevalString(raw) {
 
 function parseCollectionSummary(raw) {
   return parseSummaryLines(unwrapQevalString(raw));
+}
+
+// There's no on-chain "unique owner count" getter (that'd need a contract
+// change) -- CollectionSummary(page) already carries each token's owner
+// though, so this just walks every page and counts distinct addresses
+// client-side. Cheap right now (13 tokens = 2 pages, confirmed live), and
+// capped defensively so a much larger future collection doesn't turn
+// "load the mint page" into hundreds of qeval calls -- past the cap this
+// shows an approximate floor instead of an exact count.
+const OWNER_WALK_PAGE_CAP = 50; // 50 pages * SUMMARY_PAGE_SIZE(10) = 500 tokens
+async function loadOwnerStats(supply) {
+  const el = document.getElementById("factUniqueOwners");
+  if (supply == null) { el.textContent = "unknown"; return; }
+  if (supply === 0) { el.textContent = "0"; return; }
+  const totalPages = Math.ceil(supply / SUMMARY_PAGE_SIZE);
+  if (totalPages > OWNER_WALK_PAGE_CAP) {
+    el.textContent = `500+ (too many to count live)`;
+    return;
+  }
+  try {
+    const pageIndexes = Array.from({ length: totalPages }, (_, i) => i);
+    const owners = new Set();
+    await mapLimit(pageIndexes, 6, async (page) => {
+      const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
+      for (const tok of parseCollectionSummary(raw)) {
+        if (tok.owner) owners.add(tok.owner);
+      }
+    });
+    el.textContent = String(owners.size);
+  } catch {
+    el.textContent = "unknown";
+  }
 }
 
 // Populated by loadGallery(), read by the lightbox click handler --

@@ -345,6 +345,7 @@ const REPEAT_MINT_UGNOT = 1_878_828; // any mint after that, same recipient
 // as a real active-collection state instead of "nothing to query yet".
 function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
 function parseInt64(raw) { if (raw == null) return null; const m = raw.match(/^\((-?\d+)/); return m ? parseInt(m[1], 10) : null; }
+function parseStrQ(raw) { const m = raw && raw.match(/^\("([^"]*)"/s); return m ? m[1] : null; }
 
 function showEndpointUnreachableBanner(endpoint) {
   document.getElementById("endpointStatusHolder").innerHTML =
@@ -379,12 +380,13 @@ function currentRecipient() {
 
 async function loadStats() {
   const recipient = currentRecipient();
-  const [openR, priceR, supplyR, walletCapR, mintedByWalletR] = await Promise.all([
+  const [openR, priceR, supplyR, walletCapR, mintedByWalletR, ownerR] = await Promise.all([
     qeval("MintingOpen()").catch(() => null),
     qeval("MintPrice()").catch(() => null),
     qeval("TokenCount()").catch(() => null),
     qeval("MaxMintsPerWallet()").catch(() => null),
     recipient ? qeval(`MintsByWallet("${recipient}")`).catch(() => null) : Promise.resolve(null),
+    qeval("Owner()").catch(() => null),
   ]);
   stats = {
     mintingOpen: parseBool(openR),
@@ -392,6 +394,7 @@ async function loadStats() {
     supply: parseInt64(supplyR),
     walletCap: parseInt64(walletCapR),
     mintedByWallet: recipient ? parseInt64(mintedByWalletR) : null,
+    owner: parseStrQ(ownerR),
   };
   document.getElementById("priceVal").innerHTML = stats.price === 0
     ? `0<span class="unit">GNOT (free)</span>`
@@ -404,7 +407,11 @@ async function loadStats() {
   const youMintedRow = document.getElementById("factYouMintedRow");
   if (recipient && stats.mintedByWallet != null) {
     youMintedRow.style.display = "";
-    document.getElementById("factYouMinted").textContent = stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
+    const w = getWallet();
+    const isOwnerCaller = stats.owner && w.status === "connected" && w.address === stats.owner;
+    document.getElementById("factYouMinted").textContent = isOwnerCaller
+      ? `${stats.mintedByWallet} (no cap — owner)`
+      : stats.walletCap ? `${stats.mintedByWallet} / ${stats.walletCap}` : `${stats.mintedByWallet}`;
   } else {
     youMintedRow.style.display = "none";
   }
@@ -504,10 +511,18 @@ function updateMintButton() {
 }
 document.getElementById("qtyInput").addEventListener("input", updateMintButton);
 
-// how many more pieces the current recipient (the "mint to" address) is
-// still allowed to receive -- null means "no cap info yet" (assume
-// unrestricted rather than blocking the button on a slow/failed query).
+// how many more pieces this connected wallet is still allowed to mint --
+// null means no cap applies at all: no cap info yet (assume unrestricted
+// rather than blocking the button on a slow/failed query), walletCap is
+// 0 (unlimited by design), or the connected wallet IS the collection
+// owner. MintAssembled exempts the owner as CALLER from the per-wallet
+// cap entirely (see its own doc comment) regardless of which address
+// ends up receiving the token -- so this checks the CONNECTED wallet
+// against stats.owner, not currentRecipient()/"mint to", which can be a
+// different address entirely (the owner gifting to someone else).
 function remainingWalletAllowance() {
+  const w = getWallet();
+  if (stats.owner && w.status === "connected" && w.address === stats.owner) return null;
   if (stats.walletCap == null || stats.walletCap === 0) return null;
   if (stats.mintedByWallet == null) return null;
   return Math.max(0, stats.walletCap - stats.mintedByWallet);

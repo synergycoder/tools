@@ -74,22 +74,15 @@
   .wallet-gate.warn .dot{background:var(--amber)}
   .wallet-gate code{font-family:var(--mono)}
 
-  .mint-layout{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:36px;margin:28px 0 60px;align-items:start}
-
-  .preview{border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden;
-    position:sticky;top:80px;box-shadow:0 30px 60px -35px var(--accent-line)}
-  .preview .art{aspect-ratio:1;background:radial-gradient(circle at 50% 42%,var(--accent-soft),var(--bg2) 72%);
-    display:flex;align-items:center;justify-content:center}
-  .preview .art svg{width:46%;height:46%}
-  .preview .cap{padding:12px 16px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center}
-  @media (max-width:800px){
-    .mint-layout{grid-template-columns:1fr}
-    .preview{position:static;max-width:420px;margin:0 auto;width:100%}
+  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:28px 32px;
+    display:grid;grid-template-columns:1fr 360px;gap:36px;align-items:start;margin:28px 0 60px}
+  .panel h2{margin:0 0 6px;font-size:20px}
+  .panel .desc{color:var(--muted);font-size:14px;margin:0 0 20px;max-width:60ch}
+  .panel-mintbox{border-left:1px solid var(--hair);padding-left:32px}
+  @media (max-width:760px){
+    .panel{grid-template-columns:1fr;padding:22px 20px}
+    .panel-mintbox{border-left:none;padding-left:0;padding-top:24px;border-top:1px solid var(--hair)}
   }
-
-  .panel{border:1px solid var(--hair);border-radius:16px;background:var(--panel);padding:22px 24px}
-  .panel h2{margin:0 0 4px;font-size:16px}
-  .panel .desc{color:var(--muted);font-size:13.5px;margin:0 0 18px}
 
   .price-row{display:flex;align-items:baseline;justify-content:space-between;padding:14px 0;border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
   .price-row .lbl{font-size:13px;color:var(--muted)}
@@ -170,6 +163,20 @@
     border-radius:8px;border:1px solid var(--accent-line);background:var(--accent-soft);color:var(--accent);
     font-size:12.5px;font-weight:700;text-decoration:none}
   .step-action:hover{background:var(--accent);color:#fff}
+
+  /* Only the getstarted steps track progress -- "how minting works" below
+     reuses the same .step/.steps classes purely for visual consistency and
+     should never glow or show a done state. */
+  .getstarted .step{position:relative;border-color:var(--accent-line);
+    animation:stepGlow 2.6s ease-in-out infinite;transition:border-color .3s ease,background .3s ease,box-shadow .3s ease}
+  @keyframes stepGlow{0%,100%{box-shadow:0 0 14px -6px var(--accent)}50%{box-shadow:0 0 26px -3px var(--accent)}}
+  @media (prefers-reduced-motion: reduce){.getstarted .step{animation:none;box-shadow:0 0 0 1px var(--accent-line)}}
+  .getstarted .step .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .getstarted .step .check{display:none;color:#7fd88f;font-size:15px;font-weight:700}
+  .getstarted .step.done{animation:none;border-color:#7fd88f45;background:#7fd88f0d;box-shadow:none}
+  .getstarted .step.done .n{display:none}
+  .getstarted .step.done .check{display:inline}
+  .getstarted .step.done .step-action{display:none}
 </style>
 </head>
 <body>
@@ -189,20 +196,20 @@
   <div class="getstarted">
     <h2>New here? Get started in 3 steps</h2>
     <div class="steps">
-      <div class="step">
-        <div class="n">01</div>
+      <div class="step" id="stepInstall">
+        <div class="head"><span class="n">01</span><span class="check">✓ Done</span></div>
         <h3>Install Adena</h3>
         <p>The browser wallet gno.land tools connect to. Free, takes a minute to set up.</p>
         <a class="step-action" id="installAdenaLink" href="#" target="_blank" rel="noopener">Install Adena →</a>
       </div>
-      <div class="step">
-        <div class="n">02</div>
+      <div class="step" id="stepFaucet">
+        <div class="head"><span class="n">02</span><span class="check">✓ Done</span></div>
         <h3>Get testnet tokens</h3>
         <p>This collection lives on gno.land's Sapphire testnet — minting costs testnet GNOT, not real money. Grab some free from the faucet.</p>
         <a class="step-action" href="https://faucet.gno.land/" target="_blank" rel="noopener">🚰 Get tokens from faucet</a>
       </div>
-      <div class="step">
-        <div class="n">03</div>
+      <div class="step" id="stepMint">
+        <div class="head"><span class="n">03</span><span class="check">✓ Done</span></div>
         <h3>Mint your Gem</h3>
         <p>Connect your wallet above, then mint below — each piece is assembled at random the moment you mint.</p>
         <a class="step-action" href="#mintPanel">Jump to mint ↓</a>
@@ -212,21 +219,21 @@
 
   <div id="endpointStatusHolder"></div>
 
-  <div class="mint-layout">
-    <div class="preview">
-      <div class="art" id="sealedArt">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 8 L8 4 L16 4 L20 8 L12 21 Z" stroke="var(--accent)" stroke-width="1" opacity="0.65" stroke-linejoin="round"/>
-          <path d="M4 8 H20 M8 4 L12 8 L16 4 M12 8 V21" stroke="var(--accent)" stroke-width="0.6" opacity="0.45"/>
-        </svg>
-      </div>
-      <div class="cap">Sealed — reveals ~10 blocks after mint</div>
-    </div>
-
-    <div class="panel" id="mintPanel">
+  <div class="panel" id="mintPanel">
+    <div class="panel-info">
       <h2>Mint a randomly assembled piece</h2>
       <p class="desc">Connect your wallet to mint. The realm assembles each piece at random from the on-chain trait rosters — you can't choose traits, and no two Gems ever share an exact combination.</p>
 
+      <ul class="facts" id="factsList">
+        <li><span class="k">Minted so far</span><span class="v" id="factSupply">…</span></li>
+        <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
+        <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
+        <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
+        <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
+      </ul>
+    </div>
+
+    <div class="panel-mintbox">
       <div class="price-row">
         <span class="lbl">Price (per piece)</span>
         <span class="val" id="priceVal">…</span>
@@ -236,14 +243,6 @@
         <span class="val" id="costVal" style="font-size:14px">…</span>
       </div>
       <p class="qty-note" style="margin:6px 0 0">gno.land charges a storage deposit for the new on-chain records each mint creates (ownership, provenance, trait seal) — separate from the price above, and separate from gas.</p>
-
-      <ul class="facts" id="factsList">
-        <li><span class="k">Minted so far</span><span class="v" id="factSupply">…</span></li>
-        <li><span class="k">Minting</span><span class="v" id="factOpen">…</span></li>
-        <li><span class="k">Max per wallet</span><span class="v" id="factWalletCap">…</span></li>
-        <li id="factYouMintedRow" style="display:none"><span class="k">Minted to this wallet</span><span class="v" id="factYouMinted">…</span></li>
-        <li><span class="k">Reveal delay</span><span class="v">10 blocks</span></li>
-      </ul>
 
       <div class="qty-row">
         <label for="qtyInput">Quantity</label>
@@ -296,7 +295,7 @@
 
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "/lib/site-chrome.js";
-import { doContract, INSTALL_URL } from "/lib/adena-connect.js";
+import { doContract, INSTALL_URL, waitForAdena } from "/lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8 } from "/lib/gno-rpc.js";
 initSiteChrome();
 
@@ -416,12 +415,29 @@ async function loadStats() {
     youMintedRow.style.display = "none";
   }
   updateMintButton();
+  updateStepStates();
 }
 
 // Same truncation site-chrome's own wallet pill uses, so the address reads
 // consistently wherever it appears on the page.
 function truncateAddr(addr) {
   return addr.length > 14 ? `${addr.slice(0, 7)}…${addr.slice(-5)}` : addr;
+}
+
+// Drives the "get started" steps' done/pending state -- each condition is
+// independent (not gated on the previous step), so a returning visitor who
+// already has everything set up sees all three marked done immediately
+// rather than working through them again.
+let adenaDetected = false;
+waitForAdena().then((ok) => { adenaDetected = ok; updateStepStates(); });
+
+function updateStepStates() {
+  const w = getWallet();
+  const hasBalance = w.status === "connected" && w.balanceRaw != null && parseInt(w.balanceRaw, 10) > 0;
+  const hasMinted = stats.mintedByWallet != null && stats.mintedByWallet > 0;
+  document.getElementById("stepInstall").classList.toggle("done", adenaDetected);
+  document.getElementById("stepFaucet").classList.toggle("done", hasBalance);
+  document.getElementById("stepMint").classList.toggle("done", hasMinted);
 }
 
 // Re-fetch MintsByWallet et al. only when the recipient actually changes
@@ -448,6 +464,7 @@ function renderWalletGate() {
     loadStats();
   }
   updateMintButton();
+  updateStepStates();
 }
 onWalletChange(renderWalletGate);
 
@@ -771,9 +788,7 @@ document.getElementById("installAdenaLink").href = INSTALL_URL;
 // A plain `<a href="#mintPanel">` should scroll there on its own, but
 // explicit scrollIntoView is more reliable across browsers than depending
 // on default same-page-fragment navigation behavior. Instant, not smooth --
-// confirmed live that a smooth/animated scroll here gets cut short partway,
-// most likely the sticky .preview card shifting the target's computed
-// position mid-animation and confusing the browser's smooth-scroll math.
+// confirmed live that a smooth/animated scroll here gets cut short partway.
 document.querySelector('a[href="#mintPanel"]').addEventListener("click", (e) => {
   e.preventDefault();
   document.getElementById("mintPanel").scrollIntoView({ behavior: "instant", block: "start" });

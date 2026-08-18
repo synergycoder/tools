@@ -119,7 +119,7 @@
 
   <div class="panel composer">
     <h2>Post a message</h2>
-    <p class="desc">Goes straight to the public board below — no draft, no edit, no delete.</p>
+    <p class="desc">Goes straight to the public board below — no draft, no delete. You can edit your own messages afterward from their own Edit button.</p>
     <textarea id="composerText" placeholder="Say something…" maxlength="2000"></textarea>
     <div class="composer-row">
       <span class="char-count" id="composerCount">0 / 1000</span>
@@ -152,12 +152,14 @@ import { doContract, waitForAdena } from "/lib/adena-connect.js";
 import { abciQuery, NETWORKS, b64ToUtf8 } from "/lib/gno-rpc.js";
 initSiteChrome();
 
-// Deploy identity: g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls. Not deployed
-// yet as of this commit -- see gno-nft-minter's
-// gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messages/DEPLOY.md.
-// Until the deploy lands, every qeval/doContract call below just fails
-// gracefully ("Contract not reachable yet").
-const REALM_PATH = "gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messages";
+// Deploy identity: g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls. This points
+// at messagesv2 (adds author-only Edit + a MigrateFrom that replayed
+// every message from the original "messages" realm at deploy time) --
+// realms are immutable once deployed, so the Edit feature required a
+// fresh package at a new path rather than an in-place upgrade. See
+// gno-nft-minter's gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/
+// messagesv2/ for the source.
+const REALM_PATH = "gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messagesv2";
 
 // Must match messages.gno's own MaxMessageLen/pageSize constants —
 // same "the frontend hardcodes a number that has to match the contract"
@@ -209,7 +211,8 @@ async function qeval(expr) {
 
 // Every *Summary function on the contract returns ONE gno string literal
 // containing newline-separated "id|author|parentID|createdHeight|
-// replyCount|b64(text)" lines (messageSummaryLine's own format) — same
+// replyCount|b64(text)|edited" lines (messageSummaryLine's own format,
+// 7 fields as of messagesv2 -- edited is appended last, "1"/"0") — same
 // unwrap-then-split shape as gems/index.html's parseCollectionSummary,
 // confirmed against that realm's real deployed output before this
 // pattern was reused here (see that file's own doc comment).
@@ -224,14 +227,15 @@ function parseMessageLines(raw) {
   if (!body || !body.trim()) return [];
   return body.split("\n").filter(Boolean).map((line) => {
     const parts = line.split("|");
-    if (parts.length !== 6) return null;
-    const [id, author, parentId, createdHeight, replyCount, textB64] = parts;
+    if (parts.length !== 7) return null;
+    const [id, author, parentId, createdHeight, replyCount, textB64, edited] = parts;
     try {
       return {
         id, author, parentId,
         createdHeight: parseInt(createdHeight, 10),
         replyCount: parseInt(replyCount, 10),
         text: b64ToUtf8(textB64),
+        edited: edited === "1",
       };
     } catch {
       return null;
@@ -268,6 +272,32 @@ async function postMessage({ text, parentId, btn, statusHolder, onDone }) {
     }];
     const { hash, height } = await doContract(messages, "post message");
     setComposerStatus(statusHolder, "success", `Posted${height ? ` at block ${height}` : ""} — tx ${hash}`);
+    onDone?.();
+  } catch (err) {
+    setComposerStatus(statusHolder, "error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+}
+
+// Same shape as postMessage, but calls Edit instead of Post — no
+// parentId, and onDone gets the new text back so the caller can patch
+// the already-rendered node in place rather than re-fetching.
+async function editMessage({ id, text, btn, statusHolder, onDone }) {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  btn.disabled = true;
+  const origLabel = btn.textContent;
+  btn.textContent = "Saving…";
+  setComposerStatus(statusHolder, "pending", "Waiting for Adena approval…");
+  try {
+    const messages = [{
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "Edit", args: [String(id), text] },
+    }];
+    const { hash, height } = await doContract(messages, "edit message");
+    setComposerStatus(statusHolder, "success", `Saved${height ? ` at block ${height}` : ""} — tx ${hash}`);
     onDone?.();
   } catch (err) {
     setComposerStatus(statusHolder, "error", err.message || String(err));
@@ -331,11 +361,20 @@ function renderMessageNode(msg, depth) {
   const repliesLoaded = { page: 1, count: 0 };
 
   node.innerHTML = `
-    <div class="msg-meta"><span class="msg-author">${escapeHtml(truncateAddr(msg.author))}</span><span>block ${msg.createdHeight}</span></div>
-    <div class="msg-text">${escapeHtml(msg.text)}</div>
+    <div class="msg-meta"><span class="msg-author">${escapeHtml(truncateAddr(msg.author))}</span><span>block ${msg.createdHeight}</span><span class="msg-edited-tag" style="display:${msg.edited ? "" : "none"}">(edited)</span></div>
+    <div class="msg-text"></div>
     <div class="msg-actions">
       <button class="reply-toggle-btn" type="button">Reply</button>
+      <button class="edit-toggle-btn" type="button" style="display:none">Edit</button>
       ${msg.replyCount > 0 ? `<button class="expand-btn" type="button">${msg.replyCount} repl${msg.replyCount === 1 ? "y" : "ies"} ▾</button>` : ""}
+    </div>
+    <div class="msg-reply-composer msg-edit-composer">
+      <textarea maxlength="2000"></textarea>
+      <div class="composer-row">
+        <span class="char-count">0 / ${MAX_MESSAGE_LEN}</span>
+        <button class="post-btn" type="button">Save</button>
+      </div>
+      <div class="edit-status-holder"></div>
     </div>
     <div class="msg-reply-composer">
       <textarea placeholder="Write a reply…" maxlength="2000"></textarea>
@@ -348,13 +387,61 @@ function renderMessageNode(msg, depth) {
     <div class="msg-replies"></div>
   `;
 
+  const msgTextEl = node.querySelector(".msg-text");
+  msgTextEl.textContent = msg.text;
+  const editedTag = node.querySelector(".msg-edited-tag");
+
   const replyToggleBtn = node.querySelector(".reply-toggle-btn");
-  const replyComposer = node.querySelector(".msg-reply-composer");
+  const replyComposer = node.querySelectorAll(".msg-reply-composer")[1];
   const replyTextarea = replyComposer.querySelector("textarea");
   const replyCharCount = replyComposer.querySelector(".char-count");
   const replyPostBtn = replyComposer.querySelector(".post-btn");
   const replyStatusHolder = replyComposer.querySelector(".reply-status-holder");
   const repliesHolder = node.querySelector(".msg-replies");
+
+  const editToggleBtn = node.querySelector(".edit-toggle-btn");
+  const editComposer = node.querySelector(".msg-edit-composer");
+  const editTextarea = editComposer.querySelector("textarea");
+  const editCharCount = editComposer.querySelector(".char-count");
+  const editSaveBtn = editComposer.querySelector(".post-btn");
+  const editStatusHolder = editComposer.querySelector(".edit-status-holder");
+
+  function updateEditVisibility() {
+    const isOwn = currentAddress() === msg.author;
+    editToggleBtn.style.display = isOwn ? "" : "none";
+    if (!isOwn) editComposer.classList.remove("on");
+  }
+  onWalletChange(updateEditVisibility);
+  updateEditVisibility();
+
+  editToggleBtn.addEventListener("click", () => {
+    editComposer.classList.toggle("on");
+    if (editComposer.classList.contains("on")) {
+      editTextarea.value = msg.text;
+      editCharCount.textContent = `${msg.text.length} / ${MAX_MESSAGE_LEN}`;
+      editTextarea.focus();
+    }
+  });
+  editTextarea.addEventListener("input", () => {
+    const len = editTextarea.value.length;
+    editCharCount.textContent = `${len} / ${MAX_MESSAGE_LEN}`;
+    editCharCount.classList.toggle("over", len > MAX_MESSAGE_LEN);
+    editSaveBtn.disabled = len === 0 || len > MAX_MESSAGE_LEN;
+  });
+  editSaveBtn.addEventListener("click", () => {
+    const text = editTextarea.value.trim();
+    if (!text) return;
+    editMessage({
+      id: msg.id, text, btn: editSaveBtn, statusHolder: editStatusHolder,
+      onDone: () => {
+        msg.text = text;
+        msg.edited = true;
+        msgTextEl.textContent = text;
+        editedTag.style.display = "";
+        editComposer.classList.remove("on");
+      },
+    });
+  });
 
   replyToggleBtn.addEventListener("click", () => {
     replyComposer.classList.toggle("on");

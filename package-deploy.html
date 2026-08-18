@@ -98,6 +98,7 @@
   <div class="preset-row">
     <button class="btn ghost" id="loadPresetBtn" type="button">Load Gems deploy preset (grc721v2 → nftminter@nym-gemsnft000/g17)</button>
     <button class="btn ghost" id="loadMessagesPresetBtn" type="button">Load Messages deploy preset (avl → messages@g1lyuc4…z00ls)</button>
+    <button class="btn ghost" id="loadMessagesV2PresetBtn" type="button">Load Messages v2 deploy preset (messagesv2@g1lyuc4…z00ls, adds Edit + migration)</button>
     <button class="btn ghost" id="addPkgBtn" type="button">+ Add empty package</button>
     <span class="hint" id="presetHint"></span>
   </div>
@@ -180,6 +181,7 @@ async function loadPreset(url) {
 }
 document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset("gems-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
 document.getElementById("loadMessagesPresetBtn").addEventListener("click", () => loadPreset("messages-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
+document.getElementById("loadMessagesV2PresetBtn").addEventListener("click", () => loadPreset("messagesv2-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
 
 // A page like Collection Builder can hand off a generated preset without
 // hosting it anywhere: it JSON-stringifies the package array into

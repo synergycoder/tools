@@ -123,22 +123,23 @@ input[type=file]{display:none}
   repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 16px 16px;
 }
 .toolbar{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;align-items:center}
-.toolbarlabel{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-right:.15rem}
 .toolbtn{background:var(--panel2);border:1px solid var(--hair);color:var(--muted);border-radius:6px;padding:.4rem .8rem;font-size:.78rem;cursor:pointer}
 .toolbtn:hover{color:var(--ink)}
 .toolbtn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
 .toolbtn:disabled{opacity:.4;cursor:not-allowed}
 .toolbtn:disabled:hover{color:var(--muted)}
+.righttools{justify-content:flex-start;margin-bottom:.5rem}
 
 /* Paint/Move are MODES (how clicks on the canvas behave), not one-off
-   drawing tools like the row below -- a joined segmented control makes
-   that different, "which of these two am I in" relationship visually
-   distinct from the ordinary button row of Fill/Line/Rectangle/etc. */
-.modebar{background:var(--panel2);border:1px solid var(--hair);border-radius:9px;padding:.5rem .7rem}
+   drawing tools -- a joined segmented control keeps that distinct from
+   ordinary buttons. Shares a row with zoom (spread to the row's two
+   ends) purely to save vertical space -- the two aren't related. */
+.modezoomrow{justify-content:space-between}
 .modetoggle{display:inline-flex;border:1px solid var(--accent-line);border-radius:7px;overflow:hidden}
 .modetoggle .toolbtn{border:none;border-radius:0;background:var(--panel);padding:.45rem 1.1rem;font-weight:700}
 .modetoggle .toolbtn:first-child{border-right:1px solid var(--accent-line)}
 .modetoggle .toolbtn.active{background:var(--accent);color:var(--bg)}
+.resizebtn{font-size:.68rem;padding:.3rem .65rem}
 .canvashint{color:var(--muted);font-size:.7rem;text-align:center;max-width:420px;line-height:1.5}
 .canvashint b{color:var(--ink)}
 .statline{display:flex;gap:1rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
@@ -260,34 +261,25 @@ input[type=file]{display:none}
 
   <div class="col centercol">
     <div class="editinglabel" id="editingLabel">Base Character<span class="cat" id="editingSub"></span></div>
+    <button class="tbtn resizebtn" id="resizeCanvasBtn" title="Change canvas dimensions">Resize canvas</button>
     <div class="canvaswrap" id="canvasWrap">
       <canvas id="editCanvas" width="512" height="512"></canvas>
     </div>
-    <div class="zoomrow">
-      <button class="toolbtn" id="zoomOutBtn" title="Zoom out">&minus;</button>
-      <span class="zoomlabel" id="zoomLabel">100%</span>
-      <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
-      <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
-    </div>
-    <div class="toolbar modebar">
-      <span class="toolbarlabel">Mode</span>
+    <div class="toolbar modezoomrow">
       <div class="modetoggle">
         <button class="toolbtn active" data-tool="paint" title="Paint directly onto the canvas">Paint</button>
         <button class="toolbtn" data-tool="move" title="Select part of the drawing and drag it elsewhere">Move</button>
       </div>
-    </div>
-    <div class="toolbar">
-      <span class="toolbarlabel">Drawing tools</span>
-      <button class="toolbtn" data-tool="fill">Bucket fill</button>
-      <button class="toolbtn" data-tool="line">Line</button>
-      <button class="toolbtn" data-tool="rect">Rectangle</button>
-      <button class="toolbtn" data-tool="ellipse">Ellipse</button>
-      <button class="toolbtn" data-tool="eyedrop">Eyedropper</button>
+      <div class="zoomrow">
+        <button class="toolbtn" id="zoomOutBtn" title="Zoom out">&minus;</button>
+        <span class="zoomlabel" id="zoomLabel">100%</span>
+        <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
+        <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
+      </div>
     </div>
     <div class="toolbar">
       <button class="toolbtn" id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>&#8630; Undo</button>
       <button class="toolbtn" id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>&#8631; Redo</button>
-      <label class="filledtoggle" title="When on, Rectangle and Ellipse drag out a solid filled shape instead of just an outline"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
       <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
     </div>
     <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
@@ -300,8 +292,20 @@ input[type=file]{display:none}
   </div>
 
   <div class="col rightcol">
-    <div class="colhead"><h2>Colors</h2></div>
+    <div class="colhead"><h2>Colors &amp; Tools</h2></div>
     <div class="colbody">
+      <div class="palette-section">
+        <div class="palette-label"><span>Drawing tools</span></div>
+        <div class="toolbar righttools">
+          <button class="toolbtn" data-tool="fill">Bucket fill</button>
+          <button class="toolbtn" data-tool="line">Line</button>
+          <button class="toolbtn" data-tool="rect">Rectangle</button>
+          <button class="toolbtn" data-tool="ellipse">Ellipse</button>
+          <button class="toolbtn" data-tool="eyedrop">Eyedropper</button>
+        </div>
+        <label class="filledtoggle" title="When on, Rectangle and Ellipse drag out a solid filled shape instead of just an outline"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
+      </div>
+
       <div class="colorslots">
         <div class="colorslot">
           <span class="slotlabel">Left click</span>
@@ -313,11 +317,6 @@ input[type=file]{display:none}
           <div class="slotswatch" id="secondarySwatch"></div>
           <input type="text" id="secondaryHex" value="erase">
         </div>
-      </div>
-
-      <div class="palette-section">
-        <div class="palette-label"><span>Transparent</span></div>
-        <div class="palette" id="transparentPalette"></div>
       </div>
 
       <div class="palette-section">
@@ -502,6 +501,74 @@ function showCollectionSwitcher(){
   box.appendChild(row);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
+}
+
+// ---------------- canvas resize ----------------
+// Every pixel array in the collection (base character + every trait's
+// every variant) -- canvas size is global, not per-layer, so a resize
+// has to sweep all of them, not just whatever's currently selected.
+function allPixelLists(){
+  const lists = [STATE.baseCharacter.pixels];
+  for (const t of STATE.traits) for (const v of t.variants) lists.push(v.pixels);
+  return lists;
+}
+function countOutOfBounds(newW, newH){
+  let n = 0;
+  for (const list of allPixelLists()) for (const [x, y] of list) if (x >= newW || y >= newH) n++;
+  return n;
+}
+function applyCanvasResize(newW, newH){
+  for (const list of allPixelLists()) {
+    const kept = list.filter(([x, y]) => x < newW && y < newH);
+    list.length = 0;
+    list.push(...kept);
+  }
+  STATE.canvas.width = newW;
+  STATE.canvas.height = newH;
+  renderAll();
+  scheduleSave();
+}
+function showResizeCanvas(){
+  const overlay = document.createElement("div");
+  overlay.className = "modaloverlay";
+  const box = document.createElement("div");
+  box.className = "modalbox";
+  const h = document.createElement("h3"); h.textContent = "Resize canvas"; box.appendChild(h);
+  const p = document.createElement("p");
+  p.textContent = "Applies to the whole collection -- base character and every trait variant. Shrinking can cut off pixels outside the new size; you'll be asked to confirm first.";
+  box.appendChild(p);
+
+  const wField = document.createElement("div"); wField.className = "field";
+  wField.innerHTML = `<label>Width -- <span id="rsWVal" style="color:var(--accent);font-family:var(--mono)">${STATE.canvas.width}</span>px</label>
+    <div class="sliderrow"><input type="range" id="rsW" min="8" max="64" value="${STATE.canvas.width}" step="1"></div>`;
+  box.appendChild(wField);
+  const hField = document.createElement("div"); hField.className = "field";
+  hField.innerHTML = `<label>Height -- <span id="rsHVal" style="color:var(--accent);font-family:var(--mono)">${STATE.canvas.height}</span>px</label>
+    <div class="sliderrow"><input type="range" id="rsH" min="8" max="64" value="${STATE.canvas.height}" step="1"></div>`;
+  box.appendChild(hField);
+
+  const row = document.createElement("div"); row.className = "modalbtns";
+  const cancelBtn = document.createElement("button"); cancelBtn.className = "tbtn"; cancelBtn.textContent = "Cancel";
+  cancelBtn.onclick = () => document.body.removeChild(overlay);
+  const applyBtn = document.createElement("button"); applyBtn.className = "tbtn primary"; applyBtn.textContent = "Apply";
+  row.appendChild(cancelBtn); row.appendChild(applyBtn);
+  box.appendChild(row);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  const wSlider = document.getElementById("rsW"), hSlider = document.getElementById("rsH");
+  wSlider.oninput = () => document.getElementById("rsWVal").textContent = wSlider.value;
+  hSlider.oninput = () => document.getElementById("rsHVal").textContent = hSlider.value;
+
+  applyBtn.onclick = async () => {
+    const newW = parseInt(wSlider.value, 10), newH = parseInt(hSlider.value, 10);
+    const cut = countOutOfBounds(newW, newH);
+    document.body.removeChild(overlay);
+    if (cut > 0) {
+      if (!(await showConfirm(`This will cut off ${cut} pixel${cut === 1 ? "" : "s"} that fall outside the new ${newW}x${newH} size, across the base character and every trait variant. Continue?`))) return;
+    }
+    applyCanvasResize(newW, newH);
+  };
 }
 
 // ---------------- shape generators (return a Map of "x,y" -> color) ----------------
@@ -1167,8 +1234,11 @@ function makeSwatch(color, opts){
 }
 
 function buildPalettes(){
-  const tp = document.getElementById("transparentPalette"); tp.innerHTML = ""; tp.appendChild(makeSwatch(ERASE));
+  // Transparent lives as the first Basic swatch rather than its own
+  // section -- one fewer section header/row, and it's a color choice
+  // like any other here, not conceptually separate.
   const bp = document.getElementById("basicPalette"); bp.innerHTML = "";
+  bp.appendChild(makeSwatch(ERASE));
   BASIC_COLORS.forEach(c => bp.appendChild(makeSwatch(c)));
   const cp = document.getElementById("customPalette"); cp.innerHTML = "";
   customColors.forEach(c => cp.appendChild(makeSwatch(c, { removable: true })));
@@ -1335,6 +1405,7 @@ document.getElementById("addTraitBtn").onclick = () => {
 document.getElementById("collName").onchange = (e) => { STATE.collectionName = e.target.value; scheduleSave(); };
 document.getElementById("exportBtn").onclick = exportCollection;
 document.getElementById("collectionsBtn").onclick = showCollectionSwitcher;
+document.getElementById("resizeCanvasBtn").onclick = showResizeCanvas;
 document.getElementById("newCollBtn").onclick = async () => {
   if (!(await showConfirm("Start a new collection? This one stays saved -- switch back to it anytime from \"My Collections\"."))) return;
   location.reload();

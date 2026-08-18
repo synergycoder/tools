@@ -119,6 +119,8 @@ input[type=file]{display:none}
 .toolbtn{background:var(--panel2);border:1px solid var(--hair);color:var(--muted);border-radius:6px;padding:.4rem .8rem;font-size:.78rem;cursor:pointer}
 .toolbtn:hover{color:var(--ink)}
 .toolbtn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
+.toolbtn:disabled{opacity:.4;cursor:not-allowed}
+.toolbtn:disabled:hover{color:var(--muted)}
 .canvashint{color:var(--muted);font-size:.7rem;text-align:center;max-width:420px;line-height:1.5}
 .canvashint b{color:var(--ink)}
 .statline{display:flex;gap:1rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
@@ -252,15 +254,19 @@ input[type=file]{display:none}
       <button class="toolbtn" data-tool="line">Line</button>
       <button class="toolbtn" data-tool="rect">Rectangle</button>
       <button class="toolbtn" data-tool="ellipse">Ellipse</button>
+      <button class="toolbtn" data-tool="move">Move</button>
       <button class="toolbtn" data-tool="eyedrop">Eyedropper</button>
     </div>
     <div class="toolbar">
+      <button class="toolbtn" id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>&#8630; Undo</button>
+      <button class="toolbtn" id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>&#8631; Redo</button>
       <label class="filledtoggle"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
       <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
     </div>
     <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
     <b>right click</b> paints/drags with the right-slot color -- either slot can be Transparent to erase.
-    Line/Rectangle/Ellipse: click-drag from one corner to the other, release to commit.</p>
+    Line/Rectangle/Ellipse: click-drag from one corner to the other, release to commit.
+    Move: drag a box to select, then drag inside it to move that part of the drawing.</p>
     <div class="statline">
       <span id="pixelCount">0 px</span>
     </div>
@@ -339,8 +345,56 @@ let zoomIdx = 2; // 100%
 let previewPixels = null; // Map overlay drawn during a shape drag, merged in on release
 let shapeStart = null;    // {px,py} where a shape drag began
 
+// ---------------- move tool (marquee-select + drag) ----------------
+let selectionRect = null;   // {xmin,ymin,xmax,ymax} cell coords, or null
+let marqueeStart = null;    // {px,py} while defining a new marquee
+let liftedPixels = null;    // Map "x,y"->color lifted out of the layer during a move-drag
+let moveDragOrigin = null;  // {px,py} where the move-drag pointerdown started
+let lastMoveOffset = { dx: 0, dy: 0 };
+
+// ---------------- undo / redo (canvas pixel edits only -- not trait/
+// variant structure, naming, or collection metadata) ----------------
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 60;
+
 function currentZoom(){ return ZOOM_LEVELS[zoomIdx]; }
 function isShapeTool(t){ return t === "line" || t === "rect" || t === "ellipse"; }
+
+function resetInteractionState(){
+  previewPixels = null; shapeStart = null; isPointerDown = false;
+  selectionRect = null; marqueeStart = null; liftedPixels = null; moveDragOrigin = null;
+}
+
+function pushUndo(){
+  undoStack.push({ selection: JSON.parse(JSON.stringify(selection)), pixels: currentPixelsRef().map(p => p.slice()) });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack.length = 0;
+  updateUndoRedoButtons();
+}
+function undo(){
+  if (!undoStack.length) return;
+  const entry = undoStack.pop();
+  selection = entry.selection;
+  redoStack.push({ selection: JSON.parse(JSON.stringify(entry.selection)), pixels: currentPixelsRef().map(p => p.slice()) });
+  setCurrentPixels(entry.pixels.map(p => p.slice()));
+  resetInteractionState();
+  renderAll(); scheduleSave();
+}
+function redo(){
+  if (!redoStack.length) return;
+  const entry = redoStack.pop();
+  selection = entry.selection;
+  undoStack.push({ selection: JSON.parse(JSON.stringify(entry.selection)), pixels: currentPixelsRef().map(p => p.slice()) });
+  setCurrentPixels(entry.pixels.map(p => p.slice()));
+  resetInteractionState();
+  renderAll(); scheduleSave();
+}
+function updateUndoRedoButtons(){
+  const u = document.getElementById("undoBtn"), r = document.getElementById("redoBtn");
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
+}
 
 // ---------------- custom modal (native confirm/alert/prompt are silently
 // inert in sandboxed embeds without allow-modals -- this is real UI instead) ----------------
@@ -751,6 +805,17 @@ function redrawEditCanvas(){
       ctx.fillRect(x*scale, y*scale, scale, scale);
     }
   }
+  if (selectionRect) {
+    const dx = liftedPixels ? lastMoveOffset.dx : 0, dy = liftedPixels ? lastMoveOffset.dy : 0;
+    const rx = (selectionRect.xmin + dx) * scale, ry = (selectionRect.ymin + dy) * scale;
+    const rw = (selectionRect.xmax - selectionRect.xmin + 1) * scale, rh = (selectionRect.ymax - selectionRect.ymin + 1) * scale;
+    ctx.save();
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.strokeRect(rx + 0.75, ry + 0.75, rw - 1.5, rh - 1.5);
+    ctx.strokeStyle = "#000"; ctx.lineDashOffset = 5;
+    ctx.strokeRect(rx + 0.75, ry + 0.75, rw - 1.5, rh - 1.5);
+    ctx.restore();
+  }
   document.getElementById("pixelCount").textContent = pixels.size + " px";
   const label = document.getElementById("editingLabel");
   const sub = document.getElementById("editingSub");
@@ -804,14 +869,41 @@ function commitPreviewPixels(){
   redrawEditCanvas(); renderPreview(); updateThumbs(); scheduleSave();
 }
 
+function rectsOverlapPoint(px, py, r){ return r && px >= r.xmin && px <= r.xmax && py >= r.ymin && py <= r.ymax; }
+function normalizeRect(a, b){ return { xmin: Math.min(a.px,b.px), ymin: Math.min(a.py,b.py), xmax: Math.max(a.px,b.px), ymax: Math.max(a.py,b.py) }; }
+
 function wireCanvasEvents(){
   const canvasEl = document.getElementById("editCanvas");
   canvasEl.addEventListener("pointerdown", e => {
     isPointerDown = true; activeButton = e.button;
     const { px, py } = cellFromEvent(e, canvasEl);
+    if (activeTool === "move") {
+      if (rectsOverlapPoint(px, py, selectionRect)) {
+        pushUndo();
+        const pixels = pixelsToMap(currentPixelsRef());
+        liftedPixels = new Map();
+        for (const [k,c] of pixels) {
+          const [x,y] = k.split(",").map(Number);
+          if (x >= selectionRect.xmin && x <= selectionRect.xmax && y >= selectionRect.ymin && y <= selectionRect.ymax) {
+            liftedPixels.set(k, c);
+            pixels.delete(k);
+          }
+        }
+        setCurrentPixels(mapToSortedList(pixels));
+        moveDragOrigin = { px, py };
+        lastMoveOffset = { dx: 0, dy: 0 };
+        previewPixels = liftedPixels;
+      } else {
+        selectionRect = null; liftedPixels = null; moveDragOrigin = null;
+        marqueeStart = { px, py };
+      }
+      redrawEditCanvas();
+      return;
+    }
     if (activeTool === "fill") {
       const { w, h } = currentDims();
       if (px < 0 || py < 0 || px >= w || py >= h) return;
+      pushUndo();
       const pixels = pixelsToMap(currentPixelsRef());
       const color = activeButton === 2 ? secondaryColor : primaryColor;
       floodFillPixels(px, py, color, pixels, w, h);
@@ -820,17 +912,35 @@ function wireCanvasEvents(){
       return;
     }
     if (isShapeTool(activeTool)) {
+      pushUndo();
       shapeStart = { px, py };
       previewPixels = generateShapePixels(activeTool, px, py, px, py, activeButton === 2 ? secondaryColor : primaryColor);
       redrawEditCanvas();
       return;
     }
+    if (activeTool !== "eyedrop") pushUndo();
     paintAt(px, py, activeButton);
   });
   canvasEl.addEventListener("pointermove", e => {
     if (!isPointerDown) return;
-    if (activeTool === "eyedrop" || activeTool === "fill") return;
     const { px, py } = cellFromEvent(e, canvasEl);
+    if (activeTool === "move") {
+      if (liftedPixels && moveDragOrigin) {
+        lastMoveOffset = { dx: px - moveDragOrigin.px, dy: py - moveDragOrigin.py };
+        const shifted = new Map();
+        for (const [k,c] of liftedPixels) {
+          const [x,y] = k.split(",").map(Number);
+          shifted.set(pxKey(x + lastMoveOffset.dx, y + lastMoveOffset.dy), c);
+        }
+        previewPixels = shifted;
+        redrawEditCanvas();
+      } else if (marqueeStart) {
+        selectionRect = normalizeRect(marqueeStart, { px, py });
+        redrawEditCanvas();
+      }
+      return;
+    }
+    if (activeTool === "eyedrop" || activeTool === "fill") return;
     if (isShapeTool(activeTool) && shapeStart) {
       previewPixels = generateShapePixels(activeTool, shapeStart.px, shapeStart.py, px, py, activeButton === 2 ? secondaryColor : primaryColor);
       redrawEditCanvas();
@@ -840,6 +950,21 @@ function wireCanvasEvents(){
   });
   window.addEventListener("pointerup", () => {
     isPointerDown = false;
+    if (activeTool === "move") {
+      if (liftedPixels && moveDragOrigin) {
+        commitPreviewPixels();
+        selectionRect = {
+          xmin: selectionRect.xmin + lastMoveOffset.dx, xmax: selectionRect.xmax + lastMoveOffset.dx,
+          ymin: selectionRect.ymin + lastMoveOffset.dy, ymax: selectionRect.ymax + lastMoveOffset.dy,
+        };
+        liftedPixels = null; moveDragOrigin = null;
+        redrawEditCanvas();
+      } else if (marqueeStart) {
+        marqueeStart = null;
+        redrawEditCanvas();
+      }
+      return;
+    }
     commitPreviewPixels();
   });
   canvasEl.addEventListener("contextmenu", e => e.preventDefault());
@@ -1000,13 +1125,14 @@ async function exportCollection(){
 
 // ---------------- wiring ----------------
 function renderAll(){
-  previewPixels = null; shapeStart = null; isPointerDown = false;
+  resetInteractionState();
   document.getElementById("editingLabel").innerHTML = "Base Character<span class=\"cat\" id=\"editingSub\"></span>";
   renderTraitList();
   redrawEditCanvas();
   buildPalettes();
   updateSlotUI();
   updateThumbs();
+  updateUndoRedoButtons();
   lastPreviewPicks = null;
   renderPreview();
 }
@@ -1030,15 +1156,26 @@ document.querySelectorAll(".toolbtn[data-tool]").forEach(btn => {
     document.querySelectorAll(".toolbtn[data-tool]").forEach(b => b.classList.remove("active"));
     btn.classList.add("active");
     activeTool = btn.dataset.tool;
-    previewPixels = null; shapeStart = null; isPointerDown = false;
+    resetInteractionState();
     redrawEditCanvas();
   };
 });
 document.getElementById("clearCanvasBtn").onclick = async () => {
   if (!(await showConfirm("Clear all pixels on this canvas?"))) return;
+  pushUndo();
   setCurrentPixels([]);
   redrawEditCanvas(); renderPreview(); updateThumbs(); scheduleSave();
 };
+document.getElementById("undoBtn").onclick = undo;
+document.getElementById("redoBtn").onclick = redo;
+document.addEventListener("keydown", (e) => {
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const key = e.key.toLowerCase();
+  if (key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if ((key === "z" && e.shiftKey) || key === "y") { e.preventDefault(); redo(); }
+});
 function updateZoomLabel(){ document.getElementById("zoomLabel").textContent = Math.round(currentZoom() * 100) + "%"; }
 document.getElementById("zoomInBtn").onclick = () => { zoomIdx = Math.min(zoomIdx + 1, ZOOM_LEVELS.length - 1); updateZoomLabel(); redrawEditCanvas(); };
 document.getElementById("zoomOutBtn").onclick = () => { zoomIdx = Math.max(zoomIdx - 1, 0); updateZoomLabel(); redrawEditCanvas(); };

@@ -165,18 +165,44 @@ function renderWalletGate() {
 }
 onWalletChange(renderWalletGate);
 
+function applyPreset(preset, label) {
+  packages = preset.map(p => ({ pkgpath: p.pkgpath, deposit: p.deposit || "1000000ugnot", files: p.files.map(f => ({ ...f })) }));
+  renderPkgList();
+  document.getElementById("presetHint").textContent = `Loaded ${packages.length} packages${label ? " (" + label + ")" : ""} — review before deploying, in order.`;
+}
+
 async function loadPreset(url) {
   if (!presetCache[url]) {
     const res = await fetch(url);
     presetCache[url] = await res.json();
   }
-  const preset = presetCache[url];
-  packages = preset.map(p => ({ pkgpath: p.pkgpath, deposit: "1000000ugnot", files: p.files.map(f => ({ ...f })) }));
-  renderPkgList();
-  document.getElementById("presetHint").textContent = `Loaded ${packages.length} packages — review before deploying, in order.`;
+  applyPreset(presetCache[url]);
 }
 document.getElementById("loadPresetBtn").addEventListener("click", () => loadPreset("gems-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
 document.getElementById("loadMessagesPresetBtn").addEventListener("click", () => loadPreset("messages-deploy-preset.json").catch(e => { document.getElementById("presetHint").textContent = "Couldn't load preset: " + e.message; }));
+
+// A page like Collection Builder can hand off a generated preset without
+// hosting it anywhere: it JSON-stringifies the package array into
+// localStorage under a key of its own choosing, then links here with
+// ?preset=<that key>. Read once on load, same shape as the two static
+// fetch()-backed presets above, and clear the key after a successful
+// load so a stale handoff doesn't silently reappear on a later visit.
+(function loadHandoffPreset() {
+  const key = new URLSearchParams(location.search).get("preset");
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      document.getElementById("presetHint").textContent = "No handoff preset found for this link (it may have expired) — go back and generate it again.";
+      return;
+    }
+    const preset = JSON.parse(raw);
+    applyPreset(preset, "handed off from another page");
+    localStorage.removeItem(key);
+  } catch (e) {
+    document.getElementById("presetHint").textContent = "Couldn't read the handed-off preset: " + e.message;
+  }
+})();
 
 document.getElementById("addPkgBtn").addEventListener("click", () => {
   packages.push({ pkgpath: "gno.land/r/<your-address>/<name>", deposit: "1000000ugnot", files: [] });
@@ -302,7 +328,15 @@ async function deployPackage(pi) {
       type: "/vm.m_addpkg",
       value: {
         creator: w.address,
-        deposit: pkg.deposit || "1ugnot",
+        // MsgAddPackage's real field is max_deposit -- confirmed against
+        // gno.land/pkg/sdk/vm/msgs.go's own struct (creator/package/send/
+        // max_deposit, no "deposit" field exists at all). Sending
+        // "deposit" is silently ignored and falls back to the chain's own
+        // 600 GNOT default ceiling, which can fail on a wallet that
+        // doesn't hold that much even though the real cost is a fraction
+        // of it. See ~/gno-nft-minter/web/public/index.html's own
+        // deployMaxDeposit() for the same bug, already fixed there.
+        max_deposit: pkg.deposit || "1000000ugnot",
         package: {
           name: pkg.pkgpath.split("/").pop(),
           path: pkg.pkgpath,

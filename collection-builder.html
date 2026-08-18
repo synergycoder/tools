@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Collection Builder</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<!-- Works around a bug in Adena's own extension, not our code -- see
+     adena-compat.js and ~/gno-land-dev-notes.md ("gno-observer: SOLVED --
+     a window.adena that never gets set"). Must stay an external <script
+     src>, not inlined. -->
+<script src="adena-compat.js"></script>
+<style>
+:root{
+  color-scheme: light dark;
+  --panel3: color-mix(in srgb, var(--panel2) 90%, var(--accent) 10%);
+  --blue:#4f7fd6; --red:#e0596d; --green:#7fd88f;
+  --grid-a: color-mix(in srgb, var(--bg) 92%, var(--ink) 8%);
+  --grid-b: color-mix(in srgb, var(--bg) 86%, var(--ink) 14%);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0;padding:0;font-size:13.5px}
+button,input,select{font-family:inherit}
+
+.unlinked-banner{background:var(--amber-soft,#d9822b1a);border-bottom:1px solid var(--amber-line,#d9822b55);color:var(--amber,#d9822b);
+  font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+/* ---------- top bar ---------- */
+.topbar{display:flex;align-items:center;gap:.9rem;padding:.7rem 1.1rem;border-bottom:1px solid var(--hair);background:var(--panel)}
+.topbar .brand{font:700 .74rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--blue);white-space:nowrap}
+.topbar input#collName{flex:0 0 220px;background:var(--panel2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;padding:.4rem .6rem;font-weight:600}
+.topbar .spacer{flex:1}
+.topbar .savenote{font-size:.72rem;color:var(--muted);display:flex;align-items:center;gap:.4rem}
+.topbar .savenote .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.tbtn{background:var(--panel2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;padding:.45rem .8rem;font-size:.78rem;cursor:pointer;font-weight:600;white-space:nowrap}
+.tbtn:hover{border-color:var(--accent-line)}
+.tbtn.primary{background:var(--accent);color:#241a04;border-color:var(--accent)}
+.tbtn.danger{color:var(--red)}
+input[type=file]{display:none}
+
+.storagebanner{background:var(--panel3);border-bottom:1px solid var(--hair);padding:.5rem 1.1rem;font-size:.74rem;color:var(--muted);text-align:center;line-height:1.5}
+.storagebanner b{color:var(--ink)}
+.storagebanner button{background:none;border:none;color:var(--muted);cursor:pointer;text-decoration:underline;font-size:.74rem;padding:0;margin-left:.5rem}
+
+/* ---------- onboarding ---------- */
+#onboard{max-width:640px;margin:4rem auto;padding:0 1.4rem}
+#onboard h1{font-size:1.5rem;margin:0 0 .4rem}
+#onboard p.lead{color:var(--muted);font-size:.9rem;line-height:1.6;margin:0 0 2rem}
+.field{margin-bottom:1.2rem}
+.field label{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.4rem;font-weight:700}
+.field input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--hair);color:var(--ink);border-radius:6px;padding:.55rem .7rem;font-size:.9rem}
+.sliderrow{display:flex;align-items:center;gap:.8rem}
+.sliderrow input[type=range]{flex:1}
+.sliderrow .val{font:700 .95rem var(--mono);color:var(--accent);width:64px;text-align:right}
+.onboardcard{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:1.6rem}
+.resumecard{background:var(--panel2);border:1px solid var(--accent-line);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:1rem}
+.resumecard p{margin:0;font-size:.82rem;color:var(--muted)}
+.resumecard strong{color:var(--ink)}
+.orsep{text-align:center;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin:1.5rem 0;display:flex;align-items:center;gap:.8rem}
+.orsep::before,.orsep::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+/* ---------- workspace ---------- */
+#workspace{display:none;grid-template-columns:280px 1fr 300px;gap:0}
+#workspace.active{display:grid}
+.col{max-height:calc(100vh - 180px);overflow-y:auto;border-right:1px solid var(--hair)}
+.col:last-child{border-right:none}
+.colhead{padding:.8rem 1rem .6rem;position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--hair);z-index:2}
+.colhead h2{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0;font-weight:700}
+.colbody{padding:.8rem}
+
+/* left: layer tree */
+.baserow{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-radius:7px;cursor:pointer;border:1px solid var(--hair);background:var(--panel2);margin-bottom:.7rem}
+.baserow.selected{border-color:var(--accent)}
+.baserow .thumb{width:22px;height:22px;border-radius:4px;background:#000;flex:none;image-rendering:pixelated}
+.baserow span{font-weight:700;font-size:.8rem}
+.baserow .tag{font-size:.62rem;color:var(--muted);text-transform:uppercase;margin-left:auto}
+
+.traitcard{background:var(--panel2);border:1px solid var(--hair);border-radius:8px;margin-bottom:.6rem;overflow:hidden}
+.traitcard.dragging{opacity:.4}
+.traithead{display:flex;align-items:center;gap:.4rem;padding:.5rem .6rem;cursor:grab}
+.traithead .handle{color:var(--muted);cursor:grab;font-size:.9rem;user-select:none}
+.traithead input.tname{flex:1;background:none;border:none;color:var(--ink);font-weight:700;font-size:.82rem;padding:.15rem 0;min-width:0}
+.traithead input.tname:focus{outline:none;border-bottom:1px solid var(--accent-line)}
+.reqtoggle{font-size:.62rem;text-transform:uppercase;letter-spacing:.03em;padding:.2rem .45rem;border-radius:10px;cursor:pointer;border:1px solid var(--hair);white-space:nowrap;font-weight:700}
+.reqtoggle.required{background:var(--accent);color:var(--bg)}
+.reqtoggle.optional{color:var(--muted)}
+.iconbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:.15rem .3rem;line-height:1}
+.iconbtn:hover{color:var(--red)}
+.variantlist{padding:.2rem .6rem .6rem}
+.variantrow{display:flex;align-items:center;gap:.4rem;padding:.3rem .3rem;border-radius:6px;cursor:pointer;font-size:.76rem}
+.variantrow:hover{background:var(--panel3)}
+.variantrow.selected{background:var(--panel3);outline:1px solid var(--accent-line)}
+.variantrow.dragging{opacity:.4}
+.variantrow .handle{color:var(--muted);cursor:grab;font-size:.8rem;user-select:none}
+.variantrow .thumb{width:16px;height:16px;border-radius:3px;background:#000;flex:none;image-rendering:pixelated;border:1px solid var(--hair)}
+.variantrow input.vname{flex:1;background:none;border:none;color:var(--ink);font-size:.76rem;padding:.1rem 0;min-width:0}
+.variantrow input.vname:focus{outline:none;border-bottom:1px solid var(--accent-line)}
+.variantrow input.vweight{width:40px;background:var(--panel);border:1px solid var(--hair);color:var(--muted);border-radius:4px;padding:.1rem .25rem;font-size:.68rem;text-align:center;font-family:var(--mono)}
+.variantrow.none-variant{opacity:.75;font-style:italic}
+.addvariantbtn{width:100%;background:none;border:1px dashed var(--hair);color:var(--muted);border-radius:6px;padding:.35rem;font-size:.72rem;cursor:pointer;margin-top:.2rem}
+.addvariantbtn:hover{color:var(--accent);border-color:var(--accent-line)}
+.addtraitbtn{width:100%;background:var(--panel2);border:1px dashed var(--hair);color:var(--muted);border-radius:8px;padding:.6rem;font-size:.8rem;cursor:pointer;font-weight:600}
+.addtraitbtn:hover{color:var(--accent);border-color:var(--accent-line)}
+
+/* center: canvas */
+.centercol{display:flex;flex-direction:column;align-items:center;padding:1.2rem;gap:.8rem}
+.editinglabel{font-size:.85rem;font-weight:700;text-align:center}
+.editinglabel .cat{color:var(--muted);font-weight:500;font-size:.74rem;display:block;margin-top:.15rem}
+#editCanvas{border:2px solid var(--hair);border-radius:8px;image-rendering:pixelated;cursor:crosshair;touch-action:none;background:
+  repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 16px 16px;
+}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
+.toolbtn{background:var(--panel2);border:1px solid var(--hair);color:var(--muted);border-radius:6px;padding:.4rem .8rem;font-size:.78rem;cursor:pointer}
+.toolbtn:hover{color:var(--ink)}
+.toolbtn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
+.canvashint{color:var(--muted);font-size:.7rem;text-align:center;max-width:420px;line-height:1.5}
+.canvashint b{color:var(--ink)}
+.statline{display:flex;gap:1rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+
+/* right: colors + preview */
+.erase-swatch{background-image:
+  linear-gradient(45deg,#888 25%,transparent 25%),linear-gradient(-45deg,#888 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,#888 75%),linear-gradient(-45deg,transparent 75%,#888 75%);
+  background-size:8px 8px; background-position:0 0,0 4px,4px -4px,-4px 0; background-color:#444;
+}
+.colorslots{display:flex;gap:.5rem}
+.colorslot{flex:1;background:var(--panel2);border:1px solid var(--hair);border-radius:8px;padding:.5rem;text-align:center}
+.slotlabel{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:.35rem}
+.slotswatch{width:100%;height:28px;border-radius:6px;border:1px solid var(--hair);margin-bottom:.35rem}
+.colorslot input[type=text]{width:100%;background:var(--bg);border:1px solid var(--hair);color:var(--ink);border-radius:5px;padding:.25rem .3rem;font-family:var(--mono);font-size:.68rem;text-align:center}
+.palette-section{margin-top:.85rem}
+.palette-label{font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem;display:flex;justify-content:space-between;align-items:center}
+.palette-label button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:.65rem;padding:0;font-weight:700}
+.palette{display:flex;flex-wrap:wrap;gap:.35rem}
+.swatch{position:relative;width:23px;height:23px;border-radius:5px;border:2px solid var(--hair);cursor:pointer;flex:none}
+.swatch.selected-l{border-color:var(--accent)}
+.swatch.selected-r{border-color:var(--blue)}
+.swatch.selected-l.selected-r{border-color:var(--accent);box-shadow:0 0 0 2px var(--blue)}
+.swatch .badge{position:absolute;bottom:-1px;font:800 6.5px var(--mono);color:#000;padding:0 2px;border-radius:2px;line-height:1.3}
+.swatch .badge.l{left:-1px;background:var(--accent)}
+.swatch .badge.r{right:-1px;background:var(--blue)}
+.swatch .rm{position:absolute;top:-5px;right:-5px;width:13px;height:13px;border-radius:50%;background:var(--red);color:#fff;font:700 9px var(--mono);display:none;align-items:center;justify-content:center;cursor:pointer}
+.swatch:hover .rm{display:flex}
+.addcolorbtn{width:23px;height:23px;border-radius:5px;border:1px dashed var(--hair);background:none;color:var(--muted);cursor:pointer;font-size:.8rem;line-height:1}
+.addcolorbtn:hover{color:var(--accent);border-color:var(--accent-line)}
+
+.previewwrap{margin-top:1rem}
+#previewCanvas{border:1px solid var(--hair);border-radius:8px;image-rendering:pixelated;background:#000;width:100%;aspect-ratio:1}
+.previewactions{display:flex;gap:.4rem;margin-top:.5rem}
+.previewactions button{flex:1}
+
+/* ---------- custom modal (replaces native confirm/alert -- silently
+   inert in sandboxed embeds with no allow-modals) ---------- */
+.modaloverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:50;padding:1rem}
+.modalbox{background:var(--panel);border:1px solid var(--hair);border-radius:10px;padding:1.2rem;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+.modalbox h3{margin:0 0 .5rem;font-size:.95rem}
+.modalbox p{margin:0 0 1rem;font-size:.85rem;color:var(--muted);line-height:1.5}
+.modalbtns{display:flex;gap:.5rem;justify-content:flex-end}
+
+/* ---------- custom color popover ---------- */
+.colorpickerpop{display:flex;gap:.4rem;align-items:center;margin-top:.5rem;flex-wrap:wrap}
+.colorpickerpop input[type=color]{width:32px;height:32px;padding:0;border:1px solid var(--hair);border-radius:6px;background:none;cursor:pointer}
+.colorpickerpop input[type=text]{width:88px;background:var(--bg);border:1px solid var(--hair);color:var(--ink);border-radius:5px;padding:.3rem .4rem;font-family:var(--mono);font-size:.72rem}
+
+/* ---------- zoom + shape toolbar ---------- */
+.canvaswrap{width:100%;max-height:56vh;overflow:auto;text-align:center;padding:.3rem 0}
+.zoomrow{display:flex;gap:.5rem;align-items:center;justify-content:center}
+.zoomlabel{font-family:var(--mono);font-size:.72rem;color:var(--muted);min-width:3.4em;text-align:center}
+.filledtoggle{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--muted);cursor:pointer;padding:.4rem .6rem}
+.filledtoggle input{cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="unlinked-banner">Unlinked utility page — reachable only by direct URL, not in the site nav</div>
+
+<div class="topbar">
+  <span class="brand">Collection Builder</span>
+  <input type="text" id="collName" placeholder="Collection name" style="display:none">
+  <div class="spacer"></div>
+  <span class="savenote" id="saveNote" style="display:none"><span class="dot"></span> saved to this browser</span>
+  <button class="tbtn" id="exportBtn" style="display:none">Export .json</button>
+  <button class="tbtn" id="importBtn2" style="display:none">Import .json</button>
+  <button class="tbtn danger" id="newCollBtn" style="display:none">New collection</button>
+  <input type="file" id="fileInput" accept=".json,application/json">
+</div>
+<div class="storagebanner" id="storageBanner" style="display:none">
+  Everything here is saved only in <b>this browser</b> (localStorage) -- nothing is sent anywhere.
+  Clearing your browser data or switching devices loses it. <b>Download your work</b> to back it up or move it elsewhere.
+  <button id="dismissBanner">dismiss</button>
+</div>
+
+<div id="onboard">
+  <div id="resumeSlot"></div>
+  <div class="onboardcard">
+    <h1>Start a new collection</h1>
+    <p class="lead">Pick a canvas size, name your collection, then draw a base character. Everything after
+    that -- traits, variants, colors -- builds on top of this. All work stays in your browser unless you
+    export it.</p>
+    <div class="field">
+      <label>Collection name</label>
+      <input type="text" id="setupName" placeholder="e.g. My Gnouns" value="Untitled Collection">
+    </div>
+    <div class="field">
+      <label>Canvas width -- <span id="wVal" style="color:var(--accent);font-family:var(--mono)">32</span>px</label>
+      <div class="sliderrow"><input type="range" id="setupW" min="8" max="64" value="32" step="1"></div>
+    </div>
+    <div class="field">
+      <label>Canvas height -- <span id="hVal" style="color:var(--accent);font-family:var(--mono)">32</span>px</label>
+      <div class="sliderrow"><input type="range" id="setupH" min="8" max="64" value="32" step="1"></div>
+    </div>
+    <button class="tbtn primary" id="createBtn" style="width:100%;padding:.7rem">Create base character canvas</button>
+    <div class="orsep">or</div>
+    <button class="tbtn" id="importBtn1" style="width:100%">Import an existing collection (.json)</button>
+  </div>
+</div>
+
+<div id="workspace">
+  <div class="col leftcol">
+    <div class="colhead"><h2>Layers (top = front)</h2></div>
+    <div class="colbody">
+      <div class="baserow" id="baseRow">
+        <div class="thumb" id="baseThumb"></div>
+        <span>Base Character</span>
+        <span class="tag">always on</span>
+      </div>
+      <div id="traitList"></div>
+      <button class="addtraitbtn" id="addTraitBtn">+ Add trait</button>
+    </div>
+  </div>
+
+  <div class="col centercol">
+    <div class="editinglabel" id="editingLabel">Base Character<span class="cat" id="editingSub"></span></div>
+    <div class="canvaswrap" id="canvasWrap">
+      <canvas id="editCanvas" width="512" height="512"></canvas>
+    </div>
+    <div class="zoomrow">
+      <button class="toolbtn" id="zoomOutBtn" title="Zoom out">&minus;</button>
+      <span class="zoomlabel" id="zoomLabel">100%</span>
+      <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
+      <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
+    </div>
+    <div class="toolbar">
+      <button class="toolbtn active" data-tool="paint">Paint</button>
+      <button class="toolbtn" data-tool="fill">Bucket fill</button>
+      <button class="toolbtn" data-tool="line">Line</button>
+      <button class="toolbtn" data-tool="rect">Rectangle</button>
+      <button class="toolbtn" data-tool="ellipse">Ellipse</button>
+      <button class="toolbtn" data-tool="eyedrop">Eyedropper</button>
+    </div>
+    <div class="toolbar">
+      <label class="filledtoggle"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
+      <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
+    </div>
+    <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
+    <b>right click</b> paints/drags with the right-slot color -- either slot can be Transparent to erase.
+    Line/Rectangle/Ellipse: click-drag from one corner to the other, release to commit.</p>
+    <div class="statline">
+      <span id="pixelCount">0 px</span>
+    </div>
+  </div>
+
+  <div class="col rightcol">
+    <div class="colhead"><h2>Colors</h2></div>
+    <div class="colbody">
+      <div class="colorslots">
+        <div class="colorslot">
+          <span class="slotlabel">Left click</span>
+          <div class="slotswatch" id="primarySwatch"></div>
+          <input type="text" id="primaryHex" value="#ffb648">
+        </div>
+        <div class="colorslot">
+          <span class="slotlabel">Right click</span>
+          <div class="slotswatch" id="secondarySwatch"></div>
+          <input type="text" id="secondaryHex" value="erase">
+        </div>
+      </div>
+
+      <div class="palette-section">
+        <div class="palette-label"><span>Transparent</span></div>
+        <div class="palette" id="transparentPalette"></div>
+      </div>
+
+      <div class="palette-section">
+        <div class="palette-label"><span>Basic</span></div>
+        <div class="palette" id="basicPalette"></div>
+      </div>
+
+      <div class="palette-section">
+        <div class="palette-label"><span>Custom</span><button id="addCustomLabel">+ save current</button></div>
+        <div class="palette" id="customPalette"></div>
+        <div class="colorpickerpop" id="customColorPop" style="display:none">
+          <input type="color" id="customColorPicker" value="#ffb648">
+          <input type="text" id="customColorHex" value="#ffb648" maxlength="7" placeholder="#rrggbb">
+          <button class="tbtn primary" id="customColorAddBtn">Add</button>
+          <button class="tbtn" id="customColorCancelBtn">Cancel</button>
+        </div>
+      </div>
+
+      <div class="previewwrap">
+        <div class="palette-label"><span>Live preview</span></div>
+        <canvas id="previewCanvas" width="256" height="256"></canvas>
+        <div class="previewactions">
+          <button class="tbtn" id="randomPreviewBtn">Randomize</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== Collection Builder ====================
+const LS_STATE = "collectionBuilder:state";
+const LS_CUSTOM_COLORS = "collectionBuilder:customColors";
+const ERASE = "__erase__";
+const BASIC_COLORS = [
+  "#000000","#ffffff","#c8c8c8","#808080",
+  "#e05a5a","#e08a3a","#e8d05a","#5a9a5a",
+  "#4fa3c7","#5a6ac9","#8a6bc9","#c96b9a",
+  "#8a5a2f","#3a2a1a"
+];
+
+let STATE = null;           // the whole collection
+let customColors = [];      // persists across collections (device-wide), also embedded per-export
+let selection = { kind: "base" }; // {kind:"base"} | {kind:"variant", traitId, variantId}
+let primaryColor = "#ffb648";
+let secondaryColor = ERASE;
+let activeTool = "paint";
+let saveTimer = null;
+let downloadsNs = null;
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
+let zoomIdx = 2; // 100%
+let previewPixels = null; // Map overlay drawn during a shape drag, merged in on release
+let shapeStart = null;    // {px,py} where a shape drag began
+
+function currentZoom(){ return ZOOM_LEVELS[zoomIdx]; }
+function isShapeTool(t){ return t === "line" || t === "rect" || t === "ellipse"; }
+
+// ---------------- custom modal (native confirm/alert/prompt are silently
+// inert in sandboxed embeds without allow-modals -- this is real UI instead) ----------------
+function showModal(opts){
+  return new Promise(resolve => {
+    const overlay = document.createElement("div");
+    overlay.className = "modaloverlay";
+    const box = document.createElement("div");
+    box.className = "modalbox";
+    if (opts.title) { const h = document.createElement("h3"); h.textContent = opts.title; box.appendChild(h); }
+    const p = document.createElement("p"); p.textContent = opts.message; box.appendChild(p);
+    const row = document.createElement("div"); row.className = "modalbtns";
+    opts.buttons.forEach(b => {
+      const btn = document.createElement("button");
+      btn.className = "tbtn" + (b.primary ? " primary" : "") + (b.danger ? " danger" : "");
+      btn.textContent = b.label;
+      btn.onclick = () => { document.body.removeChild(overlay); resolve(b.value); };
+      row.appendChild(btn);
+    });
+    box.appendChild(row);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+}
+function showConfirm(message){
+  return showModal({ message, buttons: [{ label: "Cancel", value: false }, { label: "Confirm", value: true, primary: true, danger: true }] });
+}
+function showAlert(message){
+  return showModal({ message, buttons: [{ label: "OK", value: true, primary: true }] });
+}
+
+// ---------------- shape generators (return a Map of "x,y" -> color) ----------------
+function linePixels(x0, y0, x1, y1, color, out){
+  x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+  const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+  const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy, x = x0, y = y0;
+  while (true) {
+    out.set(pxKey(x, y), color);
+    if (x === x1 && y === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x += sx; }
+    if (e2 <= dx) { err += dx; y += sy; }
+  }
+}
+function rectPixels(x0, y0, x1, y1, color, filled, out){
+  const xmin = Math.min(x0, x1), xmax = Math.max(x0, x1), ymin = Math.min(y0, y1), ymax = Math.max(y0, y1);
+  for (let y = ymin; y <= ymax; y++) {
+    for (let x = xmin; x <= xmax; x++) {
+      if (filled || x === xmin || x === xmax || y === ymin || y === ymax) out.set(pxKey(x, y), color);
+    }
+  }
+}
+function ellipsePixels(x0, y0, x1, y1, color, filled, out){
+  const xmin = Math.min(x0, x1), xmax = Math.max(x0, x1), ymin = Math.min(y0, y1), ymax = Math.max(y0, y1);
+  const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
+  const rx = Math.max((xmax - xmin) / 2, 0.5), ry = Math.max((ymax - ymin) / 2, 0.5);
+  const inside = (x, y) => { const nx = (x - cx) / rx, ny = (y - cy) / ry; return nx * nx + ny * ny <= 1.0; };
+  for (let y = ymin; y <= ymax; y++) {
+    for (let x = xmin; x <= xmax; x++) {
+      if (!inside(x, y)) continue;
+      if (filled) { out.set(pxKey(x, y), color); continue; }
+      const boundary = !inside(x + 1, y) || !inside(x - 1, y) || !inside(x, y + 1) || !inside(x, y - 1);
+      if (boundary) out.set(pxKey(x, y), color);
+    }
+  }
+}
+function generateShapePixels(tool, x0, y0, x1, y1, color){
+  const out = new Map();
+  const filled = document.getElementById("shapeFillToggle").checked;
+  if (tool === "line") linePixels(x0, y0, x1, y1, color, out);
+  else if (tool === "rect") rectPixels(x0, y0, x1, y1, color, filled, out);
+  else if (tool === "ellipse") ellipsePixels(x0, y0, x1, y1, color, filled, out);
+  return out;
+}
+function floodFillPixels(startX, startY, color, pixelsMap, w, h){
+  const fillVal = isErase(color) ? null : color;
+  const targetVal = pixelsMap.has(pxKey(startX, startY)) ? pixelsMap.get(pxKey(startX, startY)) : null;
+  if (targetVal === fillVal) return;
+  const stack = [[startX, startY]];
+  const visited = new Set();
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    const k = pxKey(x, y);
+    if (visited.has(k)) continue;
+    visited.add(k);
+    const cur = pixelsMap.has(k) ? pixelsMap.get(k) : null;
+    if (cur !== targetVal) continue;
+    if (fillVal === null) pixelsMap.delete(k); else pixelsMap.set(k, fillVal);
+    stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+  }
+}
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function pxKey(x,y){ return x+","+y; }
+function pixelsToMap(list){ const m = new Map(); for (const [x,y,c] of (list||[])) m.set(pxKey(x,y), c); return m; }
+function mapToSortedList(m){
+  const arr = [];
+  for (const [k,c] of m) { const [x,y] = k.split(",").map(Number); arr.push([x,y,c]); }
+  arr.sort((a,b) => a[1]-b[1] || a[0]-b[0]);
+  return arr;
+}
+function isErase(c){ return c === ERASE; }
+
+// ---------------- persistence ----------------
+function loadCustomColors(){
+  try { customColors = JSON.parse(localStorage.getItem(LS_CUSTOM_COLORS) || "[]"); }
+  catch(e) { customColors = []; }
+}
+function saveCustomColors(){
+  try { localStorage.setItem(LS_CUSTOM_COLORS, JSON.stringify(customColors)); } catch(e){}
+}
+function loadState(){
+  try {
+    const raw = localStorage.getItem(LS_STATE);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function persist(){
+  try { localStorage.setItem(LS_STATE, JSON.stringify(STATE)); } catch(e){}
+  document.getElementById("saveNote").style.display = "inline-flex";
+}
+function scheduleSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 250);
+}
+
+// ---------------- state helpers ----------------
+function newState(name, w, h){
+  return {
+    formatVersion: 1,
+    collectionName: name,
+    collectionSymbol: (name||"COLL").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10) || "COLL",
+    description: "",
+    canvas: { width: w, height: h },
+    baseCharacter: { pixels: [] },
+    traits: [],
+    palette: { custom: [] }
+  };
+}
+function findTrait(id){ return STATE.traits.find(t => t.id === id); }
+function findVariant(traitId, variantId){
+  const t = findTrait(traitId);
+  return t ? t.variants.find(v => v.id === variantId) : null;
+}
+function currentPixelsRef(){
+  if (selection.kind === "base") return STATE.baseCharacter.pixels;
+  const v = findVariant(selection.traitId, selection.variantId);
+  return v ? v.pixels : [];
+}
+function setCurrentPixels(list){
+  if (selection.kind === "base") { STATE.baseCharacter.pixels = list; return; }
+  const v = findVariant(selection.traitId, selection.variantId);
+  if (v) v.pixels = list;
+}
+
+// ---------------- onboarding ----------------
+function initOnboard(){
+  const existing = loadState();
+  const resumeSlot = document.getElementById("resumeSlot");
+  if (existing) {
+    resumeSlot.innerHTML = `<div class="resumecard">
+      <p>Found a saved collection: <strong>${escapeHtml(existing.collectionName)}</strong>
+      (${existing.canvas.width}x${existing.canvas.height}, ${existing.traits.length} trait${existing.traits.length===1?"":"s"})</p>
+      <button class="tbtn primary" id="resumeBtn">Resume</button>
+    </div>`;
+    document.getElementById("resumeBtn").onclick = () => { STATE = existing; enterWorkspace(); };
+  }
+
+  const wSlider = document.getElementById("setupW"), hSlider = document.getElementById("setupH");
+  wSlider.oninput = () => document.getElementById("wVal").textContent = wSlider.value;
+  hSlider.oninput = () => document.getElementById("hVal").textContent = hSlider.value;
+
+  document.getElementById("createBtn").onclick = () => {
+    const name = document.getElementById("setupName").value.trim() || "Untitled Collection";
+    const w = parseInt(wSlider.value, 10), h = parseInt(hSlider.value, 10);
+    STATE = newState(name, w, h);
+    enterWorkspace();
+  };
+
+  document.getElementById("importBtn1").onclick = () => document.getElementById("fileInput").click();
+  document.getElementById("importBtn2").onclick = () => document.getElementById("fileInput").click();
+  document.getElementById("fileInput").onchange = handleImportFile;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function handleImportFile(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !data.canvas || !Array.isArray(data.traits)) throw new Error("not a collection file");
+      STATE = data;
+      if (data.palette && Array.isArray(data.palette.custom)) {
+        for (const c of data.palette.custom) if (!customColors.includes(c)) customColors.push(c);
+        saveCustomColors();
+      }
+      selection = { kind: "base" };
+      enterWorkspace();
+    } catch(err) {
+      showAlert("Could not read that file as a collection export: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+function enterWorkspace(){
+  document.getElementById("onboard").style.display = "none";
+  document.getElementById("workspace").classList.add("active");
+  document.getElementById("collName").style.display = "inline-block";
+  document.getElementById("collName").value = STATE.collectionName;
+  document.getElementById("exportBtn").style.display = "inline-block";
+  document.getElementById("importBtn2").style.display = "inline-block";
+  document.getElementById("newCollBtn").style.display = "inline-block";
+  document.getElementById("storageBanner").style.display = "block";
+  selection = { kind: "base" };
+  renderAll();
+  persist();
+}
+
+// ---------------- rendering: layer tree ----------------
+function renderTraitList(){
+  const list = document.getElementById("traitList");
+  list.innerHTML = "";
+  STATE.traits.forEach((trait, ti) => {
+    const card = document.createElement("div");
+    card.className = "traitcard";
+    card.draggable = true;
+    card.dataset.traitId = trait.id;
+
+    const head = document.createElement("div");
+    head.className = "traithead";
+    head.innerHTML = `<span class="handle">&#9776;</span>`;
+    const nameInput = document.createElement("input");
+    nameInput.className = "tname"; nameInput.value = trait.name;
+    nameInput.onchange = () => { trait.name = nameInput.value || trait.name; scheduleSave(); renderPreview(); };
+    head.appendChild(nameInput);
+
+    const reqBtn = document.createElement("button");
+    reqBtn.className = "reqtoggle " + (trait.required ? "required" : "optional");
+    reqBtn.textContent = trait.required ? "Required" : "Optional";
+    reqBtn.onclick = () => { toggleRequired(trait); };
+    head.appendChild(reqBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "iconbtn"; delBtn.textContent = "✕";
+    delBtn.title = "Delete trait";
+    delBtn.onclick = async () => {
+      if (!(await showConfirm(`Delete trait "${trait.name}" and all its variants?`))) return;
+      STATE.traits.splice(ti, 1);
+      if (selection.kind === "variant" && selection.traitId === trait.id) selection = { kind: "base" };
+      renderAll(); scheduleSave();
+    };
+    head.appendChild(delBtn);
+    card.appendChild(head);
+
+    const vlist = document.createElement("div");
+    vlist.className = "variantlist";
+    trait.variants.forEach((v, vi) => {
+      vlist.appendChild(renderVariantRow(trait, v, vi));
+    });
+    const addV = document.createElement("button");
+    addV.className = "addvariantbtn";
+    addV.textContent = "+ Add variant";
+    addV.onclick = () => {
+      const nv = { id: uid(), name: "New Variant", weight: 1, pixels: [] };
+      trait.variants.push(nv);
+      selection = { kind: "variant", traitId: trait.id, variantId: nv.id };
+      renderAll(); scheduleSave();
+    };
+    vlist.appendChild(addV);
+    card.appendChild(vlist);
+
+    wireTraitDrag(card, ti);
+    list.appendChild(card);
+  });
+}
+
+function toggleRequired(trait){
+  trait.required = !trait.required;
+  if (!trait.required) {
+    if (!trait.variants.some(v => v.isNone)) {
+      trait.variants.push({ id: uid(), name: "None", weight: 1, pixels: [], isNone: true });
+    }
+  } else {
+    trait.variants = trait.variants.filter(v => !v.isNone);
+  }
+  renderAll(); scheduleSave();
+}
+
+function renderVariantRow(trait, v, vi){
+  const row = document.createElement("div");
+  row.className = "variantrow" + (isSelected(trait.id, v.id) ? " selected" : "") + (v.isNone ? " none-variant" : "");
+  row.draggable = true;
+  row.dataset.traitId = trait.id;
+  row.dataset.variantId = v.id;
+
+  row.innerHTML = `<span class="handle">&#8942;</span>`;
+  const thumb = document.createElement("div");
+  thumb.className = "thumb";
+  thumb.style.background = v.pixels && v.pixels[0] ? v.pixels[0][2] : "transparent";
+  row.appendChild(thumb);
+
+  const nameInput = document.createElement("input");
+  nameInput.className = "vname"; nameInput.value = v.name;
+  nameInput.disabled = !!v.isNone;
+  nameInput.onchange = () => { v.name = nameInput.value || v.name; scheduleSave(); };
+  nameInput.onclick = (e) => e.stopPropagation();
+  row.appendChild(nameInput);
+
+  const weightInput = document.createElement("input");
+  weightInput.className = "vweight"; weightInput.type = "number"; weightInput.min = "0"; weightInput.step = "1";
+  weightInput.value = v.weight;
+  weightInput.title = "Relative weight (probability share)";
+  weightInput.onchange = () => { v.weight = Math.max(0, parseFloat(weightInput.value) || 0); scheduleSave(); };
+  weightInput.onclick = (e) => e.stopPropagation();
+  row.appendChild(weightInput);
+
+  if (!v.isNone) {
+    const delBtn = document.createElement("button");
+    delBtn.className = "iconbtn"; delBtn.textContent = "✕";
+    delBtn.onclick = async (e) => {
+      e.stopPropagation();
+      if (!(await showConfirm(`Delete variant "${v.name}"?`))) return;
+      trait.variants.splice(vi, 1);
+      if (selection.kind === "variant" && selection.variantId === v.id) selection = { kind: "base" };
+      renderAll(); scheduleSave();
+    };
+    row.appendChild(delBtn);
+  }
+
+  row.onclick = () => { selection = { kind: "variant", traitId: trait.id, variantId: v.id }; renderAll(); };
+  wireVariantDrag(row, trait, vi);
+  return row;
+}
+
+function isSelected(traitId, variantId){
+  return selection.kind === "variant" && selection.traitId === traitId && selection.variantId === variantId;
+}
+
+// ---------------- drag and drop ----------------
+let dragTraitIdx = null;
+function wireTraitDrag(card, idx){
+  card.addEventListener("dragstart", (e) => {
+    dragTraitIdx = idx; card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  card.addEventListener("dragover", (e) => { e.preventDefault(); });
+  card.addEventListener("drop", (e) => {
+    e.preventDefault();
+    if (dragTraitIdx === null || dragTraitIdx === idx) return;
+    const [moved] = STATE.traits.splice(dragTraitIdx, 1);
+    STATE.traits.splice(idx, 0, moved);
+    dragTraitIdx = null;
+    renderAll(); scheduleSave();
+  });
+}
+let dragVariant = null;
+function wireVariantDrag(row, trait, idx){
+  row.addEventListener("dragstart", (e) => {
+    e.stopPropagation();
+    dragVariant = { traitId: trait.id, idx };
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+  row.addEventListener("dragend", () => row.classList.remove("dragging"));
+  row.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); });
+  row.addEventListener("drop", (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (!dragVariant || dragVariant.traitId !== trait.id || dragVariant.idx === idx) return;
+    const [moved] = trait.variants.splice(dragVariant.idx, 1);
+    trait.variants.splice(idx, 0, moved);
+    dragVariant = null;
+    renderAll(); scheduleSave();
+  });
+}
+
+// ---------------- canvas editing ----------------
+function currentDims(){ return { w: STATE.canvas.width, h: STATE.canvas.height }; }
+
+function redrawEditCanvas(){
+  const { w, h } = currentDims();
+  const canvasEl = document.getElementById("editCanvas");
+  const scale = (512 / Math.max(w, h)) * currentZoom();
+  canvasEl.width = w * scale; canvasEl.height = h * scale;
+  canvasEl.style.width = "auto"; canvasEl.style.aspectRatio = w + "/" + h;
+  const ctx = canvasEl.getContext("2d");
+  ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
+  const pixels = pixelsToMap(currentPixelsRef());
+  for (const [k,c] of pixels) {
+    const [x,y] = k.split(",").map(Number);
+    ctx.fillStyle = c;
+    ctx.fillRect(x*scale, y*scale, scale, scale);
+  }
+  if (previewPixels) {
+    for (const [k,c] of previewPixels) {
+      if (isErase(c)) continue;
+      const [x,y] = k.split(",").map(Number);
+      ctx.fillStyle = c;
+      ctx.fillRect(x*scale, y*scale, scale, scale);
+    }
+  }
+  document.getElementById("pixelCount").textContent = pixels.size + " px";
+  const label = document.getElementById("editingLabel");
+  const sub = document.getElementById("editingSub");
+  if (selection.kind === "base") {
+    label.childNodes[0].textContent = "Base Character";
+    sub.textContent = w + "x" + h;
+  } else {
+    const t = findTrait(selection.traitId), v = findVariant(selection.traitId, selection.variantId);
+    label.childNodes[0].textContent = (v ? v.name : "");
+    sub.textContent = t ? t.name : "";
+  }
+}
+
+function paintAt(px, py, button){
+  const { w, h } = currentDims();
+  if (px < 0 || py < 0 || px >= w || py >= h) return;
+  const key = pxKey(px, py);
+  const pixels = pixelsToMap(currentPixelsRef());
+  if (activeTool === "eyedrop") {
+    if (pixels.has(key)) setColor(button === 2 ? "secondary" : "primary", pixels.get(key));
+    return;
+  }
+  const color = button === 2 ? secondaryColor : primaryColor;
+  if (isErase(color)) pixels.delete(key);
+  else pixels.set(key, color);
+  setCurrentPixels(mapToSortedList(pixels));
+  redrawEditCanvas();
+  renderPreview();
+  updateThumbs();
+  scheduleSave();
+}
+
+let isPointerDown = false, activeButton = 0;
+function cellFromEvent(e, canvasEl){
+  const { w, h } = currentDims();
+  const r = canvasEl.getBoundingClientRect();
+  return {
+    px: Math.floor((e.clientX - r.left) / (r.width / w)),
+    py: Math.floor((e.clientY - r.top) / (r.height / h)),
+  };
+}
+
+function commitPreviewPixels(){
+  if (!previewPixels) return;
+  const pixels = pixelsToMap(currentPixelsRef());
+  for (const [k,c] of previewPixels) {
+    if (isErase(c)) pixels.delete(k); else pixels.set(k,c);
+  }
+  setCurrentPixels(mapToSortedList(pixels));
+  shapeStart = null; previewPixels = null;
+  redrawEditCanvas(); renderPreview(); updateThumbs(); scheduleSave();
+}
+
+function wireCanvasEvents(){
+  const canvasEl = document.getElementById("editCanvas");
+  canvasEl.addEventListener("pointerdown", e => {
+    isPointerDown = true; activeButton = e.button;
+    const { px, py } = cellFromEvent(e, canvasEl);
+    if (activeTool === "fill") {
+      const { w, h } = currentDims();
+      if (px < 0 || py < 0 || px >= w || py >= h) return;
+      const pixels = pixelsToMap(currentPixelsRef());
+      const color = activeButton === 2 ? secondaryColor : primaryColor;
+      floodFillPixels(px, py, color, pixels, w, h);
+      setCurrentPixels(mapToSortedList(pixels));
+      redrawEditCanvas(); renderPreview(); updateThumbs(); scheduleSave();
+      return;
+    }
+    if (isShapeTool(activeTool)) {
+      shapeStart = { px, py };
+      previewPixels = generateShapePixels(activeTool, px, py, px, py, activeButton === 2 ? secondaryColor : primaryColor);
+      redrawEditCanvas();
+      return;
+    }
+    paintAt(px, py, activeButton);
+  });
+  canvasEl.addEventListener("pointermove", e => {
+    if (!isPointerDown) return;
+    if (activeTool === "eyedrop" || activeTool === "fill") return;
+    const { px, py } = cellFromEvent(e, canvasEl);
+    if (isShapeTool(activeTool) && shapeStart) {
+      previewPixels = generateShapePixels(activeTool, shapeStart.px, shapeStart.py, px, py, activeButton === 2 ? secondaryColor : primaryColor);
+      redrawEditCanvas();
+      return;
+    }
+    paintAt(px, py, activeButton);
+  });
+  window.addEventListener("pointerup", () => {
+    isPointerDown = false;
+    commitPreviewPixels();
+  });
+  canvasEl.addEventListener("contextmenu", e => e.preventDefault());
+}
+
+// ---------------- colors ----------------
+function makeSwatch(color, opts){
+  opts = opts || {};
+  const sw = document.createElement("div");
+  sw.className = "swatch";
+  if (isErase(color)) sw.classList.add("erase-swatch");
+  else sw.style.background = color;
+  sw.title = isErase(color) ? "Transparent / erase" : color;
+  if (color === primaryColor) { sw.classList.add("selected-l"); const b=document.createElement("span"); b.className="badge l"; b.textContent="L"; sw.appendChild(b); }
+  if (color === secondaryColor) { sw.classList.add("selected-r"); const b=document.createElement("span"); b.className="badge r"; b.textContent="R"; sw.appendChild(b); }
+  sw.addEventListener("click", () => setColor("primary", color));
+  sw.addEventListener("contextmenu", (e) => { e.preventDefault(); setColor("secondary", color); });
+  if (opts.removable) {
+    const rm = document.createElement("span");
+    rm.className = "rm"; rm.textContent = "✕";
+    rm.onclick = (e) => { e.stopPropagation(); customColors = customColors.filter(c => c !== color); saveCustomColors(); buildPalettes(); };
+    sw.appendChild(rm);
+  }
+  return sw;
+}
+
+function buildPalettes(){
+  const tp = document.getElementById("transparentPalette"); tp.innerHTML = ""; tp.appendChild(makeSwatch(ERASE));
+  const bp = document.getElementById("basicPalette"); bp.innerHTML = "";
+  BASIC_COLORS.forEach(c => bp.appendChild(makeSwatch(c)));
+  const cp = document.getElementById("customPalette"); cp.innerHTML = "";
+  customColors.forEach(c => cp.appendChild(makeSwatch(c, { removable: true })));
+  const addBtn = document.createElement("button");
+  addBtn.className = "addcolorbtn"; addBtn.textContent = "+";
+  addBtn.title = "Add a custom color";
+  addBtn.onclick = () => {
+    const pop = document.getElementById("customColorPop");
+    const picker = document.getElementById("customColorPicker");
+    const hex = document.getElementById("customColorHex");
+    const seed = isErase(primaryColor) ? "#ffb648" : primaryColor;
+    picker.value = seed; hex.value = seed; hex.style.borderColor = "";
+    pop.style.display = pop.style.display === "none" ? "flex" : "none";
+  };
+  cp.appendChild(addBtn);
+}
+
+function setColor(slot, color){
+  if (slot === "primary") primaryColor = color; else secondaryColor = color;
+  updateSlotUI();
+  buildPalettes();
+}
+function updateSlotUI(){
+  const pSwatch = document.getElementById("primarySwatch"), sSwatch = document.getElementById("secondarySwatch");
+  if (isErase(primaryColor)) { pSwatch.classList.add("erase-swatch"); pSwatch.style.background=""; } else { pSwatch.classList.remove("erase-swatch"); pSwatch.style.background = primaryColor; }
+  if (isErase(secondaryColor)) { sSwatch.classList.add("erase-swatch"); sSwatch.style.background=""; } else { sSwatch.classList.remove("erase-swatch"); sSwatch.style.background = secondaryColor; }
+  document.getElementById("primaryHex").value = isErase(primaryColor) ? "erase" : primaryColor;
+  document.getElementById("secondaryHex").value = isErase(secondaryColor) ? "erase" : secondaryColor;
+}
+
+// ---------------- preview / random assembly ----------------
+function pickWeighted(variants){
+  const total = variants.reduce((s,v) => s + (v.weight||0), 0);
+  if (total <= 0) return null;
+  let r = Math.random() * total, upto = 0;
+  for (const v of variants) { upto += (v.weight||0); if (r < upto) return v; }
+  return variants[variants.length-1];
+}
+
+function assembleRandom(){
+  const picks = {};
+  for (const t of STATE.traits) {
+    const options = t.required ? t.variants : t.variants; // isNone entries already included when optional
+    if (!options.length) continue;
+    const chosen = pickWeighted(options);
+    picks[t.id] = chosen;
+  }
+  return picks;
+}
+
+function compositeInto(ctx, w, h, scale, picks){
+  ctx.clearRect(0,0,w*scale,h*scale);
+  const merged = new Map();
+  for (const [k,c] of pixelsToMap(STATE.baseCharacter.pixels)) merged.set(k,c);
+  // traits array is front-to-back in list order (index 0 = front per spec),
+  // so composite back-to-front: iterate in REVERSE.
+  for (let i = STATE.traits.length - 1; i >= 0; i--) {
+    const t = STATE.traits[i];
+    const chosen = picks[t.id];
+    if (!chosen || chosen.isNone) continue;
+    for (const [k,c] of pixelsToMap(chosen.pixels)) merged.set(k,c);
+  }
+  for (const [k,c] of merged) {
+    const [x,y] = k.split(",").map(Number);
+    ctx.fillStyle = c;
+    ctx.fillRect(x*scale, y*scale, scale, scale);
+  }
+}
+
+let lastPreviewPicks = null;
+function renderPreview(){
+  const { w, h } = currentDims();
+  const canvasEl = document.getElementById("previewCanvas");
+  const scale = 256 / Math.max(w, h);
+  canvasEl.width = w*scale; canvasEl.height = h*scale;
+  const ctx = canvasEl.getContext("2d");
+  if (!lastPreviewPicks) lastPreviewPicks = firstPicks();
+  compositeInto(ctx, w, h, scale, lastPreviewPicks);
+}
+function firstPicks(){
+  const picks = {};
+  for (const t of STATE.traits) if (t.variants.length) picks[t.id] = t.variants.find(v=>!v.isNone) || t.variants[0];
+  return picks;
+}
+function updateThumbs(){
+  const { w, h } = currentDims();
+  const baseThumb = document.getElementById("baseThumb");
+  const first = STATE.baseCharacter.pixels[0];
+  baseThumb.style.background = first ? first[2] : "transparent";
+}
+
+// ---------------- export / import ----------------
+async function ensureDownloads(){
+  if (downloadsNs) return downloadsNs;
+  if (!window.claude || typeof window.claude.use !== "function") return null;
+  try { downloadsNs = await window.claude.use("downloads"); } catch(e) { downloadsNs = null; }
+  return downloadsNs;
+}
+
+async function exportCollection(){
+  STATE.palette.custom = customColors.slice();
+  STATE.collectionName = document.getElementById("collName").value.trim() || STATE.collectionName;
+  const json = JSON.stringify(STATE, null, 2);
+  const filename = (STATE.collectionName || "collection").replace(/[^a-z0-9\-_ ]/gi,"").trim().replace(/\s+/g,"-").toLowerCase() + ".json";
+
+  const ns = await ensureDownloads();
+  if (ns) {
+    try {
+      await ns.save({ filename, data: json });
+      return;
+    } catch(err) {
+      if (err && err.code === "declined") return;
+      console.warn("downloads.save failed, falling back", err);
+    }
+  }
+  // Fallback (no downloads capability available in this context, e.g. a
+  // plain browser tab): trigger a real same-origin file download instead.
+  try {
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    showAlert("Download failed: " + err.message + ". Copy this collection's data from the browser console: window.STATE");
+  }
+}
+
+// ---------------- wiring ----------------
+function renderAll(){
+  previewPixels = null; shapeStart = null; isPointerDown = false;
+  document.getElementById("editingLabel").innerHTML = "Base Character<span class=\"cat\" id=\"editingSub\"></span>";
+  renderTraitList();
+  redrawEditCanvas();
+  buildPalettes();
+  updateSlotUI();
+  updateThumbs();
+  lastPreviewPicks = null;
+  renderPreview();
+}
+
+document.getElementById("baseRow").onclick = () => { selection = { kind: "base" }; renderAll(); };
+document.getElementById("addTraitBtn").onclick = () => {
+  const t = { id: uid(), name: "New Trait", required: true, variants: [] };
+  STATE.traits.unshift(t); // new traits go to the front (top of list = front of image)
+  renderAll(); scheduleSave();
+};
+document.getElementById("collName").onchange = (e) => { STATE.collectionName = e.target.value; scheduleSave(); };
+document.getElementById("exportBtn").onclick = exportCollection;
+document.getElementById("newCollBtn").onclick = async () => {
+  if (!(await showConfirm("Start a new collection? Your current one stays saved in this browser until you overwrite it, but switching now will replace what's shown."))) return;
+  localStorage.removeItem(LS_STATE);
+  location.reload();
+};
+document.getElementById("dismissBanner").onclick = () => { document.getElementById("storageBanner").style.display = "none"; };
+document.querySelectorAll(".toolbtn[data-tool]").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".toolbtn[data-tool]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    activeTool = btn.dataset.tool;
+    previewPixels = null; shapeStart = null; isPointerDown = false;
+    redrawEditCanvas();
+  };
+});
+document.getElementById("clearCanvasBtn").onclick = async () => {
+  if (!(await showConfirm("Clear all pixels on this canvas?"))) return;
+  setCurrentPixels([]);
+  redrawEditCanvas(); renderPreview(); updateThumbs(); scheduleSave();
+};
+function updateZoomLabel(){ document.getElementById("zoomLabel").textContent = Math.round(currentZoom() * 100) + "%"; }
+document.getElementById("zoomInBtn").onclick = () => { zoomIdx = Math.min(zoomIdx + 1, ZOOM_LEVELS.length - 1); updateZoomLabel(); redrawEditCanvas(); };
+document.getElementById("zoomOutBtn").onclick = () => { zoomIdx = Math.max(zoomIdx - 1, 0); updateZoomLabel(); redrawEditCanvas(); };
+document.getElementById("zoomResetBtn").onclick = () => { zoomIdx = 2; updateZoomLabel(); redrawEditCanvas(); };
+function hexInputHandler(slot, el){
+  return () => {
+    let v = el.value.trim();
+    if (v.toLowerCase() === "erase" || v === "") { setColor(slot, ERASE); return; }
+    if (!v.startsWith("#")) v = "#" + v;
+    setColor(slot, v);
+  };
+}
+document.getElementById("primaryHex").onchange = hexInputHandler("primary", document.getElementById("primaryHex"));
+document.getElementById("secondaryHex").onchange = hexInputHandler("secondary", document.getElementById("secondaryHex"));
+document.getElementById("addCustomLabel").onclick = async () => {
+  const c = primaryColor;
+  if (isErase(c)) { await showAlert("Pick a real color in the left slot first."); return; }
+  if (!customColors.includes(c)) { customColors.push(c); saveCustomColors(); buildPalettes(); }
+};
+const customColorPop = document.getElementById("customColorPop");
+const customColorPicker = document.getElementById("customColorPicker");
+const customColorHex = document.getElementById("customColorHex");
+customColorPicker.oninput = () => { customColorHex.value = customColorPicker.value; customColorHex.style.borderColor = ""; };
+customColorHex.oninput = () => {
+  let v = customColorHex.value.trim();
+  if (!v.startsWith("#")) v = "#" + v;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) { customColorPicker.value = v; customColorHex.style.borderColor = ""; }
+};
+document.getElementById("customColorAddBtn").onclick = () => {
+  let v = customColorHex.value.trim();
+  if (!v.startsWith("#")) v = "#" + v;
+  if (!/^#[0-9a-fA-F]{6}$/.test(v)) { customColorHex.style.borderColor = "var(--red)"; return; }
+  if (!customColors.includes(v)) { customColors.push(v); saveCustomColors(); }
+  customColorPop.style.display = "none";
+  buildPalettes();
+};
+document.getElementById("customColorCancelBtn").onclick = () => { customColorPop.style.display = "none"; };
+document.getElementById("randomPreviewBtn").onclick = () => { lastPreviewPicks = assembleRandom(); renderPreview(); };
+
+loadCustomColors();
+wireCanvasEvents();
+initOnboard();
+
+</script>
+
+<script type="module">
+// Full site header (brand, alpha banner, theme toggle, network picker,
+// Adena connect pill with persistence) -- same shared component every
+// other page on the site uses. No deploy/mint wiring here yet; that's the
+// next step (deployment-as-a-service), matching package-deploy.html's
+// getWallet()/doContract() pattern when it lands.
+import { initSiteChrome } from "./lib/site-chrome.js";
+initSiteChrome();
+</script>
+
+</body>
+</html>

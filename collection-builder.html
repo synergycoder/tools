@@ -59,11 +59,18 @@ input[type=file]{display:none}
 .sliderrow input[type=range]{flex:1}
 .sliderrow .val{font:700 .95rem var(--mono);color:var(--accent);width:64px;text-align:right}
 .onboardcard{background:var(--panel);border:1px solid var(--hair);border-radius:12px;padding:1.6rem}
-.resumecard{background:var(--panel2);border:1px solid var(--accent-line);border-radius:10px;padding:1rem 1.2rem;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:1rem}
-.resumecard p{margin:0;font-size:.82rem;color:var(--muted)}
-.resumecard strong{color:var(--ink)}
 .orsep{text-align:center;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;margin:1.5rem 0;display:flex;align-items:center;gap:.8rem}
 .orsep::before,.orsep::after{content:"";flex:1;height:1px;background:var(--hair)}
+
+/* saved-collection switcher (onboarding list + in-workspace modal) */
+.switchlist{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.5rem}
+.switchrow{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;border:1px solid var(--hair);border-radius:9px;background:var(--panel2)}
+.switchrow.active{border-color:var(--accent)}
+.switchinfo{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.switchinfo strong{font-size:.85rem;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.switchmeta{font-size:.68rem;color:var(--muted);font-family:var(--mono)}
+.switcherbox{max-width:460px}
+.switcherbox .switchlist{max-height:50vh;overflow-y:auto;margin-bottom:1rem}
 
 /* ---------- workspace ---------- */
 #workspace{display:none;grid-template-columns:280px 1fr 300px;gap:0}
@@ -115,12 +122,23 @@ input[type=file]{display:none}
 #editCanvas{border:2px solid var(--hair);border-radius:8px;image-rendering:pixelated;cursor:crosshair;touch-action:none;background:
   repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 16px 16px;
 }
-.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center}
+.toolbar{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;align-items:center}
+.toolbarlabel{font-size:.62rem;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin-right:.15rem}
 .toolbtn{background:var(--panel2);border:1px solid var(--hair);color:var(--muted);border-radius:6px;padding:.4rem .8rem;font-size:.78rem;cursor:pointer}
 .toolbtn:hover{color:var(--ink)}
 .toolbtn.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:700}
 .toolbtn:disabled{opacity:.4;cursor:not-allowed}
 .toolbtn:disabled:hover{color:var(--muted)}
+
+/* Paint/Move are MODES (how clicks on the canvas behave), not one-off
+   drawing tools like the row below -- a joined segmented control makes
+   that different, "which of these two am I in" relationship visually
+   distinct from the ordinary button row of Fill/Line/Rectangle/etc. */
+.modebar{background:var(--panel2);border:1px solid var(--hair);border-radius:9px;padding:.5rem .7rem}
+.modetoggle{display:inline-flex;border:1px solid var(--accent-line);border-radius:7px;overflow:hidden}
+.modetoggle .toolbtn{border:none;border-radius:0;background:var(--panel);padding:.45rem 1.1rem;font-weight:700}
+.modetoggle .toolbtn:first-child{border-right:1px solid var(--accent-line)}
+.modetoggle .toolbtn.active{background:var(--accent);color:var(--bg)}
 .canvashint{color:var(--muted);font-size:.7rem;text-align:center;max-width:420px;line-height:1.5}
 .canvashint b{color:var(--ink)}
 .statline{display:flex;gap:1rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
@@ -154,6 +172,7 @@ input[type=file]{display:none}
 
 .previewwrap{margin-top:1rem}
 #previewCanvas{border:1px solid var(--hair);border-radius:8px;image-rendering:pixelated;background:#000;width:100%;aspect-ratio:1}
+.previewhint{color:var(--muted);font-size:.66rem;line-height:1.5;margin:.5rem 0 0}
 .previewactions{display:flex;gap:.4rem;margin-top:.5rem}
 .previewactions button{flex:1}
 
@@ -187,6 +206,7 @@ input[type=file]{display:none}
   <input type="text" id="collName" placeholder="Collection name" style="display:none">
   <div class="spacer"></div>
   <span class="savenote" id="saveNote" style="display:none"><span class="dot"></span> saved to this browser</span>
+  <button class="tbtn" id="collectionsBtn" style="display:none">My Collections</button>
   <button class="tbtn" id="exportBtn" style="display:none">Export .json</button>
   <button class="tbtn" id="importBtn2" style="display:none">Import .json</button>
   <button class="tbtn primary" id="deployBtn" style="display:none">Generate &amp; Deploy</button>
@@ -249,19 +269,25 @@ input[type=file]{display:none}
       <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
       <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
     </div>
+    <div class="toolbar modebar">
+      <span class="toolbarlabel">Mode</span>
+      <div class="modetoggle">
+        <button class="toolbtn active" data-tool="paint" title="Paint directly onto the canvas">Paint</button>
+        <button class="toolbtn" data-tool="move" title="Select part of the drawing and drag it elsewhere">Move</button>
+      </div>
+    </div>
     <div class="toolbar">
-      <button class="toolbtn active" data-tool="paint">Paint</button>
+      <span class="toolbarlabel">Drawing tools</span>
       <button class="toolbtn" data-tool="fill">Bucket fill</button>
       <button class="toolbtn" data-tool="line">Line</button>
       <button class="toolbtn" data-tool="rect">Rectangle</button>
       <button class="toolbtn" data-tool="ellipse">Ellipse</button>
-      <button class="toolbtn" data-tool="move">Move</button>
       <button class="toolbtn" data-tool="eyedrop">Eyedropper</button>
     </div>
     <div class="toolbar">
       <button class="toolbtn" id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>&#8630; Undo</button>
       <button class="toolbtn" id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>&#8631; Redo</button>
-      <label class="filledtoggle"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
+      <label class="filledtoggle" title="When on, Rectangle and Ellipse drag out a solid filled shape instead of just an outline"><input type="checkbox" id="shapeFillToggle"> Filled shape</label>
       <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
     </div>
     <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
@@ -313,7 +339,9 @@ input[type=file]{display:none}
       <div class="previewwrap">
         <div class="palette-label"><span>Live preview</span></div>
         <canvas id="previewCanvas" width="256" height="256"></canvas>
+        <p class="previewhint">Shows the base character plus one variant per trait -- not a real mint, just a "how do these actually look together" check, since only one variant per trait ever appears at once.</p>
         <div class="previewactions">
+          <button class="tbtn" id="oneOfEachBtn" title="Reset to the first variant of every trait">Show one of each</button>
           <button class="tbtn" id="randomPreviewBtn">Randomize</button>
         </div>
       </div>
@@ -323,7 +351,8 @@ input[type=file]{display:none}
 
 <script>
 // ==================== Collection Builder ====================
-const LS_STATE = "collectionBuilder:state";
+const LS_LIBRARY = "collectionBuilder:library"; // { [id]: STATE } -- every saved collection, not just one
+const LS_STATE_LEGACY = "collectionBuilder:state"; // old single-slot key, migrated into LS_LIBRARY then cleared
 const LS_CUSTOM_COLORS = "collectionBuilder:customColors";
 const ERASE = "__erase__";
 const BASIC_COLORS = [
@@ -427,6 +456,54 @@ function showAlert(message){
   return showModal({ message, buttons: [{ label: "OK", value: true, primary: true }] });
 }
 
+// "My Collections" -- reachable from inside the workspace, not just at
+// onboarding, so switching designs never means hunting for a way back.
+function showCollectionSwitcher(){
+  const entries = Object.values(loadLibrary()).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  const overlay = document.createElement("div");
+  overlay.className = "modaloverlay";
+  const box = document.createElement("div");
+  box.className = "modalbox switcherbox";
+  const h = document.createElement("h3"); h.textContent = "My collections"; box.appendChild(h);
+
+  if (!entries.length) {
+    const p = document.createElement("p"); p.textContent = "Nothing else saved in this browser yet.";
+    box.appendChild(p);
+  } else {
+    const list = document.createElement("div"); list.className = "switchlist";
+    entries.forEach(entry => {
+      const row = makeSwitchRow(entry, {
+        onOpen: () => {
+          document.body.removeChild(overlay);
+          if (entry.id === STATE.id) return;
+          STATE = entry;
+          selection = { kind: "base" };
+          renderAll();
+          persist();
+        },
+        onDelete: () => {
+          const wasCurrent = entry.id === STATE.id;
+          deleteCollection(entry.id);
+          document.body.removeChild(overlay);
+          if (wasCurrent) location.reload();
+          else showCollectionSwitcher();
+        },
+      });
+      if (entry.id === STATE.id) row.classList.add("active");
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+  }
+
+  const row = document.createElement("div"); row.className = "modalbtns";
+  const closeBtn = document.createElement("button"); closeBtn.className = "tbtn"; closeBtn.textContent = "Close";
+  closeBtn.onclick = () => document.body.removeChild(overlay);
+  row.appendChild(closeBtn);
+  box.appendChild(row);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 // ---------------- shape generators (return a Map of "x,y" -> color) ----------------
 function linePixels(x0, y0, x1, y1, color, out){
   x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
@@ -509,15 +586,51 @@ function loadCustomColors(){
 function saveCustomColors(){
   try { localStorage.setItem(LS_CUSTOM_COLORS, JSON.stringify(customColors)); } catch(e){}
 }
-function loadState(){
-  try {
-    const raw = localStorage.getItem(LS_STATE);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { return null; }
+function loadLibrary(){
+  try { return JSON.parse(localStorage.getItem(LS_LIBRARY) || "{}"); }
+  catch(e) { return {}; }
+}
+function saveLibrary(lib){
+  try { localStorage.setItem(LS_LIBRARY, JSON.stringify(lib)); } catch(e){}
+}
+// One-time migration from the original single-collection format, which
+// could only ever hold ONE design at a time -- starting a second one via
+// "New collection" silently discarded whatever was there before. Nothing
+// here is destructive: anything still sitting under the old key gets
+// folded into the library (never deleted outright, and given a fresh id
+// if it never had one) the first time this runs, then the old key is
+// cleared so it doesn't get re-migrated on every load.
+function migrateLegacyState(){
+  const lib = loadLibrary();
+  let raw;
+  try { raw = localStorage.getItem(LS_STATE_LEGACY); } catch(e) { raw = null; }
+  if (raw) {
+    try {
+      const legacy = JSON.parse(raw);
+      if (legacy && legacy.canvas && Array.isArray(legacy.traits)) {
+        if (!legacy.id) legacy.id = uid();
+        if (!legacy.updatedAt) legacy.updatedAt = Date.now();
+        lib[legacy.id] = legacy;
+        saveLibrary(lib);
+      }
+    } catch(e) { /* unparseable legacy data -- nothing to migrate */ }
+    try { localStorage.removeItem(LS_STATE_LEGACY); } catch(e) {}
+  }
+  return lib;
 }
 function persist(){
-  try { localStorage.setItem(LS_STATE, JSON.stringify(STATE)); } catch(e){}
+  if (!STATE) return;
+  if (!STATE.id) STATE.id = uid();
+  STATE.updatedAt = Date.now();
+  const lib = loadLibrary();
+  lib[STATE.id] = STATE;
+  saveLibrary(lib);
   document.getElementById("saveNote").style.display = "inline-flex";
+}
+function deleteCollection(id){
+  const lib = loadLibrary();
+  delete lib[id];
+  saveLibrary(lib);
 }
 function scheduleSave(){
   clearTimeout(saveTimer);
@@ -527,6 +640,7 @@ function scheduleSave(){
 // ---------------- state helpers ----------------
 function newState(name, w, h){
   return {
+    id: uid(),
     formatVersion: 1,
     collectionName: name,
     collectionSymbol: (name||"COLL").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,10) || "COLL",
@@ -534,7 +648,8 @@ function newState(name, w, h){
     canvas: { width: w, height: h },
     baseCharacter: { pixels: [] },
     traits: [],
-    palette: { custom: [] }
+    palette: { custom: [] },
+    updatedAt: Date.now(),
   };
 }
 function findTrait(id){ return STATE.traits.find(t => t.id === id); }
@@ -554,17 +669,59 @@ function setCurrentPixels(list){
 }
 
 // ---------------- onboarding ----------------
-function initOnboard(){
-  const existing = loadState();
+function relTime(ts){
+  if (!ts) return "";
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return mins + "m ago";
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return hrs + "h ago";
+  return Math.round(hrs / 24) + "d ago";
+}
+
+// Shared by the onboarding screen's full library list and the in-
+// workspace "My Collections" switcher -- one saved collection's row,
+// with Open and delete actions the caller decides what to do with.
+function makeSwitchRow(entry, opts){
+  const row = document.createElement("div");
+  row.className = "switchrow";
+  const info = document.createElement("div");
+  info.className = "switchinfo";
+  info.innerHTML = `<strong>${escapeHtml(entry.collectionName || "Untitled Collection")}</strong>
+    <span class="switchmeta">${entry.canvas.width}x${entry.canvas.height} &middot; ${entry.traits.length} trait${entry.traits.length===1?"":"s"} &middot; ${relTime(entry.updatedAt)}</span>`;
+  row.appendChild(info);
+  const openBtn = document.createElement("button");
+  openBtn.className = "tbtn primary"; openBtn.textContent = "Open";
+  openBtn.onclick = (e) => { e.stopPropagation(); opts.onOpen(); };
+  row.appendChild(openBtn);
+  const delBtn = document.createElement("button");
+  delBtn.className = "iconbtn"; delBtn.textContent = "✕"; delBtn.title = "Delete this collection";
+  delBtn.onclick = async (e) => {
+    e.stopPropagation();
+    if (!(await showConfirm(`Delete "${entry.collectionName || "Untitled Collection"}" from this browser? This can't be undone unless you've exported it.`))) return;
+    opts.onDelete();
+  };
+  row.appendChild(delBtn);
+  return row;
+}
+
+function renderLibraryList(lib){
   const resumeSlot = document.getElementById("resumeSlot");
-  if (existing) {
-    resumeSlot.innerHTML = `<div class="resumecard">
-      <p>Found a saved collection: <strong>${escapeHtml(existing.collectionName)}</strong>
-      (${existing.canvas.width}x${existing.canvas.height}, ${existing.traits.length} trait${existing.traits.length===1?"":"s"})</p>
-      <button class="tbtn primary" id="resumeBtn">Resume</button>
-    </div>`;
-    document.getElementById("resumeBtn").onclick = () => { STATE = existing; enterWorkspace(); };
-  }
+  const entries = Object.values(lib).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  if (!entries.length) { resumeSlot.innerHTML = ""; return; }
+  resumeSlot.innerHTML = `<div class="palette-label"><span>Saved in this browser</span></div>
+    <div class="switchlist" id="onboardSwitchList"></div>`;
+  const list = document.getElementById("onboardSwitchList");
+  entries.forEach(entry => {
+    list.appendChild(makeSwitchRow(entry, {
+      onOpen: () => { STATE = entry; enterWorkspace(); },
+      onDelete: () => { deleteCollection(entry.id); renderLibraryList(loadLibrary()); },
+    }));
+  });
+}
+
+function initOnboard(){
+  renderLibraryList(migrateLegacyState());
 
   const wSlider = document.getElementById("setupW"), hSlider = document.getElementById("setupH");
   wSlider.oninput = () => document.getElementById("wVal").textContent = wSlider.value;
@@ -595,6 +752,8 @@ function handleImportFile(e){
       const data = JSON.parse(reader.result);
       if (!data || !data.canvas || !Array.isArray(data.traits)) throw new Error("not a collection file");
       STATE = data;
+      if (!STATE.id) STATE.id = uid(); // older exports predate per-collection ids
+      if (STATE.collectionName === undefined) STATE.collectionName = "Untitled Collection";
       if (data.palette && Array.isArray(data.palette.custom)) {
         for (const c of data.palette.custom) if (!customColors.includes(c)) customColors.push(c);
         saveCustomColors();
@@ -614,6 +773,7 @@ function enterWorkspace(){
   document.getElementById("workspace").classList.add("active");
   document.getElementById("collName").style.display = "inline-block";
   document.getElementById("collName").value = STATE.collectionName;
+  document.getElementById("collectionsBtn").style.display = "inline-block";
   document.getElementById("exportBtn").style.display = "inline-block";
   document.getElementById("importBtn2").style.display = "inline-block";
   document.getElementById("deployBtn").style.display = "inline-block";
@@ -793,6 +953,19 @@ function redrawEditCanvas(){
   canvasEl.style.width = "auto"; canvasEl.style.aspectRatio = w + "/" + h;
   const ctx = canvasEl.getContext("2d");
   ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
+  // Faint base-character reference underneath whatever trait/variant is
+  // being drawn -- not part of this layer's own pixels, not paintable or
+  // erasable, purely so new trait pixels can be lined up against the
+  // character's actual shape instead of guessing at a blank grid.
+  if (selection.kind !== "base") {
+    ctx.save();
+    ctx.globalAlpha = 0.32;
+    for (const [x, y, c] of STATE.baseCharacter.pixels) {
+      ctx.fillStyle = c;
+      ctx.fillRect(x*scale, y*scale, scale, scale);
+    }
+    ctx.restore();
+  }
   const pixels = pixelsToMap(currentPixelsRef());
   for (const [k,c] of pixels) {
     const [x,y] = k.split(",").map(Number);
@@ -1073,11 +1246,25 @@ function renderPreview(){
   canvasEl.width = w*scale; canvasEl.height = h*scale;
   const ctx = canvasEl.getContext("2d");
   if (!lastPreviewPicks) lastPreviewPicks = firstPicks();
-  compositeInto(ctx, w, h, scale, lastPreviewPicks);
+  compositeInto(ctx, w, h, scale, currentDisplayPicks());
 }
 function firstPicks(){
   const picks = {};
   for (const t of STATE.traits) if (t.variants.length) picks[t.id] = t.variants.find(v=>!v.isNone) || t.variants[0];
+  return picks;
+}
+// Whatever trait/variant is currently being drawn always shows for real
+// in the live preview -- lastPreviewPicks alone (fixed until Randomize/
+// "Show one of each" is clicked again) would otherwise keep showing some
+// OTHER variant of that same trait while you draw a different one,
+// making the "how do these look together" preview lie about the one
+// thing you're actively working on.
+function currentDisplayPicks(){
+  const picks = Object.assign({}, lastPreviewPicks || firstPicks());
+  if (selection.kind === "variant") {
+    const t = findTrait(selection.traitId), v = findVariant(selection.traitId, selection.variantId);
+    if (t && v) picks[t.id] = v;
+  }
   return picks;
 }
 function updateThumbs(){
@@ -1147,9 +1334,9 @@ document.getElementById("addTraitBtn").onclick = () => {
 };
 document.getElementById("collName").onchange = (e) => { STATE.collectionName = e.target.value; scheduleSave(); };
 document.getElementById("exportBtn").onclick = exportCollection;
+document.getElementById("collectionsBtn").onclick = showCollectionSwitcher;
 document.getElementById("newCollBtn").onclick = async () => {
-  if (!(await showConfirm("Start a new collection? Your current one stays saved in this browser until you overwrite it, but switching now will replace what's shown."))) return;
-  localStorage.removeItem(LS_STATE);
+  if (!(await showConfirm("Start a new collection? This one stays saved -- switch back to it anytime from \"My Collections\"."))) return;
   location.reload();
 };
 document.getElementById("dismissBanner").onclick = () => { document.getElementById("storageBanner").style.display = "none"; };
@@ -1216,6 +1403,7 @@ document.getElementById("customColorAddBtn").onclick = () => {
 };
 document.getElementById("customColorCancelBtn").onclick = () => { customColorPop.style.display = "none"; };
 document.getElementById("randomPreviewBtn").onclick = () => { lastPreviewPicks = assembleRandom(); renderPreview(); };
+document.getElementById("oneOfEachBtn").onclick = () => { lastPreviewPicks = firstPicks(); renderPreview(); };
 
 loadCustomColors();
 wireCanvasEvents();

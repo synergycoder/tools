@@ -270,6 +270,16 @@
     <div id="bulkMintStatusHolder"></div>
   </div>
 
+  <div class="panel" id="mintHistoryPanel" style="display:none;margin:24px 0">
+    <h2>Mint history</h2>
+    <p class="desc">Every real <code>MintAssembled</code>/<code>AdminDeliverMigrated</code> mint on this realm, grouped by wallet -- read from the transaction indexer's own <code>Mint</code> events, not from token state, so it stays accurate even for tokens since transferred or burned.</p>
+    <div class="qty-row">
+      <button type="button" id="loadMintHistoryBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Load mint history</button>
+      <span class="qty-note" id="mintHistoryStatus"></span>
+    </div>
+    <div id="mintHistoryTableHolder" style="margin-top:14px"></div>
+  </div>
+
   <div class="panel" id="migratePanel" style="display:none;margin:24px 0">
     <h2>Migrate previous iteration's holders</h2>
     <p class="desc">Reads every revealed token from <code id="migrateFromPath"></code> and seeds this collection's migration snapshot so each original holder can claim their piece here, provenance carried forward.</p>
@@ -397,7 +407,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
 import { doContract } from "./lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8, fetchNativeBalance } from "./lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8, fetchNativeBalance, graphqlQuery, mapLimit } from "./lib/gno-rpc.js";
 initSiteChrome();
 
 const REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
@@ -572,6 +582,7 @@ function updateOwnerPanel() {
   document.getElementById("migratePanel").style.display = isOwner ? "" : "none";
   document.getElementById("burnGapPanel").style.display = isOwner ? "" : "none";
   document.getElementById("bulkMintPanel").style.display = isOwner ? "" : "none";
+  document.getElementById("mintHistoryPanel").style.display = isOwner ? "" : "none";
   if (!isOwner) return;
   document.getElementById("ownerCurrentPrice").textContent = stats.price === 0
     ? "0 GNOT (free)"
@@ -605,6 +616,113 @@ async function refreshRealmBalance() {
     el.textContent = "unknown";
     realmBalanceUgnot = null;
     allBtn.disabled = true;
+  }
+}
+
+// ---------- mint history (owner panel) ----------
+// Reads real Mint events off the transaction indexer rather than current
+// token state, so it stays accurate for tokens since transferred or
+// burned -- ported from gno-observer's build-cache.mjs
+// (fetchGingerMintEvents/fetchBlockTimes), same query shapes, adapted to
+// this repo's own graphqlQuery(net, query) signature (a network object,
+// not a bare URL string). "to" is who a mint's own Mint event names as
+// recipient -- MintAssembled always mints to the connected caller (see
+// the public mint page's own currentRecipient() comment), so this IS
+// "who minted it", not a separate gift recipient.
+async function fetchMintEvents() {
+  const query = `query {
+    getTransactions(where: {
+      success: { eq: true },
+      messages: { value: { MsgCall: { pkg_path: { eq: "${REALM_PATH}" } } } }
+    }, order: { heightAndIndex: DESC }) {
+      hash
+      block_height
+      response { events { __typename ... on GnoEvent { type attrs { key value } } } }
+    }
+  }`;
+  const data = await graphqlQuery(NETWORKS.testnet, query, 30000);
+  const mints = [];
+  for (const tx of data.getTransactions || []) {
+    for (const ev of tx.response?.events || []) {
+      if (ev.__typename !== "GnoEvent" || ev.type !== "Mint") continue;
+      const attrs = Object.fromEntries((ev.attrs || []).map(a => [a.key, a.value]));
+      if (!attrs.tokenId || !attrs.to) continue;
+      mints.push({ hash: tx.hash, blockHeight: tx.block_height, tokenId: attrs.tokenId, to: attrs.to });
+    }
+  }
+  return mints;
+}
+
+async function fetchBlockTimes(heights) {
+  const result = new Map();
+  await mapLimit(heights, 8, async (h) => {
+    try {
+      const data = await graphqlQuery(NETWORKS.testnet, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
+      const b = (data.getBlocks || [])[0];
+      if (b) result.set(b.height, b.time);
+    } catch {
+      // leave this height's date blank rather than failing the whole load
+    }
+  });
+  return result;
+}
+
+function renderMintHistory(mints, blockTimes) {
+  const byWallet = new Map(); // address -> { count, first, last }
+  for (const m of mints) {
+    const t = blockTimes.get(m.blockHeight) || null;
+    const row = byWallet.get(m.to) || { count: 0, first: t, last: t };
+    row.count++;
+    if (t && (!row.first || t < row.first)) row.first = t;
+    if (t && (!row.last || t > row.last)) row.last = t;
+    byWallet.set(m.to, row);
+  }
+  const rows = [...byWallet.entries()].sort((a, b) => b[1].count - a[1].count);
+
+  const holder = document.getElementById("mintHistoryTableHolder");
+  if (!rows.length) {
+    holder.innerHTML = `<p class="qty-note">No mints found yet.</p>`;
+    return;
+  }
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "unknown";
+  holder.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+        <th style="padding:6px 8px;border-bottom:1px solid var(--hair)">Wallet</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--hair)">Minted</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--hair)">First mint</th>
+        <th style="padding:6px 8px;border-bottom:1px solid var(--hair)">Last mint</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(([addr, r]) => `
+          <tr>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--hair);font-family:var(--mono);word-break:break-all">${addr}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--hair);font-weight:700">${r.count}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--hair);color:var(--muted)">${fmtDate(r.first)}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--hair);color:var(--muted)">${fmtDate(r.last)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>
+    <p class="qty-note" style="margin-top:8px">${mints.length} total mint${mints.length === 1 ? "" : "s"} across ${rows.length} wallet${rows.length === 1 ? "" : "s"}.</p>
+  `;
+}
+
+async function loadMintHistory() {
+  const btn = document.getElementById("loadMintHistoryBtn");
+  const status = document.getElementById("mintHistoryStatus");
+  btn.disabled = true;
+  status.textContent = "Fetching mint events from the indexer…";
+  try {
+    const mints = await fetchMintEvents();
+    status.textContent = `Found ${mints.length} mints — fetching block times…`;
+    const heights = [...new Set(mints.map(m => m.blockHeight))];
+    const blockTimes = await fetchBlockTimes(heights);
+    renderMintHistory(mints, blockTimes);
+    status.textContent = "";
+  } catch (err) {
+    status.textContent = "Couldn't load mint history: " + err.message;
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1699,6 +1817,8 @@ async function doWithdraw(ugnot, btn) {
     btn.disabled = realmBalanceUgnot <= 0;
   }
 }
+
+document.getElementById("loadMintHistoryBtn").addEventListener("click", loadMintHistory);
 
 document.getElementById("withdrawAllBtn").addEventListener("click", () => {
   if (!realmBalanceUgnot || realmBalanceUgnot <= 0) return;

@@ -28,9 +28,6 @@
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);margin:0;padding:0;font-size:13.5px}
 button,input,select{font-family:inherit}
 
-.unlinked-banner{background:var(--amber-soft,#d9822b1a);border-bottom:1px solid var(--amber-line,#d9822b55);color:var(--amber,#d9822b);
-  font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
-
 /* ---------- top bar ---------- */
 .topbar{display:flex;align-items:center;gap:.9rem;padding:.7rem 1.1rem;border-bottom:1px solid var(--hair);background:var(--panel)}
 .topbar .brand{font:700 .74rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--blue);white-space:nowrap}
@@ -116,7 +113,15 @@ input[type=file]{display:none}
 .addtraitbtn:hover{color:var(--accent);border-color:var(--accent-line)}
 
 /* center: canvas */
-.centercol{display:flex;flex-direction:column;align-items:center;padding:1.2rem;gap:.8rem}
+.centercol{display:flex;flex-direction:column;align-items:center;padding:1.2rem;gap:.6rem}
+/* Undo/Redo/Clear (left) and Mode+Zoom+Resize (right) flank the editing
+   title in one row instead of stacking underneath it -- freeing up
+   vertical room for the canvas itself, which is the whole point here. */
+.canvasheaderrow{display:flex;align-items:center;justify-content:space-between;gap:.7rem;width:100%;flex-wrap:wrap}
+.canvasheaderrow .toolbar{flex:0 0 auto;width:auto}
+.canvasheaderrow .editinglabel{flex:1;min-width:100px}
+.leftactions{justify-content:flex-start}
+.rightactions{justify-content:flex-end}
 .editinglabel{font-size:.85rem;font-weight:700;text-align:center}
 .editinglabel .cat{color:var(--muted);font-weight:500;font-size:.74rem;display:block;margin-top:.15rem}
 #editCanvas{border:2px solid var(--hair);border-radius:8px;image-rendering:pixelated;cursor:crosshair;touch-action:none;background:
@@ -132,9 +137,7 @@ input[type=file]{display:none}
 
 /* Paint/Move are MODES (how clicks on the canvas behave), not one-off
    drawing tools -- a joined segmented control keeps that distinct from
-   ordinary buttons. Shares a row with zoom (spread to the row's two
-   ends) purely to save vertical space -- the two aren't related. */
-.modezoomrow{justify-content:space-between}
+   ordinary buttons. */
 .modetoggle{display:inline-flex;border:1px solid var(--accent-line);border-radius:7px;overflow:hidden}
 .modetoggle .toolbtn{border:none;border-radius:0;background:var(--panel);padding:.45rem 1.1rem;font-weight:700}
 .modetoggle .toolbtn:first-child{border-right:1px solid var(--accent-line)}
@@ -200,7 +203,6 @@ input[type=file]{display:none}
 </head>
 <body>
 
-<div class="unlinked-banner">Unlinked utility page — reachable only by direct URL, not in the site nav</div>
 
 <div class="topbar">
   <span class="brand">Collection Builder</span>
@@ -260,27 +262,29 @@ input[type=file]{display:none}
   </div>
 
   <div class="col centercol">
-    <div class="editinglabel" id="editingLabel">Base Character<span class="cat" id="editingSub"></span></div>
-    <button class="tbtn resizebtn" id="resizeCanvasBtn" title="Change canvas dimensions">Resize canvas</button>
+    <div class="canvasheaderrow">
+      <div class="toolbar leftactions">
+        <button class="toolbtn" id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>&#8630; Undo</button>
+        <button class="toolbtn" id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>&#8631; Redo</button>
+        <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
+      </div>
+      <div class="editinglabel" id="editingLabel">Base Character<span class="cat" id="editingSub"></span></div>
+      <div class="toolbar rightactions">
+        <div class="modetoggle">
+          <button class="toolbtn active" data-tool="paint" title="Paint directly onto the canvas">Paint</button>
+          <button class="toolbtn" data-tool="move" title="Select part of the drawing and drag it elsewhere">Move</button>
+        </div>
+        <div class="zoomrow">
+          <button class="toolbtn" id="zoomOutBtn" title="Zoom out">&minus;</button>
+          <span class="zoomlabel" id="zoomLabel">100%</span>
+          <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
+          <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
+        </div>
+        <button class="tbtn resizebtn" id="resizeCanvasBtn" title="Change canvas dimensions">Resize canvas</button>
+      </div>
+    </div>
     <div class="canvaswrap" id="canvasWrap">
       <canvas id="editCanvas" width="512" height="512"></canvas>
-    </div>
-    <div class="toolbar modezoomrow">
-      <div class="modetoggle">
-        <button class="toolbtn active" data-tool="paint" title="Paint directly onto the canvas">Paint</button>
-        <button class="toolbtn" data-tool="move" title="Select part of the drawing and drag it elsewhere">Move</button>
-      </div>
-      <div class="zoomrow">
-        <button class="toolbtn" id="zoomOutBtn" title="Zoom out">&minus;</button>
-        <span class="zoomlabel" id="zoomLabel">100%</span>
-        <button class="toolbtn" id="zoomInBtn" title="Zoom in">+</button>
-        <button class="toolbtn" id="zoomResetBtn" title="Reset zoom">Reset</button>
-      </div>
-    </div>
-    <div class="toolbar">
-      <button class="toolbtn" id="undoBtn" title="Undo (Ctrl/Cmd+Z)" disabled>&#8630; Undo</button>
-      <button class="toolbtn" id="redoBtn" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>&#8631; Redo</button>
-      <button class="toolbtn danger" id="clearCanvasBtn">Clear canvas</button>
     </div>
     <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
     <b>right click</b> paints/drags with the right-slot color -- either slot can be Transparent to erase.

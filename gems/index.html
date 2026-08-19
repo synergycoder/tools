@@ -134,9 +134,12 @@
   .refreshbtn.spinning{animation:refreshSpin .6s linear infinite}
   @keyframes refreshSpin{to{transform:rotate(360deg)}}
   .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
-  .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
+  .gcard{position:relative;border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
     transition:transform .12s ease,border-color .12s ease}
   .gcard:hover{border-color:var(--accent-line);transform:translateY(-2px)}
+  .gcard.owned{border-color:var(--accent-line)}
+  .gcard .owned-badge{position:absolute;top:7px;right:7px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+    padding:3px 7px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em;pointer-events:none;z-index:1}
   .gcard .thumb{aspect-ratio:1;background:#0a0b10;display:flex;align-items:center;justify-content:center}
   .gcard .thumb img{width:78%;height:78%}
   .gcard .meta{padding:8px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -316,6 +319,15 @@
       <div class="owner-row"><span class="lbl">Owner</span><span id="lightboxOwner"></span></div>
       <ul class="lightbox-traits" id="lightboxTraits"></ul>
       <a class="lightbox-link" id="lightboxTokenLink" href="#" target="_blank" rel="noopener">View this piece on gno.land →</a>
+      <div class="transfer-box" id="lightboxTransferBox" style="display:none">
+        <span class="lbl" style="display:block;margin:18px 0 6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.04em">Transfer this piece</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="transferToInput" placeholder="g1… recipient address" style="flex:1;min-width:200px;font-family:var(--mono);font-size:12px;padding:9px 11px;border-radius:8px;border:1px solid var(--hair);background:var(--panel2);color:var(--ink)">
+          <button type="button" id="transferBtn" class="mint-btn" style="width:auto;padding:9px 16px;margin:0;font-size:13px">Transfer</button>
+        </div>
+        <p class="qty-note" style="margin-top:6px">Irreversible — sends directly, no marketplace, no escrow. Double-check the address.</p>
+        <div id="transferStatusHolder"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -780,6 +792,34 @@ function renderGalleryGrid(tokens, noteText) {
   });
   grid.innerHTML = "";
   grid.appendChild(frag);
+  updateOwnershipBadges();
+}
+
+// Marks every card the connected wallet actually owns -- a badge on
+// "Recently minted" (most cards there aren't yours), and effectively
+// every card on "My NFTs" (all of them are, by definition of that tab).
+// Runs as its own pass over whatever's already in the grid rather than
+// being folded into the per-card creation above, so it also re-applies
+// correctly to REUSED cards (the keyed diff skips touching those
+// entirely) and can be called again on its own from onWalletChange
+// without needing a full data refetch.
+function updateOwnershipBadges() {
+  const w = getWallet();
+  const myAddr = w && w.status === "connected" ? w.address : null;
+  document.querySelectorAll("#galleryGrid .gcard").forEach(card => {
+    const t = galleryTokensByTid.get(card.dataset.tid);
+    const owned = !!(t && myAddr && t.owner === myAddr);
+    card.classList.toggle("owned", owned);
+    let badge = card.querySelector(".owned-badge");
+    if (owned && !badge) {
+      badge = document.createElement("span");
+      badge.className = "owned-badge";
+      badge.textContent = "Yours";
+      card.querySelector(".thumb").appendChild(badge);
+    } else if (!owned && badge) {
+      badge.remove();
+    }
+  });
 }
 
 async function loadGallery(seq) {
@@ -842,7 +882,20 @@ async function loadMyTokens(seq) {
     document.getElementById("galleryNote").textContent = "";
     return;
   }
-  const totalPages = stats.supply != null ? Math.max(1, Math.ceil(stats.supply / SUMMARY_PAGE_SIZE)) : OWNER_WALK_PAGE_CAP;
+  // Don't blindly assume the worst case (walking all
+  // OWNER_WALK_PAGE_CAP pages, 500 tokens) just because loadStats()
+  // hasn't resolved yet -- ask directly. A tab click soon after page
+  // load previously fell back to a 50-page walk instead of the real
+  // (usually much smaller) supply, slow enough that the 20s periodic
+  // refresh below could fire again before it finished, discarding it
+  // as stale via the seq check -- and the next attempt hit the exact
+  // same slow path, so "My NFTs" could end up never actually finishing.
+  let supply = stats.supply;
+  if (supply == null) {
+    supply = parseInt64(await qeval("TokenCount()").catch(() => null));
+    if (seq !== gallerySeq) return;
+  }
+  const totalPages = supply != null ? Math.max(1, Math.ceil(supply / SUMMARY_PAGE_SIZE)) : OWNER_WALK_PAGE_CAP;
   const cappedPages = Math.min(totalPages, OWNER_WALK_PAGE_CAP);
   const pageNums = Array.from({ length: cappedPages }, (_, i) => i + 1); // CollectionSummary is 1-indexed
   const mine = [];
@@ -885,6 +938,17 @@ let lastGalleryRefreshAt = null;
 // tabs quickly reliably reproduced an empty/stuck grid).
 let gallerySeq = 0;
 
+// Set for the duration of any refresh, checked only by the periodic
+// auto-refresh below (a tab switch or the manual button always goes
+// through regardless -- gallerySeq already makes an old one harmless
+// once it resolves). Without this, a slow-but-legitimate fetch (e.g.
+// "My NFTs" before loadStats() had resolved, walking far more pages
+// than actually needed) could still be running when the 20s interval
+// fired again, which just discarded it via the seq check and started
+// an equally slow replacement -- repeating indefinitely, so the tab
+// never actually finished loading.
+let galleryFetchInFlight = false;
+
 function updateRefreshInfo() {
   const el = document.getElementById("refreshInfo");
   el.textContent = lastGalleryRefreshAt ? `refreshed ${relativeTimeFrom(lastGalleryRefreshAt)}` : "";
@@ -895,6 +959,7 @@ async function refreshActiveGalleryTab(opts) {
   const tab = activeGalleryTab;
   const btn = document.getElementById("manualRefreshBtn");
   if (opts && opts.spin) btn.classList.add("spinning");
+  galleryFetchInFlight = true;
   try {
     if (tab === "recent") await loadGallery(seq);
     else await loadMyTokens(seq);
@@ -903,6 +968,7 @@ async function refreshActiveGalleryTab(opts) {
       updateRefreshInfo();
     }
   } finally {
+    galleryFetchInFlight = false;
     if (opts && opts.spin) btn.classList.remove("spinning");
   }
 }
@@ -923,16 +989,27 @@ function switchGalleryTab(tab) {
 // ---------- lightbox ----------
 
 const lightbox = document.getElementById("lightbox");
+let lightboxTid = null; // which token the transfer button below acts on
 
 function openLightbox(tid) {
   const t = galleryTokensByTid.get(tid);
   if (!t) return;
+  lightboxTid = tid;
   document.getElementById("lightboxImg").src = t.image;
   document.getElementById("lightboxImg").alt = t.sealed ? "sealed" : t.name;
   document.getElementById("lightboxName").textContent = t.sealed ? "Sealed" : t.name;
   document.getElementById("lightboxTid").textContent = `#${t.tid}`;
   document.getElementById("lightboxOwner").textContent = t.owner;
   document.getElementById("lightboxTokenLink").href = gnowebTokenUrl(t.tid);
+
+  const w = getWallet();
+  const iOwnThis = w && w.status === "connected" && w.address === t.owner;
+  const transferBox = document.getElementById("lightboxTransferBox");
+  transferBox.style.display = iOwnThis ? "" : "none";
+  if (iOwnThis) {
+    document.getElementById("transferToInput").value = "";
+    document.getElementById("transferStatusHolder").innerHTML = "";
+  }
 
   const descEl = document.getElementById("lightboxDesc");
   const traitsEl = document.getElementById("lightboxTraits");
@@ -997,6 +1074,39 @@ document.getElementById("mintBtn").addEventListener("click", async () => {
   }
 });
 
+function setTransferStatus(cls, text) {
+  document.getElementById("transferStatusHolder").innerHTML = text ? `<div class="status-line ${cls}">${text}</div>` : "";
+}
+
+document.getElementById("transferBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (!w || w.status !== "connected") { setTransferStatus("error", "Connect Adena first."); return; }
+  if (!lightboxTid) return;
+  const to = document.getElementById("transferToInput").value.trim();
+  if (!/^g1[a-z0-9]{25,}$/.test(to)) { setTransferStatus("error", "That doesn't look like a valid gno.land address."); return; }
+  if (to === w.address) { setTransferStatus("error", "That's already your own address."); return; }
+  if (!confirm(`Transfer Gem #${lightboxTid} to ${to}? This can't be undone.`)) return;
+
+  const btn = document.getElementById("transferBtn");
+  btn.disabled = true;
+  setTransferStatus("pending", "Waiting for Adena approval…");
+  try {
+    const messages = [{
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "TransferFrom", args: [w.address, to, lightboxTid] },
+    }];
+    const { hash, height } = await doContract(messages, `transfer Gem #${lightboxTid}`);
+    setTransferStatus("success", `Transferred${height ? ` at block ${height}` : ""} — tx ${hash}.`);
+    document.getElementById("lightboxTransferBox").style.display = "none";
+    loadGallery();
+    if (activeGalleryTab === "mine") refreshActiveGalleryTab();
+  } catch (err) {
+    setTransferStatus("error", err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById("costVal").textContent = `~${formatGnot(fromBaseUnits(REPEAT_MINT_UGNOT, NATIVE_DECIMALS))} GNOT (~${formatGnot(fromBaseUnits(FIRST_MINT_UGNOT, NATIVE_DECIMALS))} for a wallet's first-ever piece)`;
 document.getElementById("collectionGnowebLink").href = gnowebCollectionUrl();
 document.getElementById("installAdenaLink").href = INSTALL_URL;
@@ -1014,11 +1124,12 @@ document.getElementById("tabRecentBtn").onclick = () => switchGalleryTab("recent
 document.getElementById("tabMineBtn").onclick = () => switchGalleryTab("mine");
 document.getElementById("manualRefreshBtn").onclick = () => refreshActiveGalleryTab({ spin: true });
 onWalletChange(() => { if (activeGalleryTab === "mine") refreshActiveGalleryTab(); });
+onWalletChange(updateOwnershipBadges);
 
 renderWalletGate(); // also triggers the initial loadStats() as a side effect
 refreshActiveGalleryTab();
 setInterval(loadStats, 20000);
-setInterval(() => refreshActiveGalleryTab(), 20000);
+setInterval(() => { if (!galleryFetchInFlight) refreshActiveGalleryTab(); }, 20000);
 setInterval(updateRefreshInfo, 10000); // ticks the "refreshed Xs ago" text between actual refreshes
 </script>
 

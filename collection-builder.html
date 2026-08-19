@@ -81,9 +81,13 @@ input[type=file]{display:none}
 /* left: layer tree */
 .baserow{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-radius:7px;cursor:pointer;border:1px solid var(--hair);background:var(--panel2);margin-bottom:.7rem}
 .baserow.selected{border-color:var(--accent)}
-.baserow .thumb{width:22px;height:22px;border-radius:4px;background:#000;flex:none;image-rendering:pixelated}
 .baserow span{font-weight:700;font-size:.8rem}
 .baserow .tag{font-size:.62rem;color:var(--muted);text-transform:uppercase;margin-left:auto}
+
+.thumb{border-radius:4px;flex:none;image-rendering:pixelated;border:1px solid var(--hair);background:
+  repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 6px 6px;
+  cursor:pointer;
+}
 
 .traitcard{background:var(--panel2);border:1px solid var(--hair);border-radius:8px;margin-bottom:.6rem;overflow:hidden}
 .traitcard.dragging{opacity:.4}
@@ -96,17 +100,31 @@ input[type=file]{display:none}
 .reqtoggle.optional{color:var(--muted)}
 .iconbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem;padding:.15rem .3rem;line-height:1}
 .iconbtn:hover{color:var(--red)}
+.editbtn{font-size:.72rem}
+.editbtn:hover{color:var(--accent)}
 .variantlist{padding:.2rem .6rem .6rem}
 .variantrow{display:flex;align-items:center;gap:.4rem;padding:.3rem .3rem;border-radius:6px;cursor:pointer;font-size:.76rem}
 .variantrow:hover{background:var(--panel3)}
 .variantrow.selected{background:var(--panel3);outline:1px solid var(--accent-line)}
 .variantrow.dragging{opacity:.4}
 .variantrow .handle{color:var(--muted);cursor:grab;font-size:.8rem;user-select:none}
-.variantrow .thumb{width:16px;height:16px;border-radius:3px;background:#000;flex:none;image-rendering:pixelated;border:1px solid var(--hair)}
-.variantrow input.vname{flex:1;background:none;border:none;color:var(--ink);font-size:.76rem;padding:.1rem 0;min-width:0}
-.variantrow input.vname:focus{outline:none;border-bottom:1px solid var(--accent-line)}
-.variantrow input.vweight{width:40px;background:var(--panel);border:1px solid var(--hair);color:var(--muted);border-radius:4px;padding:.1rem .25rem;font-size:.68rem;text-align:center;font-family:var(--mono)}
+.variantrow .thumb{width:20px;height:20px}
+.vnamewrap{flex:1;min-width:0}
+.vname{display:block;color:var(--ink);font-size:.76rem;padding:.1rem 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vnameinput{width:100%;background:var(--panel);border:1px solid var(--accent-line);border-radius:4px;color:var(--ink);font-size:.76rem;padding:.1rem .25rem}
+.vweightwrap{display:flex;align-items:center;gap:.25rem;flex:none}
+.vweight{width:36px;background:var(--panel);border:1px solid var(--hair);color:var(--muted);border-radius:4px;padding:.1rem .2rem;font-size:.68rem;text-align:center;font-family:var(--mono)}
+.vweightpct{font-size:.62rem;color:var(--faint);font-family:var(--mono);min-width:2.2em}
 .variantrow.none-variant{opacity:.75;font-style:italic}
+
+/* Bigger render on hover -- the inline thumb is too small to actually
+   see what's drawn, this is the "let me actually look at it" escape
+   hatch, positioned next to whichever thumb triggered it. */
+.thumbhoverpreview{position:fixed;z-index:60;display:none;padding:6px;background:var(--panel);border:1px solid var(--hair);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);pointer-events:none}
+.thumbhoverpreview.visible{display:block}
+.thumbhovercanvas{display:block;image-rendering:pixelated;border-radius:6px;background:
+  repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 12px 12px;
+}
 .addvariantbtn{width:100%;background:none;border:1px dashed var(--hair);color:var(--muted);border-radius:6px;padding:.35rem;font-size:.72rem;cursor:pointer;margin-top:.2rem}
 .addvariantbtn:hover{color:var(--accent);border-color:var(--accent-line)}
 .addtraitbtn{width:100%;background:var(--panel2);border:1px dashed var(--hair);color:var(--muted);border-radius:8px;padding:.6rem;font-size:.8rem;cursor:pointer;font-weight:600}
@@ -143,9 +161,6 @@ input[type=file]{display:none}
 .modetoggle .toolbtn:first-child{border-right:1px solid var(--accent-line)}
 .modetoggle .toolbtn.active{background:var(--accent);color:var(--bg)}
 .resizebtn{font-size:.68rem;padding:.3rem .65rem}
-.canvashint{color:var(--muted);font-size:.7rem;text-align:center;max-width:420px;line-height:1.5}
-.canvashint b{color:var(--ink)}
-.statline{display:flex;gap:1rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
 
 /* right: colors + preview */
 .erase-swatch{background-image:
@@ -175,7 +190,9 @@ input[type=file]{display:none}
 .addcolorbtn:hover{color:var(--accent);border-color:var(--accent-line)}
 
 .previewwrap{margin-top:1rem}
-#previewCanvas{border:1px solid var(--hair);border-radius:8px;image-rendering:pixelated;background:#000;width:100%;aspect-ratio:1}
+#previewCanvas{border:1px solid var(--hair);border-radius:8px;image-rendering:pixelated;width:100%;aspect-ratio:1;background:
+  repeating-conic-gradient(var(--grid-a) 0% 25%, var(--grid-b) 0% 50%) 50% / 16px 16px;
+}
 .previewhint{color:var(--muted);font-size:.66rem;line-height:1.5;margin:.5rem 0 0}
 .previewactions{display:flex;gap:.4rem;margin-top:.5rem}
 .previewactions button{flex:1}
@@ -194,7 +211,7 @@ input[type=file]{display:none}
 .colorpickerpop input[type=text]{width:88px;background:var(--bg);border:1px solid var(--hair);color:var(--ink);border-radius:5px;padding:.3rem .4rem;font-family:var(--mono);font-size:.72rem}
 
 /* ---------- zoom + shape toolbar ---------- */
-.canvaswrap{width:100%;max-height:56vh;overflow:auto;text-align:center;padding:.3rem 0}
+.canvaswrap{width:100%;flex:1;min-height:200px;overflow:auto;text-align:center;padding:.3rem 0}
 .zoomrow{display:flex;gap:.5rem;align-items:center;justify-content:center}
 .zoomlabel{font-family:var(--mono);font-size:.72rem;color:var(--muted);min-width:3.4em;text-align:center}
 .filledtoggle{display:flex;align-items:center;gap:.35rem;font-size:.78rem;color:var(--muted);cursor:pointer;padding:.4rem .6rem}
@@ -252,7 +269,7 @@ input[type=file]{display:none}
     <div class="colhead"><h2>Layers (top = front)</h2></div>
     <div class="colbody">
       <div class="baserow" id="baseRow">
-        <div class="thumb" id="baseThumb"></div>
+        <canvas class="thumb" id="baseThumb" width="22" height="22"></canvas>
         <span>Base Character</span>
         <span class="tag">always on</span>
       </div>
@@ -285,13 +302,6 @@ input[type=file]{display:none}
     </div>
     <div class="canvaswrap" id="canvasWrap">
       <canvas id="editCanvas" width="512" height="512"></canvas>
-    </div>
-    <p class="canvashint"><b>Left click</b> paints/drags with the left-slot color &middot;
-    <b>right click</b> paints/drags with the right-slot color -- either slot can be Transparent to erase.
-    Line/Rectangle/Ellipse: click-drag from one corner to the other, release to commit.
-    Move: drag a box to select, then drag inside it to move that part of the drawing.</p>
-    <div class="statline">
-      <span id="pixelCount">0 px</span>
     </div>
   </div>
 
@@ -933,25 +943,64 @@ function renderVariantRow(trait, v, vi){
   row.dataset.variantId = v.id;
 
   row.innerHTML = `<span class="handle">&#8942;</span>`;
-  const thumb = document.createElement("div");
-  thumb.className = "thumb";
-  thumb.style.background = v.pixels && v.pixels[0] ? v.pixels[0][2] : "transparent";
-  row.appendChild(thumb);
+  row.appendChild(makeThumbCanvas(() => v.pixels, 20));
 
-  const nameInput = document.createElement("input");
-  nameInput.className = "vname"; nameInput.value = v.name;
-  nameInput.disabled = !!v.isNone;
-  nameInput.onchange = () => { v.name = nameInput.value || v.name; scheduleSave(); };
-  nameInput.onclick = (e) => e.stopPropagation();
-  row.appendChild(nameInput);
+  const nameWrap = document.createElement("span");
+  nameWrap.className = "vnamewrap";
+  const nameText = document.createElement("span");
+  nameText.className = "vname";
+  nameText.textContent = v.name;
+  nameWrap.appendChild(nameText);
+  row.appendChild(nameWrap);
 
+  const startEdit = () => {
+    if (v.isNone) return;
+    const input = document.createElement("input");
+    input.className = "vnameinput"; input.value = v.name;
+    input.onclick = (e) => e.stopPropagation();
+    const commit = () => {
+      v.name = input.value.trim() || v.name;
+      scheduleSave();
+      renderPreview();
+      if (input.parentNode) input.replaceWith(nameText);
+      nameText.textContent = v.name;
+    };
+    input.onblur = commit;
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") input.blur();
+      else if (e.key === "Escape") { input.value = v.name; input.blur(); }
+    };
+    nameText.replaceWith(input);
+    input.focus(); input.select();
+  };
+  nameText.ondblclick = (e) => { e.stopPropagation(); startEdit(); };
+
+  if (!v.isNone) {
+    const editBtn = document.createElement("button");
+    editBtn.className = "iconbtn editbtn"; editBtn.innerHTML = "&#9998;";
+    editBtn.title = "Rename (or double-click the name)";
+    editBtn.onclick = (e) => { e.stopPropagation(); startEdit(); };
+    row.appendChild(editBtn);
+  }
+
+  const weightWrap = document.createElement("span");
+  weightWrap.className = "vweightwrap";
   const weightInput = document.createElement("input");
   weightInput.className = "vweight"; weightInput.type = "number"; weightInput.min = "0"; weightInput.step = "1";
   weightInput.value = v.weight;
-  weightInput.title = "Relative weight (probability share)";
-  weightInput.onchange = () => { v.weight = Math.max(0, parseFloat(weightInput.value) || 0); scheduleSave(); };
+  weightInput.title = "Relative weight -- how often this is picked vs. its siblings, not a percentage itself";
+  weightInput.onchange = () => {
+    v.weight = Math.max(0, parseFloat(weightInput.value) || 0);
+    scheduleSave();
+    renderTraitList(); // sibling percentages all shift too
+  };
   weightInput.onclick = (e) => e.stopPropagation();
-  row.appendChild(weightInput);
+  weightWrap.appendChild(weightInput);
+  const pct = document.createElement("span");
+  pct.className = "vweightpct";
+  pct.textContent = weightPercent(trait, v);
+  weightWrap.appendChild(pct);
+  row.appendChild(weightWrap);
 
   if (!v.isNone) {
     const delBtn = document.createElement("button");
@@ -969,6 +1018,12 @@ function renderVariantRow(trait, v, vi){
   row.onclick = () => { selection = { kind: "variant", traitId: trait.id, variantId: v.id }; renderAll(); };
   wireVariantDrag(row, trait, vi);
   return row;
+}
+
+function weightPercent(trait, variant){
+  const total = trait.variants.reduce((s, v) => s + (v.weight || 0), 0);
+  if (total <= 0) return "0%";
+  return Math.round((variant.weight || 0) / total * 100) + "%";
 }
 
 function isSelected(traitId, variantId){
@@ -1062,7 +1117,6 @@ function redrawEditCanvas(){
     ctx.strokeRect(rx + 0.75, ry + 0.75, rw - 1.5, rh - 1.5);
     ctx.restore();
   }
-  document.getElementById("pixelCount").textContent = pixels.size + " px";
   const label = document.getElementById("editingLabel");
   const sub = document.getElementById("editingSub");
   if (selection.kind === "base") {
@@ -1341,11 +1395,61 @@ function currentDisplayPicks(){
   }
   return picks;
 }
-function updateThumbs(){
+// ---------------- thumbnails (real renders, not a flat swatch) ----------------
+function drawThumbInto(canvasEl, pixels){
+  const ctx = canvasEl.getContext("2d");
+  ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
   const { w, h } = currentDims();
-  const baseThumb = document.getElementById("baseThumb");
-  const first = STATE.baseCharacter.pixels[0];
-  baseThumb.style.background = first ? first[2] : "transparent";
+  const scale = canvasEl.width / Math.max(w, h);
+  for (const [x, y, c] of (pixels || [])) {
+    ctx.fillStyle = c;
+    ctx.fillRect(x * scale, y * scale, Math.ceil(scale), Math.ceil(scale));
+  }
+}
+function makeThumbCanvas(getPixels, size){
+  const el = document.createElement("canvas");
+  el.width = size; el.height = size;
+  el.className = "thumb";
+  drawThumbInto(el, getPixels());
+  el.addEventListener("mouseenter", () => showHoverPreview(getPixels(), el));
+  el.addEventListener("mouseleave", hideHoverPreview);
+  return el;
+}
+
+let hoverPreviewEl = null;
+function ensureHoverPreview(){
+  if (hoverPreviewEl) return hoverPreviewEl;
+  hoverPreviewEl = document.createElement("div");
+  hoverPreviewEl.className = "thumbhoverpreview";
+  const canvasEl = document.createElement("canvas");
+  canvasEl.className = "thumbhovercanvas";
+  hoverPreviewEl.appendChild(canvasEl);
+  document.body.appendChild(hoverPreviewEl);
+  return hoverPreviewEl;
+}
+function showHoverPreview(pixels, anchorEl){
+  const wrap = ensureHoverPreview();
+  const canvasEl = wrap.querySelector("canvas");
+  const size = 168;
+  canvasEl.width = size; canvasEl.height = size;
+  drawThumbInto(canvasEl, pixels);
+  const rect = anchorEl.getBoundingClientRect();
+  const left = Math.min(rect.right + 10, window.innerWidth - size - 24);
+  const top = Math.min(Math.max(8, rect.top - size / 2), window.innerHeight - size - 16);
+  wrap.style.left = left + "px";
+  wrap.style.top = top + "px";
+  wrap.classList.add("visible");
+}
+function hideHoverPreview(){
+  if (hoverPreviewEl) hoverPreviewEl.classList.remove("visible");
+}
+
+function updateThumbs(){
+  drawThumbInto(document.getElementById("baseThumb"), STATE.baseCharacter.pixels);
+  if (selection.kind === "variant") {
+    const el = document.querySelector('.variantrow[data-variant-id="' + selection.variantId + '"] canvas.thumb');
+    if (el) drawThumbInto(el, currentPixelsRef());
+  }
 }
 
 // ---------------- export / import ----------------
@@ -1401,6 +1505,11 @@ function renderAll(){
 }
 
 document.getElementById("baseRow").onclick = () => { selection = { kind: "base" }; renderAll(); };
+(function(){
+  const el = document.getElementById("baseThumb");
+  el.addEventListener("mouseenter", () => showHoverPreview(STATE.baseCharacter.pixels, el));
+  el.addEventListener("mouseleave", hideHoverPreview);
+})();
 document.getElementById("addTraitBtn").onclick = () => {
   const t = { id: uid(), name: "New Trait", required: true, variants: [] };
   STATE.traits.unshift(t); // new traits go to the front (top of list = front of image)

@@ -119,10 +119,20 @@
 
   .gallery{margin:50px 0 20px}
   .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
-  .gallery-head h2{font-size:18px;margin:0}
+  .gallery-tabs{display:flex;gap:6px}
+  .gtab{background:none;border:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 0 4px;cursor:pointer;
+    border-bottom:2px solid transparent;font-family:inherit}
+  .gtab:hover{color:var(--ink)}
+  .gtab.active{color:var(--ink);border-bottom-color:var(--accent)}
   .gallery-head .links{display:flex;align-items:baseline;gap:14px}
   .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
   .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
+  .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .refreshbtn{background:none;border:1px solid var(--hair);color:var(--muted);border-radius:6px;width:24px;height:24px;
+    font-size:13px;cursor:pointer;line-height:1;padding:0}
+  .refreshbtn:hover{color:var(--ink);border-color:var(--accent-line)}
+  .refreshbtn.spinning{animation:refreshSpin .6s linear infinite}
+  @keyframes refreshSpin{to{transform:rotate(360deg)}}
   .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
   .gcard{border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
     transition:transform .12s ease,border-color .12s ease}
@@ -270,9 +280,14 @@
 
   <div class="gallery">
     <div class="gallery-head">
-      <h2>Recently minted</h2>
+      <div class="gallery-tabs">
+        <button class="gtab active" id="tabRecentBtn" type="button">Recently minted</button>
+        <button class="gtab" id="tabMineBtn" type="button">My NFTs</button>
+      </div>
       <div class="links">
         <a class="collection-link" id="collectionGnowebLink" href="#" target="_blank" rel="noopener">View collection on gno.land →</a>
+        <span class="refreshinfo" id="refreshInfo"></span>
+        <button class="refreshbtn" id="manualRefreshBtn" type="button" title="Refresh now">&#8635;</button>
         <span class="note" id="galleryNote"></span>
       </div>
     </div>
@@ -721,19 +736,46 @@ function relativeTimeFrom(ms) {
 
 // Shared by the live fetch and the cache fallback -- same markup either
 // way, just a different data source and note text.
+//
+// Keyed diff against the PREVIOUS render instead of a blind innerHTML
+// replace: a card whose tid/image/name/sealed status is byte-identical
+// to last time gets its existing DOM node moved into place, not
+// recreated. Gem images are on-chain SVGs with their own baked-in
+// animation -- recreating the <img> every 20s (the old behavior)
+// restarted that animation from frame zero on every periodic refresh,
+// which is what actually looked broken. Only tokens that are genuinely
+// new or whose content actually changed (e.g. a reveal) get a fresh
+// element, which is the one case where restarting is correct.
 function renderGalleryGrid(tokens, noteText) {
   const grid = document.getElementById("galleryGrid");
   const note = document.getElementById("galleryNote");
+  const prevByTid = galleryTokensByTid;
   galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
   note.textContent = noteText;
-  grid.innerHTML = tokens.map(t => `
-    <div class="gcard${t.sealed ? " sealed" : ""}" data-tid="${t.tid}">
-      <div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
-      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>
-    </div>`).join("");
-  grid.querySelectorAll(".gcard").forEach(card => {
+
+  const existingCards = new Map();
+  grid.querySelectorAll(".gcard").forEach(card => existingCards.set(card.dataset.tid, card));
+
+  const frag = document.createDocumentFragment();
+  tokens.forEach(t => {
+    const prev = prevByTid.get(t.tid);
+    const existingCard = existingCards.get(t.tid);
+    if (existingCard && prev && prev.image === t.image && prev.name === t.name && prev.sealed === t.sealed) {
+      existingCards.delete(t.tid);
+      frag.appendChild(existingCard); // moves the live node -- identity preserved
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "gcard" + (t.sealed ? " sealed" : "");
+    card.dataset.tid = t.tid;
+    card.innerHTML = `<div class="thumb"><img src="${t.image}" alt="${t.sealed ? "sealed" : escapeHtml(t.name)}"></div>
+      <div class="meta"><span class="tid">#${t.tid}</span>${t.sealed ? "sealed" : escapeHtml(t.name)}</div>`;
     card.addEventListener("click", () => openLightbox(card.dataset.tid));
+    existingCards.delete(t.tid);
+    frag.appendChild(card);
   });
+  grid.innerHTML = "";
+  grid.appendChild(frag);
 }
 
 async function loadGallery() {
@@ -773,6 +815,82 @@ async function loadGallery() {
   const total = stats.supply != null ? stats.supply : shown.length;
   saveGalleryCache(shown, total);
   renderGalleryGrid(shown, total > shown.length ? `showing latest ${shown.length} of ${total}` : `${shown.length} minted so far`);
+}
+
+// "My NFTs" walks every page (not just the newest GALLERY_LIMIT) and
+// keeps only tokens this wallet owns -- CollectionSummary already
+// carries each token's owner, so no extra contract call is needed.
+// Capped the same way loadOwnerStats is, for the same reason: a much
+// larger future collection shouldn't turn this into hundreds of qeval
+// calls every time the tab is opened.
+async function loadMyTokens() {
+  const w = getWallet();
+  if (!w || w.status !== "connected") {
+    galleryTokensByTid = new Map();
+    document.getElementById("galleryGrid").innerHTML =
+      `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
+    document.getElementById("galleryNote").textContent = "";
+    return;
+  }
+  const totalPages = stats.supply != null ? Math.max(1, Math.ceil(stats.supply / SUMMARY_PAGE_SIZE)) : OWNER_WALK_PAGE_CAP;
+  const cappedPages = Math.min(totalPages, OWNER_WALK_PAGE_CAP);
+  const pageNums = Array.from({ length: cappedPages }, (_, i) => i + 1); // CollectionSummary is 1-indexed
+  const mine = [];
+  let anyPageReachable = false;
+  await mapLimit(pageNums, 6, async (page) => {
+    const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
+    if (raw == null) return;
+    anyPageReachable = true;
+    for (const t of parseCollectionSummary(raw)) {
+      if (t.owner === w.address) mine.push(t);
+    }
+  });
+  if (!anyPageReachable) {
+    galleryTokensByTid = new Map();
+    document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
+    document.getElementById("galleryNote").textContent = "";
+    return;
+  }
+  mine.sort((a, b) => Number(b.tid) - Number(a.tid)); // newest first, matches Recently minted
+  const note = totalPages > OWNER_WALK_PAGE_CAP
+    ? `${mine.length} found in the first ${OWNER_WALK_PAGE_CAP * SUMMARY_PAGE_SIZE} tokens (collection too large to check in full live)`
+    : `${mine.length} minted by this wallet`;
+  renderGalleryGrid(mine, note);
+}
+
+// ---------- gallery tabs + refresh ----------
+let activeGalleryTab = "recent"; // "recent" | "mine"
+let lastGalleryRefreshAt = null;
+
+function updateRefreshInfo() {
+  const el = document.getElementById("refreshInfo");
+  el.textContent = lastGalleryRefreshAt ? `refreshed ${relativeTimeFrom(lastGalleryRefreshAt)}` : "";
+}
+
+async function refreshActiveGalleryTab(opts) {
+  const btn = document.getElementById("manualRefreshBtn");
+  if (opts && opts.spin) btn.classList.add("spinning");
+  try {
+    if (activeGalleryTab === "recent") await loadGallery();
+    else await loadMyTokens();
+    lastGalleryRefreshAt = Date.now();
+    updateRefreshInfo();
+  } finally {
+    if (opts && opts.spin) btn.classList.remove("spinning");
+  }
+}
+
+function switchGalleryTab(tab) {
+  if (tab === activeGalleryTab) return;
+  activeGalleryTab = tab;
+  document.getElementById("tabRecentBtn").classList.toggle("active", tab === "recent");
+  document.getElementById("tabMineBtn").classList.toggle("active", tab === "mine");
+  // Different token set than whatever's currently rendered -- there's no
+  // shared identity to preserve across tabs, so this is the one case
+  // where a full rebuild (via an empty "previous" map) is correct.
+  galleryTokensByTid = new Map();
+  document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Loading…</div>`;
+  refreshActiveGalleryTab({ spin: true });
 }
 
 // ---------- lightbox ----------
@@ -865,10 +983,16 @@ document.querySelector('a[href="#mintPanel"]').addEventListener("click", (e) => 
   document.getElementById("mintPanel").scrollIntoView({ behavior: "instant", block: "start" });
 });
 
+document.getElementById("tabRecentBtn").onclick = () => switchGalleryTab("recent");
+document.getElementById("tabMineBtn").onclick = () => switchGalleryTab("mine");
+document.getElementById("manualRefreshBtn").onclick = () => refreshActiveGalleryTab({ spin: true });
+onWalletChange(() => { if (activeGalleryTab === "mine") refreshActiveGalleryTab(); });
+
 renderWalletGate(); // also triggers the initial loadStats() as a side effect
-loadGallery();
+refreshActiveGalleryTab();
 setInterval(loadStats, 20000);
-setInterval(loadGallery, 20000);
+setInterval(() => refreshActiveGalleryTab(), 20000);
+setInterval(updateRefreshInfo, 10000); // ticks the "refreshed Xs ago" text between actual refreshes
 </script>
 
 </body>

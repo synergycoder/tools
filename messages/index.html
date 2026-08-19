@@ -117,6 +117,13 @@
   <div id="networkMismatchHolder"></div>
   <div id="endpointStatusHolder"></div>
 
+  <div class="panel" id="migratePanel" style="display:none">
+    <h2>Migrate messages from the old realm</h2>
+    <p class="desc">This board has no data yet — every message ever posted lives on the previous "messages" realm and has to be copied over once, by this deploy wallet, before it shows up here. Safe to click even if you're not sure whether it already ran — the contract only allows this once.</p>
+    <button class="post-btn" id="migrateBtn" type="button">Run migration</button>
+    <div id="migrateStatusHolder"></div>
+  </div>
+
   <div class="panel composer">
     <h2>Post a message</h2>
     <p class="desc">Goes straight to the public board below — no draft, no delete. You can edit your own messages afterward from their own Edit button.</p>
@@ -149,17 +156,26 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
 import { doContract, waitForAdena } from "/lib/adena-connect.js";
-import { abciQuery, NETWORKS, b64ToUtf8 } from "/lib/gno-rpc.js";
+import { abciQuery, fetchBlockTime, NETWORKS, b64ToUtf8 } from "/lib/gno-rpc.js";
 initSiteChrome();
 
 // Deploy identity: g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls. This points
-// at messagesv2 (adds author-only Edit + a MigrateFrom that replayed
-// every message from the original "messages" realm at deploy time) --
-// realms are immutable once deployed, so the Edit feature required a
-// fresh package at a new path rather than an in-place upgrade. See
+// at messagesv3 (adds author-only Edit + EditedHeight + a MigrateFrom
+// that replays every message from the original "messages" realm) --
+// realms are immutable once deployed, so each new feature needs a fresh
+// package at a new path rather than an in-place upgrade. messagesv2
+// added Edit but was deployed without any way to trigger its own
+// migration and never accumulated real data, so v3 supersedes it
+// directly and migrates straight from the original realm. See
 // gno-nft-minter's gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/
-// messagesv2/ for the source.
-const REALM_PATH = "gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messagesv2";
+// messagesv3/ for the source.
+const REALM_PATH = "gno.land/r/g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls/messagesv3";
+
+// The only address allowed to call MigrateFrom on the contract -- used
+// here purely to decide whether to show the migration-trigger button,
+// not as any kind of real access control (the contract enforces that
+// itself; a hidden button wouldn't stop anyone from calling it directly).
+const ADMIN_ADDRESS = "g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls";
 
 // Must match messages.gno's own MaxMessageLen/pageSize constants —
 // same "the frontend hardcodes a number that has to match the contract"
@@ -211,11 +227,12 @@ async function qeval(expr) {
 
 // Every *Summary function on the contract returns ONE gno string literal
 // containing newline-separated "id|author|parentID|createdHeight|
-// replyCount|b64(text)|edited" lines (messageSummaryLine's own format,
-// 7 fields as of messagesv2 -- edited is appended last, "1"/"0") — same
-// unwrap-then-split shape as gems/index.html's parseCollectionSummary,
-// confirmed against that realm's real deployed output before this
-// pattern was reused here (see that file's own doc comment).
+// replyCount|b64(text)|edited|editedHeight" lines (messageSummaryLine's
+// own format, 8 fields as of messagesv3 -- edited/editedHeight are
+// appended last) — same unwrap-then-split shape as gems/index.html's
+// parseCollectionSummary, confirmed against that realm's real deployed
+// output before this pattern was reused here (see that file's own doc
+// comment).
 function unwrapQevalString(raw) {
   if (!raw) return "";
   const m = raw.match(/^\("([\s\S]*)" string\)$/);
@@ -227,8 +244,8 @@ function parseMessageLines(raw) {
   if (!body || !body.trim()) return [];
   return body.split("\n").filter(Boolean).map((line) => {
     const parts = line.split("|");
-    if (parts.length !== 7) return null;
-    const [id, author, parentId, createdHeight, replyCount, textB64, edited] = parts;
+    if (parts.length !== 8) return null;
+    const [id, author, parentId, createdHeight, replyCount, textB64, edited, editedHeight] = parts;
     try {
       return {
         id, author, parentId,
@@ -236,11 +253,32 @@ function parseMessageLines(raw) {
         replyCount: parseInt(replyCount, 10),
         text: b64ToUtf8(textB64),
         edited: edited === "1",
+        editedHeight: parseInt(editedHeight, 10) || 0,
       };
     } catch {
       return null;
     }
   }).filter(Boolean);
+}
+
+// Resolves a block height to a short human timestamp and writes it into
+// targetEl once the RPC call returns -- fire-and-forget, since a failed
+// lookup shouldn't block the message itself from rendering (the block
+// height is already shown; the timestamp is a progressive enhancement).
+// Intl.DateTimeFormat (not toLocaleString's default) so the format is
+// consistent regardless of the reader's own locale-driven browser
+// defaults -- short enough to sit inline next to "block N" without
+// wrapping.
+const blockTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+});
+function renderBlockTime(height, targetEl) {
+  fetchBlockTime(NETWORKS.testnet, height).then((iso) => {
+    targetEl.textContent = blockTimeFormatter.format(new Date(iso));
+    targetEl.title = iso;
+  }).catch(() => {
+    targetEl.textContent = "";
+  });
 }
 
 function currentAddress() {
@@ -282,8 +320,10 @@ async function postMessage({ text, parentId, btn, statusHolder, onDone }) {
 }
 
 // Same shape as postMessage, but calls Edit instead of Post — no
-// parentId, and onDone gets the new text back so the caller can patch
-// the already-rendered node in place rather than re-fetching.
+// parentId, and onDone(height) gets the tx's own inclusion height back
+// (== the EditedHeight the contract just set via runtime.ChainHeight())
+// so the caller can show the edit timestamp immediately without a
+// separate RPC round trip to re-fetch the message.
 async function editMessage({ id, text, btn, statusHolder, onDone }) {
   const w = getWallet();
   if (w.status !== "connected") return;
@@ -298,7 +338,7 @@ async function editMessage({ id, text, btn, statusHolder, onDone }) {
     }];
     const { hash, height } = await doContract(messages, "edit message");
     setComposerStatus(statusHolder, "success", `Saved${height ? ` at block ${height}` : ""} — tx ${hash}`);
-    onDone?.();
+    onDone?.(height);
   } catch (err) {
     setComposerStatus(statusHolder, "error", err.message || String(err));
   } finally {
@@ -361,7 +401,12 @@ function renderMessageNode(msg, depth) {
   const repliesLoaded = { page: 1, count: 0 };
 
   node.innerHTML = `
-    <div class="msg-meta"><span class="msg-author">${escapeHtml(truncateAddr(msg.author))}</span><span>block ${msg.createdHeight}</span><span class="msg-edited-tag" style="display:${msg.edited ? "" : "none"}">(edited)</span></div>
+    <div class="msg-meta">
+      <span class="msg-author">${escapeHtml(truncateAddr(msg.author))}</span>
+      <span>block ${msg.createdHeight}</span>
+      <span class="msg-time"></span>
+      <span class="msg-edited-tag" style="display:${msg.edited ? "" : "none"}">(edited <span class="msg-edited-time"></span>)</span>
+    </div>
     <div class="msg-text"></div>
     <div class="msg-actions">
       <button class="reply-toggle-btn" type="button">Reply</button>
@@ -390,6 +435,10 @@ function renderMessageNode(msg, depth) {
   const msgTextEl = node.querySelector(".msg-text");
   msgTextEl.textContent = msg.text;
   const editedTag = node.querySelector(".msg-edited-tag");
+  const editedTimeEl = node.querySelector(".msg-edited-time");
+
+  renderBlockTime(msg.createdHeight, node.querySelector(".msg-time"));
+  if (msg.edited && msg.editedHeight > 0) renderBlockTime(msg.editedHeight, editedTimeEl);
 
   const replyToggleBtn = node.querySelector(".reply-toggle-btn");
   const replyComposer = node.querySelectorAll(".msg-reply-composer")[1];
@@ -433,12 +482,17 @@ function renderMessageNode(msg, depth) {
     if (!text) return;
     editMessage({
       id: msg.id, text, btn: editSaveBtn, statusHolder: editStatusHolder,
-      onDone: () => {
+      onDone: (height) => {
         msg.text = text;
         msg.edited = true;
         msgTextEl.textContent = text;
         editedTag.style.display = "";
         editComposer.classList.remove("on");
+        if (height) {
+          msg.editedHeight = height;
+          editedTimeEl.textContent = "";
+          renderBlockTime(height, editedTimeEl);
+        }
       },
     });
   });
@@ -625,6 +679,41 @@ function refreshInboxIfAddressChanged() {
   }
 }
 
+// ---------- admin migration trigger ----------
+
+const migratePanel = document.getElementById("migratePanel");
+const migrateBtn = document.getElementById("migrateBtn");
+const migrateStatusHolder = document.getElementById("migrateStatusHolder");
+
+function updateMigratePanelVisibility() {
+  const w = getWallet();
+  migratePanel.style.display = (w.status === "connected" && w.address === ADMIN_ADDRESS) ? "" : "none";
+}
+onWalletChange(updateMigratePanelVisibility);
+
+migrateBtn.addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") return;
+  migrateBtn.disabled = true;
+  const origLabel = migrateBtn.textContent;
+  migrateBtn.textContent = "Migrating…";
+  setComposerStatus(migrateStatusHolder, "pending", "Waiting for Adena approval… this replays every message from the old realm in one transaction, so it may take a bit longer to confirm than a normal post.");
+  try {
+    const messages = [{
+      type: "/vm.m_call",
+      value: { caller: w.address, send: "", pkg_path: REALM_PATH, func: "MigrateFrom", args: [] },
+    }];
+    const { hash, height } = await doContract(messages, "migrate messages");
+    setComposerStatus(migrateStatusHolder, "success", `Migration complete${height ? ` at block ${height}` : ""} — tx ${hash}. Reloading the feed…`);
+    resetFeed();
+  } catch (err) {
+    setComposerStatus(migrateStatusHolder, "error", err.message || String(err));
+  } finally {
+    migrateBtn.disabled = false;
+    migrateBtn.textContent = origLabel;
+  }
+});
+
 // ---------- wallet gate + wiring ----------
 
 function renderWalletGate() {
@@ -647,6 +736,7 @@ onWalletChange(renderWalletGate);
 
 waitForAdena();
 renderWalletGate();
+updateMigratePanelVisibility();
 resetFeed();
 </script>
 

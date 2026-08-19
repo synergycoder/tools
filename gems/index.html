@@ -873,14 +873,32 @@ async function loadGallery(seq) {
 // Capped the same way loadOwnerStats is, for the same reason: a much
 // larger future collection shouldn't turn this into hundreds of qeval
 // calls every time the tab is opened.
+// In-memory only (unlike the recently-minted cache, this is wallet-
+// specific and small, no need to survive a reload) -- keyed by address
+// so switching wallets doesn't show someone else's stale results.
+// Without this, switching tabs away and back always re-ran the full
+// multi-page owner walk from zero: reproduced live (mint a fresh token,
+// connect, then switch tabs back and forth fast) -- it isn't
+// permanently stuck, but every bounce restarts the walk before the
+// previous one finishes, so it can show empty for several real seconds
+// under repeated switching, which reads as broken. Same fix
+// loadGallery already has for "Recently minted": show the last known
+// result immediately, refresh underneath it.
+let myTokensCache = null; // { address, tokens, savedAt }
+
 async function loadMyTokens(seq) {
   const w = getWallet();
   if (!w || w.status !== "connected") {
+    myTokensCache = null;
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML =
       `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
     document.getElementById("galleryNote").textContent = "";
     return;
+  }
+  const cached = myTokensCache && myTokensCache.address === w.address ? myTokensCache : null;
+  if (cached) {
+    renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
   }
   // Don't blindly assume the worst case (walking all
   // OWNER_WALK_PAGE_CAP pages, 500 tokens) just because loadStats()
@@ -913,12 +931,17 @@ async function loadMyTokens(seq) {
   // before the first DOM write.
   if (seq !== gallerySeq) return;
   if (!anyPageReachable) {
+    if (cached) {
+      renderGalleryGrid(cached.tokens, `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`);
+      return;
+    }
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
     document.getElementById("galleryNote").textContent = "";
     return;
   }
   mine.sort((a, b) => Number(b.tid) - Number(a.tid)); // newest first, matches Recently minted
+  myTokensCache = { address: w.address, tokens: mine, savedAt: Date.now() };
   const note = totalPages > OWNER_WALK_PAGE_CAP
     ? `${mine.length} found in the first ${OWNER_WALK_PAGE_CAP * SUMMARY_PAGE_SIZE} tokens (collection too large to check in full live)`
     : `${mine.length} minted by this wallet`;

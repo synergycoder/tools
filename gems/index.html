@@ -119,11 +119,11 @@
 
   .gallery{margin:50px 0 20px}
   .gallery-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 0 16px;flex-wrap:wrap}
-  .gallery-tabs{display:flex;gap:6px}
-  .gtab{background:none;border:none;color:var(--muted);font-size:18px;font-weight:700;padding:0 0 4px;cursor:pointer;
-    border-bottom:2px solid transparent;font-family:inherit}
+  .gallery-tabs{display:inline-flex;gap:2px;padding:3px;border:1px solid var(--hair);border-radius:11px;background:var(--panel2)}
+  .gtab{background:none;border:none;color:var(--muted);font-size:14px;font-weight:700;padding:8px 16px;cursor:pointer;
+    border-radius:8px;font-family:inherit;white-space:nowrap}
   .gtab:hover{color:var(--ink)}
-  .gtab.active{color:var(--ink);border-bottom-color:var(--accent)}
+  .gtab.active{color:#fff;background:var(--accent);box-shadow:0 2px 8px -2px var(--accent-line)}
   .gallery-head .links{display:flex;align-items:baseline;gap:14px}
   .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
   .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
@@ -671,7 +671,11 @@ async function loadOwnerStats(supply) {
     return;
   }
   try {
-    const pageIndexes = Array.from({ length: totalPages }, (_, i) => i);
+    // 1-indexed -- CollectionSummary(page) clamps page<1 up to 1, so a
+    // 0-indexed loop here silently double-fetched page 1 and never
+    // reached the real last page, undercounting whichever owners only
+    // appeared there. Matches loadGallery's own (correct) page loop.
+    const pageIndexes = Array.from({ length: totalPages }, (_, i) => i + 1);
     const owners = new Set();
     await mapLimit(pageIndexes, 6, async (page) => {
       const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
@@ -778,7 +782,7 @@ function renderGalleryGrid(tokens, noteText) {
   grid.appendChild(frag);
 }
 
-async function loadGallery() {
+async function loadGallery(seq) {
   const cached = loadGalleryCache();
   if (cached && cached.tokens && cached.tokens.length) {
     renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
@@ -789,6 +793,12 @@ async function loadGallery() {
   let firstPageRaw = null;
   for (let page = 1; page <= pagesNeeded; page++) {
     const raw = await qeval(`CollectionSummary(${page})`).catch(() => null);
+    // Bail out (without touching the DOM) the instant this request is no
+    // longer the active one -- switching tabs mid-fetch used to let a
+    // stale response land after the tab had already changed, stomping
+    // whatever the OTHER tab had just rendered. Checked after every
+    // await, since that's the only place this can go stale.
+    if (seq !== gallerySeq) return;
     if (page === 1) firstPageRaw = raw;
     if (raw == null) break;
     const pageTokens = parseCollectionSummary(raw);
@@ -823,7 +833,7 @@ async function loadGallery() {
 // Capped the same way loadOwnerStats is, for the same reason: a much
 // larger future collection shouldn't turn this into hundreds of qeval
 // calls every time the tab is opened.
-async function loadMyTokens() {
+async function loadMyTokens(seq) {
   const w = getWallet();
   if (!w || w.status !== "connected") {
     galleryTokensByTid = new Map();
@@ -845,6 +855,10 @@ async function loadMyTokens() {
       if (t.owner === w.address) mine.push(t);
     }
   });
+  // Same staleness guard as loadGallery -- mapLimit runs every page
+  // concurrently, so this is checked once, after all of them settle,
+  // before the first DOM write.
+  if (seq !== gallerySeq) return;
   if (!anyPageReachable) {
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
@@ -862,19 +876,32 @@ async function loadMyTokens() {
 let activeGalleryTab = "recent"; // "recent" | "mine"
 let lastGalleryRefreshAt = null;
 
+// Bumped on every refresh dispatch (tab switch, the 20s auto-refresh, or
+// the manual button) -- loadGallery/loadMyTokens each capture the value
+// at call time and check it's still current before writing to the DOM.
+// Without this, switching tabs while a fetch was still in flight let
+// that stale response land later and overwrite whatever the tab you'd
+// switched TO had already rendered (confirmed live: bouncing between
+// tabs quickly reliably reproduced an empty/stuck grid).
+let gallerySeq = 0;
+
 function updateRefreshInfo() {
   const el = document.getElementById("refreshInfo");
   el.textContent = lastGalleryRefreshAt ? `refreshed ${relativeTimeFrom(lastGalleryRefreshAt)}` : "";
 }
 
 async function refreshActiveGalleryTab(opts) {
+  const seq = ++gallerySeq;
+  const tab = activeGalleryTab;
   const btn = document.getElementById("manualRefreshBtn");
   if (opts && opts.spin) btn.classList.add("spinning");
   try {
-    if (activeGalleryTab === "recent") await loadGallery();
-    else await loadMyTokens();
-    lastGalleryRefreshAt = Date.now();
-    updateRefreshInfo();
+    if (tab === "recent") await loadGallery(seq);
+    else await loadMyTokens(seq);
+    if (seq === gallerySeq) {
+      lastGalleryRefreshAt = Date.now();
+      updateRefreshInfo();
+    }
   } finally {
     if (opts && opts.spin) btn.classList.remove("spinning");
   }

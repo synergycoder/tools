@@ -128,12 +128,21 @@
   .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
   .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
   .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .refreshinfo.active{color:var(--accent)}
   .refreshbtn{background:none;border:1px solid var(--hair);color:var(--muted);border-radius:6px;width:24px;height:24px;
     font-size:13px;cursor:pointer;line-height:1;padding:0}
   .refreshbtn:hover{color:var(--ink);border-color:var(--accent-line)}
-  .refreshbtn.spinning{animation:refreshSpin .6s linear infinite}
+  .refreshbtn.spinning{animation:refreshSpin .6s linear infinite;color:var(--accent);border-color:var(--accent-line)}
   @keyframes refreshSpin{to{transform:rotate(360deg)}}
+  .view-toggle{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--hair);border-radius:8px;background:var(--panel2)}
+  .vtab{background:none;border:none;color:var(--muted);font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer;
+    border-radius:6px;font-family:inherit}
+  .vtab:hover{color:var(--ink)}
+  .vtab.active{color:var(--bg);background:var(--muted)}
   .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
+  .gallery-grid.view-small{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+  .gallery-grid.view-small .gcard .meta{padding:5px 6px;font-size:9px}
+  .gallery-grid.view-small .owned-badge{font-size:7px;padding:2px 5px;top:4px;right:4px}
   .gcard{position:relative;border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
     transition:transform .12s ease,border-color .12s ease}
   .gcard:hover{border-color:var(--accent-line);transform:translateY(-2px)}
@@ -146,6 +155,18 @@
   .gcard .meta .tid{color:var(--ink);font-weight:700;display:block}
   .gcard.sealed .meta{color:var(--faint)}
   .gallery-empty{color:var(--muted);font-size:13.5px;padding:20px 0}
+
+  .gallery-list{overflow-x:auto}
+  .mint-list-table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap}
+  .mint-list-table th{text-align:left;color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+    padding:8px 10px;border-bottom:1px solid var(--hair)}
+  .mint-list-table td{padding:8px 10px;border-bottom:1px solid var(--hair)}
+  .mint-list-table tr:hover td{background:var(--panel2)}
+  .mint-list-table tr.mine td{background:var(--accent-soft)}
+  .mint-list-table .mono{font-family:var(--mono)}
+  .mint-list-table .dim{color:var(--faint)}
+  .you-tag{display:inline-block;margin-left:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+    padding:2px 6px;border-radius:99px;text-transform:uppercase;letter-spacing:.03em}
 
   .lightbox{position:fixed;inset:0;background:#050608e0;display:none;align-items:center;justify-content:center;z-index:500;padding:24px}
   .lightbox.on{display:flex}
@@ -288,6 +309,11 @@
         <button class="gtab" id="tabMineBtn" type="button">My NFTs</button>
       </div>
       <div class="links">
+        <div class="view-toggle" id="viewToggle">
+          <button class="vtab active" id="viewBigBtn" type="button" title="Large cards">Large</button>
+          <button class="vtab" id="viewSmallBtn" type="button" title="Small cards">Small</button>
+          <button class="vtab" id="viewListBtn" type="button" title="List view, with per-mint details">List</button>
+        </div>
         <a class="collection-link" id="collectionGnowebLink" href="#" target="_blank" rel="noopener">View collection on gno.land →</a>
         <span class="refreshinfo" id="refreshInfo"></span>
         <button class="refreshbtn" id="manualRefreshBtn" type="button" title="Refresh now">&#8635;</button>
@@ -295,6 +321,7 @@
       </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"><div class="gallery-empty">Loading…</div></div>
+    <div class="gallery-list" id="galleryListHolder" style="display:none"></div>
   </div>
 
   <div class="howitworks">
@@ -335,7 +362,7 @@
 <script type="module">
 import { initSiteChrome, getWallet, onWalletChange, getActiveNetworkKey } from "/lib/site-chrome.js";
 import { doContract, INSTALL_URL, waitForAdena } from "/lib/adena-connect.js";
-import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8, mapLimit } from "/lib/gno-rpc.js";
+import { abciQuery, NETWORKS, fromBaseUnits, NATIVE_DECIMALS, b64ToUtf8, mapLimit, graphqlQuery } from "/lib/gno-rpc.js";
 initSiteChrome();
 
 // gno.land packages can't be redeployed in place, so this points at
@@ -873,30 +900,40 @@ async function loadGallery(seq) {
 // Capped the same way loadOwnerStats is, for the same reason: a much
 // larger future collection shouldn't turn this into hundreds of qeval
 // calls every time the tab is opened.
-// In-memory only (unlike the recently-minted cache, this is wallet-
-// specific and small, no need to survive a reload) -- keyed by address
-// so switching wallets doesn't show someone else's stale results.
-// Without this, switching tabs away and back always re-ran the full
-// multi-page owner walk from zero: reproduced live (mint a fresh token,
+// Persisted (localStorage), keyed by address so switching wallets
+// doesn't show someone else's stale results -- a plain in-memory cache
+// only survived within one page session, so a hard refresh always paid
+// the full multi-page owner walk again with nothing to show meanwhile.
+// Without ANY cache at all, switching tabs away and back also re-ran
+// that walk from zero every time: reproduced live (mint a fresh token,
 // connect, then switch tabs back and forth fast) -- it isn't
 // permanently stuck, but every bounce restarts the walk before the
-// previous one finishes, so it can show empty for several real seconds
-// under repeated switching, which reads as broken. Same fix
-// loadGallery already has for "Recently minted": show the last known
-// result immediately, refresh underneath it.
-let myTokensCache = null; // { address, tokens, savedAt }
+// previous one finishes, so it can show empty for several real seconds,
+// which reads as broken. Same fix loadGallery already has for
+// "Recently minted" (localStorage-backed there too): show the last
+// known result immediately, refresh underneath it.
+const MY_TOKENS_CACHE_KEY = "gemsGallery:myTokensCache";
+function loadMyTokensCache(address) {
+  try {
+    const raw = localStorage.getItem(MY_TOKENS_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && parsed.address === address ? parsed : null;
+  } catch { return null; }
+}
+function saveMyTokensCache(address, tokens) {
+  try { localStorage.setItem(MY_TOKENS_CACHE_KEY, JSON.stringify({ address, tokens, savedAt: Date.now() })); } catch {}
+}
 
 async function loadMyTokens(seq) {
   const w = getWallet();
   if (!w || w.status !== "connected") {
-    myTokensCache = null;
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML =
       `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
     document.getElementById("galleryNote").textContent = "";
     return;
   }
-  const cached = myTokensCache && myTokensCache.address === w.address ? myTokensCache : null;
+  const cached = loadMyTokensCache(w.address);
   if (cached) {
     renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
   }
@@ -941,7 +978,7 @@ async function loadMyTokens(seq) {
     return;
   }
   mine.sort((a, b) => Number(b.tid) - Number(a.tid)); // newest first, matches Recently minted
-  myTokensCache = { address: w.address, tokens: mine, savedAt: Date.now() };
+  saveMyTokensCache(w.address, mine);
   const note = totalPages > OWNER_WALK_PAGE_CAP
     ? `${mine.length} found in the first ${OWNER_WALK_PAGE_CAP * SUMMARY_PAGE_SIZE} tokens (collection too large to check in full live)`
     : `${mine.length} minted by this wallet`;
@@ -974,25 +1011,48 @@ let galleryFetchInFlight = false;
 
 function updateRefreshInfo() {
   const el = document.getElementById("refreshInfo");
+  el.classList.remove("active");
   el.textContent = lastGalleryRefreshAt ? `refreshed ${relativeTimeFrom(lastGalleryRefreshAt)}` : "";
+}
+
+// Visible for EVERY refresh now, not just a manual click or tab switch --
+// the spinning icon alone was too easy to miss, so the text label next
+// to it says "Refreshing…" outright while anything is actually in
+// flight (including the silent 20s background one), not just after.
+function setRefreshingUI(active) {
+  document.getElementById("manualRefreshBtn").classList.toggle("spinning", active);
+  const el = document.getElementById("refreshInfo");
+  if (active) {
+    el.textContent = "Refreshing…";
+    el.classList.add("active");
+  } else {
+    updateRefreshInfo();
+  }
 }
 
 async function refreshActiveGalleryTab(opts) {
   const seq = ++gallerySeq;
   const tab = activeGalleryTab;
-  const btn = document.getElementById("manualRefreshBtn");
-  if (opts && opts.spin) btn.classList.add("spinning");
+  const mode = galleryViewMode;
+  setRefreshingUI(true);
   galleryFetchInFlight = true;
   try {
-    if (tab === "recent") await loadGallery(seq);
+    if (mode === "list") await loadMintList(seq, tab);
+    else if (tab === "recent") await loadGallery(seq);
     else await loadMyTokens(seq);
-    if (seq === gallerySeq) {
-      lastGalleryRefreshAt = Date.now();
-      updateRefreshInfo();
-    }
+    if (seq === gallerySeq) lastGalleryRefreshAt = Date.now();
   } finally {
     galleryFetchInFlight = false;
-    if (opts && opts.spin) btn.classList.remove("spinning");
+    setRefreshingUI(false);
+  }
+}
+
+function showGalleryLoading() {
+  galleryTokensByTid = new Map();
+  if (galleryViewMode === "list") {
+    document.getElementById("galleryListHolder").innerHTML = `<div class="gallery-empty">Loading…</div>`;
+  } else {
+    document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Loading…</div>`;
   }
 }
 
@@ -1004,9 +1064,183 @@ function switchGalleryTab(tab) {
   // Different token set than whatever's currently rendered -- there's no
   // shared identity to preserve across tabs, so this is the one case
   // where a full rebuild (via an empty "previous" map) is correct.
-  galleryTokensByTid = new Map();
-  document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Loading…</div>`;
+  showGalleryLoading();
   refreshActiveGalleryTab({ spin: true });
+}
+
+// ---------- view mode: big cards / small cards / list ----------
+let galleryViewMode = "big"; // "big" | "small" | "list"
+try {
+  const savedView = localStorage.getItem("gemsGallery:viewMode");
+  if (savedView === "big" || savedView === "small" || savedView === "list") galleryViewMode = savedView;
+} catch {}
+
+function applyViewMode() {
+  document.getElementById("viewBigBtn").classList.toggle("active", galleryViewMode === "big");
+  document.getElementById("viewSmallBtn").classList.toggle("active", galleryViewMode === "small");
+  document.getElementById("viewListBtn").classList.toggle("active", galleryViewMode === "list");
+  const grid = document.getElementById("galleryGrid");
+  const list = document.getElementById("galleryListHolder");
+  const isList = galleryViewMode === "list";
+  grid.style.display = isList ? "none" : "";
+  list.style.display = isList ? "" : "none";
+  grid.classList.toggle("view-small", galleryViewMode === "small");
+}
+applyViewMode();
+
+function setViewMode(mode) {
+  if (mode === galleryViewMode) return;
+  galleryViewMode = mode;
+  try { localStorage.setItem("gemsGallery:viewMode", mode); } catch {}
+  applyViewMode();
+  showGalleryLoading();
+  refreshActiveGalleryTab({ spin: true }); // list mode reads a completely different data source
+}
+document.getElementById("viewBigBtn").addEventListener("click", () => setViewMode("big"));
+document.getElementById("viewSmallBtn").addEventListener("click", () => setViewMode("small"));
+document.getElementById("viewListBtn").addEventListener("click", () => setViewMode("list"));
+
+// ---------- list view: per-transaction mint history ----------
+// Same real chain data as the owner-only mint-history panel on
+// gems-mint.html (Mint + StorageDepositEvent off the indexer, block
+// times via getBlocks), surfaced here per-transaction instead of
+// aggregated by wallet -- confirmed live which fields exist before
+// writing this (gas_fee.amount, StorageDepositEvent.bytes_delta/
+// fee_delta.amount -- the fee_delta really is exactly bytes_delta*100,
+// matching this family's own "100 ugnot/byte" storage-cost note).
+const MINT_TX_CACHE_KEY = "gemsGallery:mintTxCache";
+function loadMintTxCache() {
+  try { return JSON.parse(localStorage.getItem(MINT_TX_CACHE_KEY) || "null"); } catch { return null; }
+}
+function saveMintTxCache(txs) {
+  try { localStorage.setItem(MINT_TX_CACHE_KEY, JSON.stringify({ txs, savedAt: Date.now() })); } catch {}
+}
+
+async function fetchMintTransactions() {
+  const query = `query {
+    getTransactions(where: {
+      success: { eq: true },
+      messages: { value: { MsgCall: { pkg_path: { eq: "${REALM_PATH}" } } } }
+    }, order: { heightAndIndex: DESC }) {
+      hash
+      block_height
+      gas_fee { amount }
+      response { events {
+        __typename
+        ... on GnoEvent { type attrs { key value } }
+        ... on StorageDepositEvent { bytes_delta fee_delta { amount } }
+      } }
+    }
+  }`;
+  const data = await graphqlQuery(NETWORKS.testnet, query, 30000);
+  const txs = [];
+  for (const tx of data.getTransactions || []) {
+    const mints = [];
+    let storageBytes = 0, storageFeeUgnot = 0;
+    for (const ev of tx.response?.events || []) {
+      if (ev.__typename === "GnoEvent" && ev.type === "Mint") {
+        const attrs = Object.fromEntries((ev.attrs || []).map(a => [a.key, a.value]));
+        if (attrs.tokenId && attrs.to) mints.push({ tokenId: attrs.tokenId, to: attrs.to });
+      } else if (ev.__typename === "StorageDepositEvent") {
+        storageBytes += ev.bytes_delta || 0;
+        storageFeeUgnot += (ev.fee_delta && ev.fee_delta.amount) || 0;
+      }
+    }
+    if (!mints.length) continue; // a non-mint call on this realm (e.g. a transfer) -- not a row here
+    txs.push({
+      hash: tx.hash,
+      blockHeight: tx.block_height,
+      gasFeeUgnot: tx.gas_fee ? tx.gas_fee.amount : null,
+      storageBytes,
+      storageFeeUgnot,
+      to: mints[0].to, // one mint tx always mints to a single recipient -- see MintAssembled/currentRecipient
+      quantity: mints.length,
+      tokenIds: mints.map(m => m.tokenId),
+    });
+  }
+  return txs;
+}
+
+async function fetchBlockTimesFor(heights) {
+  const times = new Map();
+  await mapLimit(heights, 8, async (h) => {
+    try {
+      const data = await graphqlQuery(NETWORKS.testnet, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
+      const b = (data.getBlocks || [])[0];
+      if (b) times.set(b.height, b.time);
+    } catch { /* leave this height's date blank rather than failing the whole load */ }
+  });
+  return times;
+}
+
+function renderMintList(txs, forWallet) {
+  const holder = document.getElementById("galleryListHolder");
+  const rows = forWallet ? txs.filter(t => t.to === forWallet) : txs;
+  if (!rows.length) {
+    holder.innerHTML = `<div class="gallery-empty">${forWallet ? "No mints from this wallet yet." : "No mints yet."}</div>`;
+    return;
+  }
+  const fmtGnot = (ugnot) => ugnot == null ? "—" : (ugnot / 1e6).toFixed(4) + " GNOT";
+  const fmtDate = (iso) => iso ? new Date(iso).toLocaleString() : "—";
+  const myAddr = (getWallet() || {}).address;
+  holder.innerHTML = `
+    <table class="mint-list-table">
+      <thead><tr>
+        <th>Time</th><th>Block</th><th>Wallet</th><th>Qty</th><th>Tokens</th><th>Gas fee</th><th>Storage</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(t => `
+          <tr class="${myAddr && t.to === myAddr ? "mine" : ""}">
+            <td>${fmtDate(t.blockTime)}</td>
+            <td class="mono">${t.blockHeight}</td>
+            <td class="mono">${truncateAddr(t.to)}${myAddr && t.to === myAddr ? '<span class="you-tag">yours</span>' : ""}</td>
+            <td>${t.quantity}</td>
+            <td class="mono">${t.tokenIds.map(id => "#" + id).join(", ")}</td>
+            <td>${fmtGnot(t.gasFeeUgnot)}</td>
+            <td>${fmtGnot(t.storageFeeUgnot)} <span class="dim">(${t.storageBytes.toLocaleString()}B)</span></td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+async function loadMintList(seq, tab) {
+  const w = getWallet();
+  if (tab === "mine" && (!w || w.status !== "connected")) {
+    document.getElementById("galleryListHolder").innerHTML = `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
+    document.getElementById("galleryNote").textContent = "";
+    return;
+  }
+  const forWallet = tab === "mine" ? w.address : null;
+  const cached = loadMintTxCache();
+  if (cached && cached.txs && cached.txs.length) {
+    renderMintList(cached.txs, forWallet);
+    document.getElementById("galleryNote").textContent = `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`;
+  }
+
+  let txs;
+  try {
+    txs = await fetchMintTransactions();
+  } catch (err) {
+    if (seq !== gallerySeq) return;
+    if (cached && cached.txs && cached.txs.length) {
+      document.getElementById("galleryNote").textContent = `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`;
+    } else {
+      document.getElementById("galleryListHolder").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
+      document.getElementById("galleryNote").textContent = "";
+    }
+    return;
+  }
+  if (seq !== gallerySeq) return;
+
+  const heights = [...new Set(txs.map(t => t.blockHeight))];
+  const times = await fetchBlockTimesFor(heights);
+  if (seq !== gallerySeq) return;
+  txs.forEach(t => { t.blockTime = times.get(t.blockHeight) || null; });
+
+  saveMintTxCache(txs);
+  renderMintList(txs, forWallet);
+  const shown = forWallet ? txs.filter(t => t.to === forWallet).length : txs.length;
+  document.getElementById("galleryNote").textContent = `${shown} mint transaction${shown === 1 ? "" : "s"}`;
 }
 
 // ---------- lightbox ----------
@@ -1146,13 +1380,28 @@ document.querySelector('a[href="#mintPanel"]').addEventListener("click", (e) => 
 document.getElementById("tabRecentBtn").onclick = () => switchGalleryTab("recent");
 document.getElementById("tabMineBtn").onclick = () => switchGalleryTab("mine");
 document.getElementById("manualRefreshBtn").onclick = () => refreshActiveGalleryTab({ spin: true });
-onWalletChange(() => { if (activeGalleryTab === "mine") refreshActiveGalleryTab(); });
+onWalletChange(() => {
+  if (activeGalleryTab === "mine") { refreshActiveGalleryTab(); return; }
+  // On "Recently minted" in list mode, connecting/disconnecting doesn't
+  // change WHICH transactions show, only which row gets the "yours" tag
+  // -- re-render from the already-fetched list instead of paying for
+  // another full indexer round-trip just to update that.
+  if (galleryViewMode === "list") {
+    const cached = loadMintTxCache();
+    if (cached && cached.txs) renderMintList(cached.txs, null);
+  }
+});
 onWalletChange(updateOwnershipBadges);
 
 renderWalletGate(); // also triggers the initial loadStats() as a side effect
 refreshActiveGalleryTab();
 setInterval(loadStats, 20000);
-setInterval(() => { if (!galleryFetchInFlight) refreshActiveGalleryTab(); }, 20000);
+// List mode skips the automatic tick -- it fetches every mint TX plus a
+// separate block-time lookup per unique height (dozens of extra indexer
+// round-trips for a collection this size), and a transaction log isn't
+// as time-critical as "did a new piece just appear" anyway. Still
+// refreshes on tab/view switches and the manual button.
+setInterval(() => { if (!galleryFetchInFlight && galleryViewMode !== "list") refreshActiveGalleryTab(); }, 20000);
 setInterval(updateRefreshInfo, 10000); // ticks the "refreshed Xs ago" text between actual refreshes
 </script>
 

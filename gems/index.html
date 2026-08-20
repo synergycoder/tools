@@ -125,9 +125,10 @@
   .gtab:hover{color:var(--ink)}
   .gtab.active{color:#fff;background:var(--accent);box-shadow:0 2px 8px -2px var(--accent-line)}
   .gallery-head .links{display:flex;align-items:baseline;gap:14px}
-  .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
+  .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono);display:inline-block;max-width:220px;
+    flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
   .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
-  .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono);display:inline-block;min-width:118px;
+  .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono);display:inline-block;width:118px;flex:none;
     text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .refreshinfo.active{color:var(--accent)}
   .refreshbtn{background:none;border:1px solid var(--hair);color:var(--muted);border-radius:6px;width:24px;height:24px;
@@ -788,12 +789,22 @@ function relativeTimeFrom(ms) {
 // which is what actually looked broken. Only tokens that are genuinely
 // new or whose content actually changed (e.g. a reveal) get a fresh
 // element, which is the one case where restarting is correct.
+// Sets both the visible (truncated by CSS) text and a title tooltip
+// with the full string -- the note's length swings wildly (a bare
+// "24 minted so far" vs "live data unavailable — showing cached
+// results from 5m ago"), and letting the widest case size the box
+// is what made the gallery-head row wrap/unwrap on every refresh.
+function setGalleryNote(text) {
+  const el = document.getElementById("galleryNote");
+  el.textContent = text;
+  el.title = text;
+}
+
 function renderGalleryGrid(tokens, noteText) {
   const grid = document.getElementById("galleryGrid");
-  const note = document.getElementById("galleryNote");
   const prevByTid = galleryTokensByTid;
   galleryTokensByTid = new Map(tokens.map(t => [t.tid, t]));
-  note.textContent = noteText;
+  setGalleryNote(noteText);
 
   const existingCards = new Map();
   grid.querySelectorAll(".gcard").forEach(card => existingCards.set(card.dataset.tid, card));
@@ -883,7 +894,7 @@ async function loadGallery(seq) {
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML =
       `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
-    document.getElementById("galleryNote").textContent = "";
+    setGalleryNote("");
     return;
   }
 
@@ -929,7 +940,7 @@ async function loadMyTokens(seq) {
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML =
       `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
-    document.getElementById("galleryNote").textContent = "";
+    setGalleryNote("");
     return;
   }
   const cached = loadMyTokensCache(w.address);
@@ -973,7 +984,7 @@ async function loadMyTokens(seq) {
     }
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
-    document.getElementById("galleryNote").textContent = "";
+    setGalleryNote("");
     return;
   }
   mine.sort((a, b) => Number(b.tid) - Number(a.tid)); // newest first, matches Recently minted
@@ -1229,7 +1240,7 @@ async function loadMintList(seq, tab) {
   const w = getWallet();
   if (tab === "mine" && (!w || w.status !== "connected")) {
     document.getElementById("galleryListHolder").innerHTML = `<div class="gallery-empty">Connect Adena (top right) to see your NFTs.</div>`;
-    document.getElementById("galleryNote").textContent = "";
+    setGalleryNote("");
     return;
   }
   const forWallet = tab === "mine" ? w.address : null;
@@ -1238,7 +1249,7 @@ async function loadMintList(seq, tab) {
   if (seq !== gallerySeq) return;
   if (cached && cached.txs && cached.txs.length) {
     renderMintList(cached.txs, forWallet);
-    document.getElementById("galleryNote").textContent = `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`;
+    setGalleryNote(`showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
   }
 
   let txs;
@@ -1247,10 +1258,10 @@ async function loadMintList(seq, tab) {
   } catch (err) {
     if (seq !== gallerySeq) return;
     if (cached && cached.txs && cached.txs.length) {
-      document.getElementById("galleryNote").textContent = `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`;
+      setGalleryNote(`live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`);
     } else {
       document.getElementById("galleryListHolder").innerHTML = `<div class="gallery-empty">Contract not reachable yet.</div>`;
-      document.getElementById("galleryNote").textContent = "";
+      setGalleryNote("");
     }
     return;
   }
@@ -1264,7 +1275,7 @@ async function loadMintList(seq, tab) {
   saveMintTxCache(txs);
   renderMintList(txs, forWallet);
   const shown = forWallet ? txs.filter(t => t.to === forWallet).length : txs.length;
-  document.getElementById("galleryNote").textContent = `${shown} mint transaction${shown === 1 ? "" : "s"}`;
+  setGalleryNote(`${shown} mint transaction${shown === 1 ? "" : "s"}`);
 }
 
 // ---------- lightbox ----------

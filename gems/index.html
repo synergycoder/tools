@@ -155,6 +155,11 @@
   .gcard .meta .tid{color:var(--ink);font-weight:700;display:block}
   .gcard.sealed .meta{color:var(--faint)}
   .gallery-empty{color:var(--muted);font-size:13.5px;padding:20px 0}
+  .load-more-row{display:flex;justify-content:center;margin:18px 0 0}
+  .load-more-btn{background:none;border:1px solid var(--hair);color:var(--muted);border-radius:8px;padding:9px 22px;
+    font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  .load-more-btn:hover{color:var(--ink);border-color:var(--accent-line)}
+  .load-more-btn:disabled{opacity:.5;cursor:default}
 
   .gallery-list{overflow-x:auto}
   .mint-list-table{width:100%;border-collapse:collapse;font-size:12.5px;white-space:nowrap}
@@ -321,6 +326,9 @@
       </div>
     </div>
     <div class="gallery-grid" id="galleryGrid"><div class="gallery-empty">Loading…</div></div>
+    <div class="load-more-row" id="galleryLoadMoreRow" style="display:none">
+      <button class="load-more-btn" id="galleryLoadMoreBtn" type="button">Load more</button>
+    </div>
     <div class="gallery-list" id="galleryListHolder" style="display:none"></div>
   </div>
 
@@ -642,10 +650,22 @@ function remainingWalletAllowance() {
 // (must match nftminter.gno's own homeRenderLimit -- confirmed live
 // that's the largest page size that fits a single qeval call's gas
 // budget; the old unbounded version failed with "out of gas" at just 21
-// minted tokens). GALLERY_LIMIT is how many the gallery actually shows;
-// loadGallery fetches ceil(GALLERY_LIMIT/SUMMARY_PAGE_SIZE) pages.
+// minted tokens). GALLERY_LIMIT is the initial/increment size for how
+// many the "Recently minted" grid shows; loadGallery fetches
+// ceil(galleryLoadedCount/SUMMARY_PAGE_SIZE) pages. galleryLoadedCount
+// grows by GALLERY_LIMIT each time the Load more button is clicked --
+// it used to be a hard, un-liftable cap with no way to see anything
+// past the newest 24, even though CollectionSummary is happy to page
+// arbitrarily far (it's newest-first, confirmed in nftminter.gno).
 const SUMMARY_PAGE_SIZE = 10;
 const GALLERY_LIMIT = 24;
+let galleryLoadedCount = GALLERY_LIMIT;
+let galleryHasMore = false;
+
+function updateLoadMoreVisibility() {
+  const row = document.getElementById("galleryLoadMoreRow");
+  row.style.display = activeGalleryTab === "recent" && galleryViewMode !== "list" && galleryHasMore ? "" : "none";
+}
 
 // A CollectionSummary() page's qeval result is one gno string literal
 // containing newline-separated
@@ -863,9 +883,11 @@ async function loadGallery(seq) {
   const cached = loadGalleryCache();
   if (cached && cached.tokens && cached.tokens.length) {
     renderGalleryGrid(cached.tokens, `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`);
+    galleryHasMore = cached.total > cached.tokens.length;
+    updateLoadMoreVisibility();
   }
 
-  const pagesNeeded = Math.ceil(GALLERY_LIMIT / SUMMARY_PAGE_SIZE);
+  const pagesNeeded = Math.ceil(galleryLoadedCount / SUMMARY_PAGE_SIZE);
   const tokens = [];
   let firstPageRaw = null;
   for (let page = 1; page <= pagesNeeded; page++) {
@@ -879,8 +901,8 @@ async function loadGallery(seq) {
     if (page === 1) firstPageRaw = raw;
     if (raw == null) break;
     const pageTokens = parseCollectionSummary(raw);
-    if (!pageTokens.length) break; // fewer tokens than GALLERY_LIMIT exist -- no more pages
     tokens.push(...pageTokens);
+    if (pageTokens.length < SUMMARY_PAGE_SIZE) break; // short page -- no more pages left
   }
 
   if (!tokens.length) {
@@ -889,19 +911,25 @@ async function loadGallery(seq) {
     // fall back to cache; a real zero shouldn't keep showing stale cards.
     if (firstPageRaw == null && cached && cached.tokens && cached.tokens.length) {
       renderGalleryGrid(cached.tokens, `live data unavailable — showing cached results from ${relativeTimeFrom(cached.savedAt)}`);
+      galleryHasMore = cached.total > cached.tokens.length;
+      updateLoadMoreVisibility();
       return;
     }
     galleryTokensByTid = new Map();
     document.getElementById("galleryGrid").innerHTML =
       `<div class="gallery-empty">${firstPageRaw == null ? "Contract not reachable yet." : "No pieces minted yet — be the first."}</div>`;
     setGalleryNote("");
+    galleryHasMore = false;
+    updateLoadMoreVisibility();
     return;
   }
 
-  const shown = tokens.slice(0, GALLERY_LIMIT);
+  const shown = tokens.slice(0, galleryLoadedCount);
   const total = stats.supply != null ? stats.supply : shown.length;
   saveGalleryCache(shown, total);
   renderGalleryGrid(shown, total > shown.length ? `showing latest ${shown.length} of ${total}` : `${shown.length} minted so far`);
+  galleryHasMore = total > shown.length;
+  updateLoadMoreVisibility();
 }
 
 // "My NFTs" walks every page (not just the newest GALLERY_LIMIT) and
@@ -1075,6 +1103,12 @@ function switchGalleryTab(tab) {
   // shared identity to preserve across tabs, so this is the one case
   // where a full rebuild (via an empty "previous" map) is correct.
   showGalleryLoading();
+  // A "Load more" expansion is a per-visit-to-this-tab thing, not
+  // something that should follow you to "My NFTs" and back -- reset to
+  // the baseline every time the tab actually changes.
+  galleryLoadedCount = GALLERY_LIMIT;
+  galleryHasMore = false;
+  updateLoadMoreVisibility();
   refreshActiveGalleryTab({ spin: true });
 }
 
@@ -1095,6 +1129,7 @@ function applyViewMode() {
   grid.style.display = isList ? "none" : "";
   list.style.display = isList ? "" : "none";
   grid.classList.toggle("view-small", galleryViewMode === "small");
+  updateLoadMoreVisibility();
 }
 applyViewMode();
 
@@ -1415,6 +1450,15 @@ document.querySelector('a[href="#mintPanel"]').addEventListener("click", (e) => 
 document.getElementById("tabRecentBtn").onclick = () => switchGalleryTab("recent");
 document.getElementById("tabMineBtn").onclick = () => switchGalleryTab("mine");
 document.getElementById("manualRefreshBtn").onclick = () => refreshActiveGalleryTab({ spin: true });
+document.getElementById("galleryLoadMoreBtn").onclick = async () => {
+  const btn = document.getElementById("galleryLoadMoreBtn");
+  galleryLoadedCount += GALLERY_LIMIT;
+  btn.disabled = true;
+  btn.textContent = "Loading…";
+  await refreshActiveGalleryTab(); // reuses loadGallery's keyed diff -- appends, doesn't rebuild
+  btn.disabled = false;
+  btn.textContent = "Load more";
+};
 onWalletChange(() => {
   if (activeGalleryTab === "mine") { refreshActiveGalleryTab(); return; }
   // On "Recently minted" in list mode, connecting/disconnecting doesn't

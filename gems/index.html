@@ -127,7 +127,8 @@
   .gallery-head .links{display:flex;align-items:baseline;gap:14px}
   .gallery-head .note{font-size:12px;color:var(--faint);font-family:var(--mono)}
   .gallery-head .collection-link{font-size:12px;font-family:var(--mono);color:var(--accent)}
-  .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono)}
+  .refreshinfo{font-size:11px;color:var(--faint);font-family:var(--mono);display:inline-block;min-width:118px;
+    text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .refreshinfo.active{color:var(--accent)}
   .refreshbtn{background:none;border:1px solid var(--hair);color:var(--muted);border-radius:6px;width:24px;height:24px;
     font-size:13px;cursor:pointer;line-height:1;padding:0}
@@ -139,10 +140,8 @@
     border-radius:6px;font-family:inherit}
   .vtab:hover{color:var(--ink)}
   .vtab.active{color:var(--bg);background:var(--muted)}
-  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
-  .gallery-grid.view-small{grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
-  .gallery-grid.view-small .gcard .meta{padding:5px 6px;font-size:9px}
-  .gallery-grid.view-small .owned-badge{font-size:7px;padding:2px 5px;top:4px;right:4px}
+  .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+  .gallery-grid.view-small{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px}
   .gcard{position:relative;border:1px solid var(--hair);border-radius:12px;background:var(--panel);overflow:hidden;cursor:pointer;
     transition:transform .12s ease,border-color .12s ease}
   .gcard:hover{border-color:var(--accent-line);transform:translateY(-2px)}
@@ -1203,6 +1202,29 @@ function renderMintList(txs, forWallet) {
     </table>`;
 }
 
+// A returning visitor's own localStorage cache (loadMintTxCache) is
+// always fresher when it exists -- it's their own last live fetch. This
+// static file is only for the visitor who has NEITHER: a periodically
+// regenerated JSON snapshot (refresh-gems-mint-history.mjs), committed
+// to the repo, that gives every FIRST-time visitor an instant baseline
+// too instead of everyone independently paying for the same full
+// indexer walk (one transaction-list query plus one getBlocks call per
+// unique block height) on their very first look at List view.
+let staticMintHistoryAttempted = false;
+async function loadStaticMintHistoryBaseline() {
+  if (staticMintHistoryAttempted) return null;
+  staticMintHistoryAttempted = true;
+  try {
+    const res = await fetch("/gems-mint-history.json", { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.txs) || !data.txs.length) return null;
+    return { txs: data.txs, savedAt: data.generatedAt ? Date.parse(data.generatedAt) : Date.now() };
+  } catch {
+    return null;
+  }
+}
+
 async function loadMintList(seq, tab) {
   const w = getWallet();
   if (tab === "mine" && (!w || w.status !== "connected")) {
@@ -1211,7 +1233,9 @@ async function loadMintList(seq, tab) {
     return;
   }
   const forWallet = tab === "mine" ? w.address : null;
-  const cached = loadMintTxCache();
+  let cached = loadMintTxCache();
+  if (!cached) cached = await loadStaticMintHistoryBaseline();
+  if (seq !== gallerySeq) return;
   if (cached && cached.txs && cached.txs.length) {
     renderMintList(cached.txs, forWallet);
     document.getElementById("galleryNote").textContent = `showing cached results from ${relativeTimeFrom(cached.savedAt)} — refreshing…`;

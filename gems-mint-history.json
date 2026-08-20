@@ -1,0 +1,285 @@
+{
+  "realmPath": "gno.land/r/nym-gemsnft000/g17",
+  "generatedAt": "2026-08-20T05:50:59.724Z",
+  "lastHeight": 285047,
+  "txs": [
+    {
+      "hash": "4GvSdhBW0T0zsWlD1P8c8W/715uPG3ogySJiqKiRSSE=",
+      "blockHeight": 285047,
+      "gasFeeUgnot": 45563,
+      "storageBytes": 23040,
+      "storageFeeUgnot": 2304000,
+      "to": "g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls",
+      "quantity": 1,
+      "tokenIds": [
+        "0000015"
+      ],
+      "blockTime": "2026-08-19T23:29:39.469595694Z"
+    },
+    {
+      "hash": "Yr3aqu0zteU3u9x/VgAjSFiL3DuErGCIJIhLEGm6kqg=",
+      "blockHeight": 284688,
+      "gasFeeUgnot": 128162,
+      "storageBytes": 23028,
+      "storageFeeUgnot": 2302800,
+      "to": "g1gn6t0q9wenwhdda47rkrpfd63kcxjvyp7eqwku",
+      "quantity": 1,
+      "tokenIds": [
+        "0000014"
+      ],
+      "blockTime": "2026-08-19T23:07:40.248219359Z"
+    },
+    {
+      "hash": "Q6LhjblRcMPjBtkdtSyghkHkyYYrF9PiNcj/vP2LRjk=",
+      "blockHeight": 281564,
+      "gasFeeUgnot": 46444,
+      "storageBytes": 18489,
+      "storageFeeUgnot": 1848900,
+      "to": "g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc",
+      "quantity": 1,
+      "tokenIds": [
+        "0000013"
+      ],
+      "blockTime": "2026-08-19T19:56:29.891715154Z"
+    },
+    {
+      "hash": "IJ1Fpi+JQ9HRLNWCd+0M/bkVFcz6BWxL5c+Bqt9bnck=",
+      "blockHeight": 281561,
+      "gasFeeUgnot": 46388,
+      "storageBytes": 18505,
+      "storageFeeUgnot": 1850500,
+      "to": "g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc",
+      "quantity": 1,
+      "tokenIds": [
+        "0000012"
+      ],
+      "blockTime": "2026-08-19T19:56:19.635074898Z"
+    },
+    {
+      "hash": "EFuw0mpHRONsgDZkCjDJJqtbft5B+UfTJFj7mMHjCww=",
+      "blockHeight": 281556,
+      "gasFeeUgnot": 47109,
+      "storageBytes": 22996,
+      "storageFeeUgnot": 2299600,
+      "to": "g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc",
+      "quantity": 1,
+      "tokenIds": [
+        "0000011"
+      ],
+      "blockTime": "2026-08-19T19:56:00.145182708Z"
+    },
+    {
+      "hash": "P9aof24lqjfz3VHRPRYLxJ+pk3cQ7GW3kucs3gxhAd8=",
+      "blockHeight": 278333,
+      "gasFeeUgnot": 62524,
+      "storageBytes": 60037,
+      "storageFeeUgnot": 6003700,
+      "to": "g1g8l8vcslktac2pgdgfrd69da5pd8v25j0a7qsf",
+      "quantity": 3,
+      "tokenIds": [
+        "000000y",
+        "000000z",
+        "0000010"
+      ],
+      "blockTime": "2026-08-19T16:38:29.48534227Z"
+    },
+    {
+      "hash": "UpYKE8ORsBPkYf04TiVDalpPmGSCdMgjAfm7fsWh2CQ=",
+      "blockHeight": 265653,
+      "gasFeeUgnot": 63583,
+      "storageBytes": 60018,
+      "storageFeeUgnot": 6001800,
+      "to": "g1k3rgm46pgh7207tpf2mcnmyccsvlpt56gnp79l",
+      "quantity": 3,
+      "tokenIds": [
+        "000000v",
+        "000000w",
+        "000000x"
+      ],
+      "blockTime": "2026-08-19T03:44:33.368671574Z"
+    },
+    {
+      "hash": "Go9v2KohUI8tnY/M9GTzrQQ5YI7qkEgFG0dpUKJWeik=",
+      "blockHeight": 253548,
+      "gasFeeUgnot": 61351,
+      "storageBytes": 60016,
+      "storageFeeUgnot": 6001600,
+      "to": "g1q7tn3yp0aux44z6nqefdv6wx788w8dyyl60aqk",
+      "quantity": 3,
+      "tokenIds": [
+        "000000r",
+        "000000s",
+        "000000t"
+      ],
+      "blockTime": "2026-08-18T15:30:43.986211924Z"
+    },
+    {
+      "hash": "mI0aaTEikkwr/fjT2rpyOv4jkUW17u26WY350+bpIss=",
+      "blockHeight": 251041,
+      "gasFeeUgnot": 61197,
+      "storageBytes": 60072,
+      "storageFeeUgnot": 6007200,
+      "to": "g1wryt0g4g7h8eldzankzpx55kraljjepxh9ukkd",
+      "quantity": 3,
+      "tokenIds": [
+        "000000n",
+        "000000p",
+        "000000q"
+      ],
+      "blockTime": "2026-08-18T12:58:50.03998807Z"
+    },
+    {
+      "hash": "d6dOxLZWMHrBKtGNopKW03JQK/rkBxAsmftg6GdgwE8=",
+      "blockHeight": 249290,
+      "gasFeeUgnot": 42538,
+      "storageBytes": 18495,
+      "storageFeeUgnot": 1849500,
+      "to": "g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr",
+      "quantity": 1,
+      "tokenIds": [
+        "000000m"
+      ],
+      "blockTime": "2026-08-18T11:13:13.895213123Z"
+    },
+    {
+      "hash": "sP8j5IjVEM8z0RdWtQAjNVT1qyRiX7hTV+qAhIMgqQk=",
+      "blockHeight": 249098,
+      "gasFeeUgnot": 41604,
+      "storageBytes": 18501,
+      "storageFeeUgnot": 1850100,
+      "to": "g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr",
+      "quantity": 1,
+      "tokenIds": [
+        "000000k"
+      ],
+      "blockTime": "2026-08-18T11:01:44.215771979Z"
+    },
+    {
+      "hash": "Pl87u+1XzXGFZ68t41Obr/uqNxAr7mtjaJKTEtGEQcs=",
+      "blockHeight": 249067,
+      "gasFeeUgnot": 42075,
+      "storageBytes": 23035,
+      "storageFeeUgnot": 2303500,
+      "to": "g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr",
+      "quantity": 1,
+      "tokenIds": [
+        "000000j"
+      ],
+      "blockTime": "2026-08-18T10:59:45.929624874Z"
+    },
+    {
+      "hash": "KL2TwLN0HUG8PhGIrwrRZd+q91NFTqGkj+w0Fx7SUy4=",
+      "blockHeight": 244835,
+      "gasFeeUgnot": 41087,
+      "storageBytes": 22989,
+      "storageFeeUgnot": 2298900,
+      "to": "g1vmjgpgsy7v7t7xvwwgcya8thuufuyh2ak6zsqc",
+      "quantity": 1,
+      "tokenIds": [
+        "000000h"
+      ],
+      "blockTime": "2026-08-18T06:42:59.203333869Z"
+    },
+    {
+      "hash": "5xlA3SPNR1pGlyvaNSWXGM1KpAnYj1+iLpauiQmvxao=",
+      "blockHeight": 244307,
+      "gasFeeUgnot": 37339,
+      "storageBytes": 18521,
+      "storageFeeUgnot": 1852100,
+      "to": "g1z360harzpshhdnlrdgj5ljkx2aeckzavkyl9g0",
+      "quantity": 1,
+      "tokenIds": [
+        "000000g"
+      ],
+      "blockTime": "2026-08-18T06:11:03.726578617Z"
+    },
+    {
+      "hash": "Uz3Umq8o7rlvpHdf+zKFbqyhjXC798dxiPU7ZAHIJJI=",
+      "blockHeight": 244245,
+      "gasFeeUgnot": 37394,
+      "storageBytes": 23036,
+      "storageFeeUgnot": 2303600,
+      "to": "g1z360harzpshhdnlrdgj5ljkx2aeckzavkyl9g0",
+      "quantity": 1,
+      "tokenIds": [
+        "000000f"
+      ],
+      "blockTime": "2026-08-18T06:07:17.290317152Z"
+    },
+    {
+      "hash": "RWVbhtQkeCrFs8xf/TLwTHdFbl3qupdA9A/EmIoYeuU=",
+      "blockHeight": 227818,
+      "gasFeeUgnot": 36603,
+      "storageBytes": 23040,
+      "storageFeeUgnot": 2304000,
+      "to": "g1x4zvyxlwauaanupr43fjm4l3kltk5h6lzgpvwn",
+      "quantity": 1,
+      "tokenIds": [
+        "000000e"
+      ],
+      "blockTime": "2026-08-17T13:06:09.96779931Z"
+    },
+    {
+      "hash": "W3/VeClQNtqpFwL8+6vby/vMSN308f6bU+oOy1dzA0Q=",
+      "blockHeight": 223250,
+      "gasFeeUgnot": 35631,
+      "storageBytes": 23095,
+      "storageFeeUgnot": 2309500,
+      "to": "g10h5qkujhw8jnztppngtjtg5wy2ma9xwqc93uky",
+      "quantity": 1,
+      "tokenIds": [
+        "000000d"
+      ],
+      "blockTime": "2026-08-17T08:28:13.922086253Z"
+    },
+    {
+      "hash": "yaSiqC+lfL64kSnponYBu8O49JY1GIoQ8pFoEzFYzUo=",
+      "blockHeight": 218353,
+      "gasFeeUgnot": 88769,
+      "storageBytes": 184165,
+      "storageFeeUgnot": 18416500,
+      "to": "g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems",
+      "quantity": 10,
+      "tokenIds": [
+        "0000003",
+        "0000004",
+        "0000005",
+        "0000006",
+        "0000007",
+        "0000008",
+        "0000009",
+        "000000a",
+        "000000b",
+        "000000c"
+      ],
+      "blockTime": "2026-08-17T03:32:57.386267595Z"
+    },
+    {
+      "hash": "X1QMEPNjVQgHytnYt6mfMPW6bsGwAWJFVeY1Hu981w8=",
+      "blockHeight": 218170,
+      "gasFeeUgnot": 25789,
+      "storageBytes": 36744,
+      "storageFeeUgnot": 3674400,
+      "to": "g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems",
+      "quantity": 2,
+      "tokenIds": [
+        "0000001",
+        "0000002"
+      ],
+      "blockTime": "2026-08-17T03:21:59.255512126Z"
+    },
+    {
+      "hash": "DofhZmXcfyw3Bz4rT2+c8tB6EsgxKc8J8H5l7JWjIYM=",
+      "blockHeight": 218137,
+      "gasFeeUgnot": 18988,
+      "storageBytes": 14568,
+      "storageFeeUgnot": 1456800,
+      "to": "g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems",
+      "quantity": 1,
+      "tokenIds": [
+        "0000000"
+      ],
+      "blockTime": "2026-08-17T03:19:59.055658784Z"
+    }
+  ]
+}

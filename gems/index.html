@@ -37,6 +37,15 @@
 <link rel="shortcut icon" href="/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
 <script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<!-- Gems now lives on Pearl-1, not Sapphire-1 (site-chrome.js's shared
+     NETWORKS default is still sapphire-first, since other tools on this
+     site are unaffected by the migration and shouldn't have their own
+     default silently changed). Only sets a starting pick for a visitor
+     with NO stored preference at all -- never overrides an explicit
+     choice made on this or any other gno.tools page, and
+     syncActiveNetworkToWallet() in site-chrome.js still corrects this
+     the moment a real wallet connection reports its actual chain. -->
+<script>try{if(!localStorage.getItem("gnoTools:activeNetworkChainId:v1"))localStorage.setItem("gnoTools:activeNetworkChainId:v1","pearl-1");}catch(e){}</script>
 <!-- Works around a real bug in Adena's own extension (a window.adena that
      never gets set on some page-load orderings), not this code — must
      stay an external <script src>, not inlined. -->
@@ -235,7 +244,7 @@
     <div class="hero-top">
       <h1>Mint a Gem</h1>
       <div class="hero-status">
-        <p class="eyebrow">Gno.land · Sapphire-1 testnet · GRC-721 public mint</p>
+        <p class="eyebrow">Gno.land · Pearl-1 testnet · GRC-721 public mint</p>
         <div class="wallet-gate" id="walletGate">Checking wallet…</div>
       </div>
     </div>
@@ -256,7 +265,7 @@
       <div class="step" id="stepFaucet">
         <div class="head"><span class="n">02</span><span class="check">✓ Done</span></div>
         <h3>Get testnet tokens</h3>
-        <p>This collection lives on gno.land's Sapphire testnet — minting costs testnet GNOT, not real money. Grab some free from the faucet.</p>
+        <p>This collection lives on gno.land's Pearl testnet — minting costs testnet GNOT, not real money. Grab some free from the faucet.</p>
         <a class="step-action" href="https://faucet.gno.land/" target="_blank" rel="noopener">🚰 Get tokens from faucet</a>
       </div>
       <div class="step" id="stepMint">
@@ -376,7 +385,7 @@ initSiteChrome();
 // gno.land packages can't be redeployed in place, so this points at
 // whichever Gems iteration is the current live one — updating it by hand
 // on redeploy is the same pattern nft-minter's own realmRelPath uses.
-const REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g18";
 
 // UI safety ceiling on how many MintAssembled calls one transaction queues
 // -- not itself an on-chain limit. The real ceiling most wallets hit is
@@ -385,7 +394,7 @@ const REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
 // getting unreasonably large.
 const MAX_QTY_PER_TX = 25;
 
-const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
+const GNOWEB_BASE = "https://pearl.testnets.gno.land";
 function gnowebCollectionUrl() {
   return REALM_PATH.replace(/^gno\.land/, GNOWEB_BASE);
 }
@@ -431,16 +440,16 @@ function formatGnot(amount) {
   return (Math.round(n * 100) / 100).toString();
 }
 
-// This realm only exists on Sapphire-1 testnet -- every qeval/mint call
-// below hardcodes NETWORKS.testnet regardless of what's selected, so the
+// This realm only exists on Pearl-1 testnet -- every qeval/mint call
+// below hardcodes NETWORKS.pearl regardless of what's selected, so the
 // page still works even if the header's own network picker is pointed
 // elsewhere, but a visitor who's on e.g. betanet for some other tool and
 // then lands here would otherwise see no signal that anything's off.
 function updateNetworkMismatchBanner() {
   const holder = document.getElementById("networkMismatchHolder");
   const key = getActiveNetworkKey();
-  holder.innerHTML = key && key !== "testnet"
-    ? `<div class="status-line warn">You have ${escapeHtml(NETWORKS[key]?.label || key)} selected (top right). Gems only exists on gno.land's Sapphire-1 testnet — switch the network picker to Sapphire-1 to see live data and mint.</div>`
+  holder.innerHTML = key && key !== "pearl"
+    ? `<div class="status-line warn">You have ${escapeHtml(NETWORKS[key]?.label || key)} selected (top right). Gems only exists on gno.land's Pearl-1 testnet — switch the network picker to Pearl-1 to see live data and mint.</div>`
     : "";
 }
 updateNetworkMismatchBanner();
@@ -458,7 +467,7 @@ function clearEndpointUnreachableBanner() {
 
 async function qeval(expr) {
   try {
-    const result = await abciQuery(NETWORKS.testnet, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+    const result = await abciQuery(NETWORKS.pearl, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
     clearEndpointUnreachableBanner();
     return result;
   } catch (err) {
@@ -553,11 +562,11 @@ function renderWalletGate() {
     gate.className = "wallet-gate warn";
     gate.innerHTML = `<span class="dot"></span> Connect Adena to mint`;
   } else {
-    const onSapphire = w.chainId === "sapphire-1";
-    gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
-    gate.innerHTML = onSapphire
+    const onPearl = w.chainId === "pearl-1";
+    gate.className = "wallet-gate " + (onPearl ? "ok" : "warn");
+    gate.innerHTML = onPearl
       ? `<span class="dot"></span> Connected as <code>${truncateAddr(w.address)}</code>`
-      : `<span class="dot"></span> Wrong network — switch to Sapphire-1`;
+      : `<span class="dot"></span> Wrong network — switch to Pearl-1`;
   }
   const addr = w.status === "connected" ? w.address : null;
   if (addr !== lastStatsAddress) {
@@ -609,7 +618,7 @@ function updateMintButton() {
   const btn = document.getElementById("mintBtn");
   const qtyInput = document.getElementById("qtyInput");
   if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
-  if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (w.chainId !== "pearl-1") { btn.disabled = true; btn.textContent = "Switch to Pearl-1"; return; }
   if (stats.mintingOpen === null) { btn.disabled = true; btn.textContent = "Contract Not Reachable Yet"; return; }
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
 
@@ -1177,7 +1186,7 @@ async function fetchMintTransactions() {
       } }
     }
   }`;
-  const data = await graphqlQuery(NETWORKS.testnet, query, 30000);
+  const data = await graphqlQuery(NETWORKS.pearl, query, 30000);
   const txs = [];
   for (const tx of data.getTransactions || []) {
     const mints = [];
@@ -1210,7 +1219,7 @@ async function fetchBlockTimesFor(heights) {
   const times = new Map();
   await mapLimit(heights, 8, async (h) => {
     try {
-      const data = await graphqlQuery(NETWORKS.testnet, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
+      const data = await graphqlQuery(NETWORKS.pearl, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
       const b = (data.getBlocks || [])[0];
       if (b) times.set(b.height, b.time);
     } catch { /* leave this height's date blank rather than failing the whole load */ }

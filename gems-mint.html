@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/nym-gemsnft000/g17</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g18</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -300,7 +300,7 @@
     <div class="qty-row" style="flex-wrap:wrap;gap:10px 16px;margin-top:10px">
       <div>
         <label for="gapOriginalChain">Original chain</label><br>
-        <input type="text" id="gapOriginalChain" placeholder="sapphire-1" style="width:140px">
+        <input type="text" id="gapOriginalChain" placeholder="pearl-1" style="width:140px">
       </div>
       <div>
         <label for="gapOriginalTokenId">Original token id</label><br>
@@ -410,14 +410,14 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8, fetchNativeBalance, graphqlQuery, mapLimit } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g18";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g16";
+const PREVIOUS_REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -435,10 +435,10 @@ const MAX_QTY_PER_TX = 500;
 // that didn't).
 const QTY_PRESETS = [10, 20, 50, 100, 150, 200, 300, 400, 500];
 
-// This page only ever reads/writes sapphire-1, so gnoweb link-building
+// This page only ever reads/writes pearl-1, so gnoweb link-building
 // never needs to branch on network -- same reasoning as nft-minter's
 // own gnowebCollectionUrl/gnowebTokenUrl.
-const GNOWEB_BASE = "https://sapphire.testnets.gno.land";
+const GNOWEB_BASE = "https://pearl.testnets.gno.land";
 function gnowebCollectionUrl(pkgPath = REALM_PATH) {
   return pkgPath.replace(/^gno\.land/, GNOWEB_BASE);
 }
@@ -500,7 +500,7 @@ function clearEndpointUnreachableBanner() {
 
 async function qevalReportable(pkgPath, expr) {
   try {
-    const result = await abciQuery(NETWORKS.testnet, "vm/qeval", `${pkgPath}.${expr}`, 10000);
+    const result = await abciQuery(NETWORKS.pearl, "vm/qeval", `${pkgPath}.${expr}`, 10000);
     clearEndpointUnreachableBanner();
     return result;
   } catch (err) {
@@ -609,7 +609,7 @@ async function refreshRealmBalance() {
     const addrR = await qeval("RealmAddress()");
     const addr = parseStrQ(addrR);
     if (!addr) throw new Error("no address");
-    realmBalanceUgnot = parseInt(await fetchNativeBalance(NETWORKS.testnet, addr), 10) || 0;
+    realmBalanceUgnot = parseInt(await fetchNativeBalance(NETWORKS.pearl, addr), 10) || 0;
     el.textContent = `${fromBaseUnits(realmBalanceUgnot, NATIVE_DECIMALS)} GNOT`;
     allBtn.disabled = realmBalanceUgnot <= 0;
   } catch {
@@ -640,7 +640,7 @@ async function fetchMintEvents() {
       response { events { __typename ... on GnoEvent { type attrs { key value } } } }
     }
   }`;
-  const data = await graphqlQuery(NETWORKS.testnet, query, 30000);
+  const data = await graphqlQuery(NETWORKS.pearl, query, 30000);
   const mints = [];
   for (const tx of data.getTransactions || []) {
     for (const ev of tx.response?.events || []) {
@@ -657,7 +657,7 @@ async function fetchBlockTimes(heights) {
   const result = new Map();
   await mapLimit(heights, 8, async (h) => {
     try {
-      const data = await graphqlQuery(NETWORKS.testnet, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
+      const data = await graphqlQuery(NETWORKS.pearl, `query { getBlocks(where: { height: { eq: ${h} } }) { height time } }`);
       const b = (data.getBlocks || [])[0];
       if (b) result.set(b.height, b.time);
     } catch {
@@ -754,11 +754,11 @@ function renderWalletGate() {
     gate.className = "wallet-gate warn";
     gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) to mint.`;
   } else {
-    const onSapphire = w.chainId === "sapphire-1";
-    gate.className = "wallet-gate " + (onSapphire ? "ok" : "warn");
-    gate.innerHTML = onSapphire
-      ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>sapphire-1</code>.`
-      : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Sapphire-1 first.`;
+    const onPearl = w.chainId === "pearl-1";
+    gate.className = "wallet-gate " + (onPearl ? "ok" : "warn");
+    gate.innerHTML = onPearl
+      ? `<span class="dot"></span> Connected as <code>${w.address}</code> on <code>pearl-1</code>.`
+      : `<span class="dot"></span> Connected as <code>${w.address}</code>, but on <code>${w.chainId || "an unknown network"}</code> — switch to Pearl-1 first.`;
     // Only auto-track the connected wallet into "mint to" while the user
     // hasn't manually typed their own recipient in -- otherwise switching
     // Adena accounts after a manual edit would clobber an intentional
@@ -831,7 +831,7 @@ function updateMintButton() {
   const btn = document.getElementById("mintBtn");
   const qtyInput = document.getElementById("qtyInput");
   if (w.status !== "connected") { btn.disabled = true; btn.textContent = "Connect Wallet to Mint"; return; }
-  if (w.chainId !== "sapphire-1") { btn.disabled = true; btn.textContent = "Switch to Sapphire-1"; return; }
+  if (w.chainId !== "pearl-1") { btn.disabled = true; btn.textContent = "Switch to Pearl-1"; return; }
   if (stats.mintingOpen === null) { btn.disabled = true; btn.textContent = "Contract Not Reachable Yet"; return; }
   if (stats.mintingOpen === false) { btn.disabled = true; btn.textContent = "Minting Closed"; return; }
 

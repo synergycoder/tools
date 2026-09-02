@@ -724,11 +724,13 @@ function parseCollectionSummary(raw) {
 // There's no on-chain "unique owner count" getter (that'd need a contract
 // change) -- CollectionSummary(page) already carries each token's owner
 // though, so this just walks every page and counts distinct addresses
-// client-side. Cheap right now (13 tokens = 2 pages, confirmed live), and
-// capped defensively so a much larger future collection doesn't turn
-// "load the mint page" into hundreds of qeval calls -- past the cap this
-// shows an approximate floor instead of an exact count.
-const OWNER_WALK_PAGE_CAP = 50; // 50 pages * SUMMARY_PAGE_SIZE(10) = 500 tokens
+// client-side. Capped defensively so a much larger future collection
+// doesn't turn "load the mint page" into hundreds of qeval calls -- past
+// the cap this shows an approximate floor instead of an exact count.
+// Raised from 50 (500 tokens) once supply actually crossed that --
+// confirmed live it was silently showing the literal string "500+" as
+// soon as supply passed 500, not a real count capped at 500.
+const OWNER_WALK_PAGE_CAP = 200; // 200 pages * SUMMARY_PAGE_SIZE(10) = 2000 tokens
 async function loadOwnerStats(supply) {
   const el = document.getElementById("factUniqueOwners");
   if (supply == null) { el.textContent = "unknown"; return; }

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrate Sapphire holders into g19</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/favicon-180.png">
+<meta name="robots" content="noindex, nofollow">
+<script>try{var t=localStorage.getItem("gnoTools:theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);document.documentElement.style.visibility="hidden";setTimeout(function(){document.documentElement.style.visibility="";},1500);}catch(e){}</script>
+<script src="adena-compat.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.55}
+  .wrap{max-width:900px;margin:0 auto;padding:0 20px 80px}
+  .unlinked-banner{background:var(--amber-soft);border-bottom:1px solid var(--amber-line);color:var(--amber);
+    font-family:var(--mono);font-size:12px;text-align:center;padding:7px 12px}
+
+  .hero{padding:40px 0 8px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{margin:0 0 8px;font-size:26px;letter-spacing:-0.02em;font-family:ui-monospace,"SF Mono",Consolas,monospace}
+  .sub{color:var(--muted);margin:0;max-width:66ch;font-size:14.5px}
+
+  .wallet-gate{display:flex;align-items:flex-start;flex-wrap:wrap;gap:12px;border:1px solid var(--hair);background:var(--panel);
+    border-radius:12px;padding:14px 18px;margin:22px 0;font-size:13.5px}
+  .wallet-gate .dot{margin-top:5px}
+  .wallet-gate.ok{border-color:#7fd88f55;background:#7fd88f14}
+  .wallet-gate.warn{border-color:var(--amber-line);background:var(--amber-soft)}
+  .wallet-gate .dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+  .wallet-gate.ok .dot{background:#7fd88f}
+  .wallet-gate.warn .dot{background:var(--amber)}
+  .wallet-gate code{font-family:var(--mono)}
+
+  .card{background:var(--panel); border:1px solid var(--hair); border-radius:14px; padding:18px 20px; margin:20px 0}
+  .card h2{margin:0 0 8px; font-size:15px}
+  .card p.desc{font-size:13px; color:var(--muted); margin:0 0 14px; max-width:70ch}
+  code.inline{background:var(--panel2);border:1px solid var(--hair);border-radius:4px;padding:1px 5px;font-family:var(--mono);font-size:12.5px}
+
+  .btn{padding:9px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit}
+  .btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--hair)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+
+  .status-line{font-family:var(--mono);font-size:12px;margin-top:12px;padding:8px 10px;border-radius:7px;word-break:break-word}
+  .status-line.pending{background:var(--accent-soft);color:var(--accent)}
+  .status-line.success{background:#7fd88f1a;color:#7fd88f}
+  .status-line.error{background:#e0596d1a;color:#e0596d}
+
+  .table-scroll{overflow-x:auto; border:1px solid var(--hair); border-radius:10px; max-height:420px; overflow-y:auto; margin-top:14px}
+  table.data{width:100%;border-collapse:collapse;font-size:12px}
+  table.data thead th{position:sticky;top:0;background:var(--panel2);text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);padding:8px 10px;border-bottom:1px solid var(--hair);white-space:nowrap}
+  table.data tbody td{padding:6px 10px;border-bottom:1px solid var(--hair);white-space:nowrap;font-family:var(--mono)}
+  table.data tbody tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--panel2);color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="unlinked-banner">Unlinked utility page — reachable only by direct URL, not in the site nav</div>
+
+<div class="wrap">
+  <div class="hero">
+    <p class="eyebrow">Gno.land · gems · one-time migration</p>
+    <h1>Migrate Sapphire holders into g19</h1>
+    <p class="sub">Seeds and delivers the same 56-token Sapphire-generation migration snapshot that g18 already carries, onto <code class="inline">g19</code> instead. The site's own "Migrate previous iteration" button can't do this anymore — <code class="inline">gno.land/r/nym-gemsnft000/g17</code> lived on the old Sapphire chain, which Pearl's RPC can't reach (separate chains, no shared state) — so this page works from the same 56-entry snapshot already committed to the repo, embedded below, and calls this collection's own <code class="inline">AddMigrationSnapshotEntry</code> / <code class="inline">AdminDeliverMigrated</code> directly.</p>
+  </div>
+
+  <div class="wallet-gate" id="walletGate">Checking wallet…</div>
+
+  <div class="card">
+    <h2>1. Seed migration snapshot</h2>
+    <p class="desc">Registers each of the 56 entries below into g19's own migration table via <code class="inline">AddMigrationSnapshotEntry</code> — one transaction, 56 messages (well under g19's own per-call limits). Owner-only; connected wallet must be the collection owner. Safe to re-run: each entry just overwrites its own key.</p>
+    <div class="btn-row">
+      <button class="btn" id="seedBtn" type="button">Seed migration snapshot (56 tokens)</button>
+    </div>
+    <div id="seedStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Deliver directly to holders</h2>
+    <p class="desc">Mints each seeded entry straight to its original holder's wallet via <code class="inline">AdminDeliverMigrated</code> — owner-paid, no action needed from them. Only works on entries already seeded above (run step 1 first). Also safe to re-run: <code class="inline">IsMigrationClaimed</code> entries are skipped by the contract itself if called twice, though this page doesn't pre-filter — a repeat call for an already-delivered token will simply fail that one message.</p>
+    <div class="btn-row">
+      <button class="btn" id="deliverBtn" type="button">Deliver directly to holders (56 tokens)</button>
+    </div>
+    <div id="deliverStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>Entries (56)</h2>
+    <p class="desc">Read-only preview of the embedded snapshot data — identical to <code class="inline">sapphire-migration-snapshot.json</code> already in the repo.</p>
+    <div class="table-scroll">
+      <table class="data" id="entriesTable">
+        <thead><tr>
+          <th>Tid</th><th>Owner</th><th>Chain</th><th>Shape</th><th>Color</th><th>Metal</th><th>Active</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initSiteChrome, getWallet, onWalletChange } from "./lib/site-chrome.js";
+import { doContract } from "./lib/adena-connect.js";
+import { NETWORKS, abciQuery } from "./lib/gno-rpc.js";
+initSiteChrome();
+
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g19";
+const OWNER_ADDR = "g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems";
+
+// Same 56 entries as sapphire-migration-snapshot.json, embedded directly
+// so this page never depends on reaching the (unreachable-from-Pearl)
+// Sapphire source realm at read time -- only the destination realm
+// (g19) is ever queried/written here.
+const ENTRIES = [{"tid":"000001q","owner":"g1h92t4e4jtl58rmgcjxwnpks2qhtwx6slq2l9cf","originalChain":"sapphire-1","originalTokenID":"000001q","originalMintHeight":374544,"traitChain":"TEST-12","metal":"Platinum","shapeIdx":6,"colorIdx":8,"active":false},{"tid":"000001p","owner":"g1h92t4e4jtl58rmgcjxwnpks2qhtwx6slq2l9cf","originalChain":"sapphire-1","originalTokenID":"000001p","originalMintHeight":374544,"traitChain":"TEST-13","metal":"Platinum","shapeIdx":9,"colorIdx":9,"active":false},{"tid":"000001n","owner":"g1h92t4e4jtl58rmgcjxwnpks2qhtwx6slq2l9cf","originalChain":"sapphire-1","originalTokenID":"000001n","originalMintHeight":374544,"traitChain":"TOPAZ-1","metal":"Gold","shapeIdx":10,"colorIdx":1,"active":false},{"tid":"000001m","owner":"g15ph4nltx3g5psqr92ejdcrt0kc0naaa20ylq84","originalChain":"sapphire-1","originalTokenID":"000001m","originalMintHeight":359902,"traitChain":"TEST-2","metal":"Bronze","shapeIdx":7,"colorIdx":9,"active":true},{"tid":"000001k","owner":"g15ph4nltx3g5psqr92ejdcrt0kc0naaa20ylq84","originalChain":"sapphire-1","originalTokenID":"000001k","originalMintHeight":359902,"traitChain":"TEST-8","metal":"Silver","shapeIdx":5,"colorIdx":4,"active":false},{"tid":"000001j","owner":"g15ph4nltx3g5psqr92ejdcrt0kc0naaa20ylq84","originalChain":"sapphire-1","originalTokenID":"000001j","originalMintHeight":359897,"traitChain":"TEST-11","metal":"Obsidian","shapeIdx":2,"colorIdx":3,"active":false},{"tid":"000001h","owner":"g1h33q3kza07m0pg33j0hvevfkgak5tfpzal2tes","originalChain":"sapphire-1","originalTokenID":"000001h","originalMintHeight":321587,"traitChain":"TEST-8","metal":"Silver","shapeIdx":0,"colorIdx":9,"active":false},{"tid":"000001g","owner":"g1h33q3kza07m0pg33j0hvevfkgak5tfpzal2tes","originalChain":"sapphire-1","originalTokenID":"000001g","originalMintHeight":321585,"traitChain":"TEST-12","metal":"Gold","shapeIdx":7,"colorIdx":9,"active":false},{"tid":"000001f","owner":"g1h33q3kza07m0pg33j0hvevfkgak5tfpzal2tes","originalChain":"sapphire-1","originalTokenID":"000001f","originalMintHeight":321582,"traitChain":"BETANET","metal":"Gold","shapeIdx":2,"colorIdx":8,"active":true},{"tid":"000001e","owner":"g1558yc50c7qcdnpnp20cepdzl8sh650cpz3a9f3","originalChain":"sapphire-1","originalTokenID":"000001e","originalMintHeight":319987,"traitChain":"TEST-7","metal":"Obsidian","shapeIdx":7,"colorIdx":6,"active":false},{"tid":"000001d","owner":"g1558yc50c7qcdnpnp20cepdzl8sh650cpz3a9f3","originalChain":"sapphire-1","originalTokenID":"000001d","originalMintHeight":319948,"traitChain":"SAPPHIRE-1","metal":"Silver","shapeIdx":0,"colorIdx":4,"active":false},{"tid":"000001c","owner":"g1558yc50c7qcdnpnp20cepdzl8sh650cpz3a9f3","originalChain":"sapphire-1","originalTokenID":"000001c","originalMintHeight":319912,"traitChain":"TEST-4","metal":"Obsidian","shapeIdx":4,"colorIdx":5,"active":true},{"tid":"000001b","owner":"g1t7sal5wxcrnymk0dja7n8lsmlzyyrlugzwgpez","originalChain":"sapphire-1","originalTokenID":"000001b","originalMintHeight":318572,"traitChain":"TEST-11","metal":"Gold","shapeIdx":6,"colorIdx":2,"active":false},{"tid":"000001a","owner":"g1t7sal5wxcrnymk0dja7n8lsmlzyyrlugzwgpez","originalChain":"sapphire-1","originalTokenID":"000001a","originalMintHeight":318570,"traitChain":"TEST-13","metal":"Obsidian","shapeIdx":8,"colorIdx":6,"active":false},{"tid":"0000019","owner":"g1t7sal5wxcrnymk0dja7n8lsmlzyyrlugzwgpez","originalChain":"sapphire-1","originalTokenID":"0000019","originalMintHeight":318568,"traitChain":"TEST-10","metal":"Platinum","shapeIdx":4,"colorIdx":5,"active":false},{"tid":"0000018","owner":"g13jn9zv07xr95a2j425la65s0drjhl66n4a3urk","originalChain":"sapphire-1","originalTokenID":"0000018","originalMintHeight":316930,"traitChain":"TEST-5","metal":"Platinum","shapeIdx":9,"colorIdx":0,"active":false},{"tid":"0000017","owner":"g13jn9zv07xr95a2j425la65s0drjhl66n4a3urk","originalChain":"sapphire-1","originalTokenID":"0000017","originalMintHeight":316929,"traitChain":"TOPAZ-1","metal":"Platinum","shapeIdx":0,"colorIdx":2,"active":false},{"tid":"0000016","owner":"g13jn9zv07xr95a2j425la65s0drjhl66n4a3urk","originalChain":"sapphire-1","originalTokenID":"0000016","originalMintHeight":316926,"traitChain":"TEST-8","metal":"Obsidian","shapeIdx":3,"colorIdx":2,"active":false},{"tid":"0000015","owner":"g1lyuc4zhnmd7dkdvt02fmzq9q0drqmgtn2t00ls","originalChain":"sapphire-1","originalTokenID":"0000015","originalMintHeight":285047,"traitChain":"TEST-1","metal":"Bronze","shapeIdx":7,"colorIdx":1,"active":false},{"tid":"0000014","owner":"g1gn6t0q9wenwhdda47rkrpfd63kcxjvyp7eqwku","originalChain":"sapphire-1","originalTokenID":"0000014","originalMintHeight":284688,"traitChain":"TEST-7","metal":"Platinum","shapeIdx":9,"colorIdx":8,"active":false},{"tid":"0000013","owner":"g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc","originalChain":"sapphire-1","originalTokenID":"0000013","originalMintHeight":281564,"traitChain":"TEST-10","metal":"Gold","shapeIdx":4,"colorIdx":1,"active":false},{"tid":"0000012","owner":"g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc","originalChain":"sapphire-1","originalTokenID":"0000012","originalMintHeight":281561,"traitChain":"TEST-13","metal":"Bronze","shapeIdx":0,"colorIdx":5,"active":true},{"tid":"0000011","owner":"g1f0t6fz8gye0swu2etk2fhhvn8lunvkpf6zmvvc","originalChain":"sapphire-1","originalTokenID":"0000011","originalMintHeight":281556,"traitChain":"TEST-8","metal":"Platinum","shapeIdx":5,"colorIdx":1,"active":true},{"tid":"0000010","owner":"g1g8l8vcslktac2pgdgfrd69da5pd8v25j0a7qsf","originalChain":"sapphire-1","originalTokenID":"0000010","originalMintHeight":278333,"traitChain":"TEST-10","metal":"Obsidian","shapeIdx":7,"colorIdx":3,"active":true},{"tid":"000000z","owner":"g1g8l8vcslktac2pgdgfrd69da5pd8v25j0a7qsf","originalChain":"sapphire-1","originalTokenID":"000000z","originalMintHeight":278333,"traitChain":"TEST-9","metal":"Silver","shapeIdx":3,"colorIdx":6,"active":false},{"tid":"000000y","owner":"g1g8l8vcslktac2pgdgfrd69da5pd8v25j0a7qsf","originalChain":"sapphire-1","originalTokenID":"000000y","originalMintHeight":278333,"traitChain":"TEST-3","metal":"Bronze","shapeIdx":2,"colorIdx":0,"active":false},{"tid":"000000x","owner":"g1k3rgm46pgh7207tpf2mcnmyccsvlpt56gnp79l","originalChain":"sapphire-1","originalTokenID":"000000x","originalMintHeight":265653,"traitChain":"TEST-7","metal":"Platinum","shapeIdx":7,"colorIdx":7,"active":false},{"tid":"000000w","owner":"g1k3rgm46pgh7207tpf2mcnmyccsvlpt56gnp79l","originalChain":"sapphire-1","originalTokenID":"000000w","originalMintHeight":265653,"traitChain":"TOPAZ-1","metal":"Platinum","shapeIdx":9,"colorIdx":4,"active":false},{"tid":"000000v","owner":"g1k3rgm46pgh7207tpf2mcnmyccsvlpt56gnp79l","originalChain":"sapphire-1","originalTokenID":"000000v","originalMintHeight":265653,"traitChain":"TOPAZ-1","metal":"Gold","shapeIdx":1,"colorIdx":2,"active":false},{"tid":"000000t","owner":"g1q7tn3yp0aux44z6nqefdv6wx788w8dyyl60aqk","originalChain":"sapphire-1","originalTokenID":"000000t","originalMintHeight":253548,"traitChain":"TEST-12","metal":"Gold","shapeIdx":2,"colorIdx":7,"active":false},{"tid":"000000s","owner":"g1q7tn3yp0aux44z6nqefdv6wx788w8dyyl60aqk","originalChain":"sapphire-1","originalTokenID":"000000s","originalMintHeight":253548,"traitChain":"TEST-8","metal":"Obsidian","shapeIdx":5,"colorIdx":6,"active":false},{"tid":"000000r","owner":"g1q7tn3yp0aux44z6nqefdv6wx788w8dyyl60aqk","originalChain":"sapphire-1","originalTokenID":"000000r","originalMintHeight":253548,"traitChain":"TEST-12","metal":"Gold","shapeIdx":3,"colorIdx":4,"active":true},{"tid":"000000q","owner":"g1wryt0g4g7h8eldzankzpx55kraljjepxh9ukkd","originalChain":"sapphire-1","originalTokenID":"000000q","originalMintHeight":251041,"traitChain":"TEST-11","metal":"Platinum","shapeIdx":4,"colorIdx":7,"active":false},{"tid":"000000p","owner":"g1wryt0g4g7h8eldzankzpx55kraljjepxh9ukkd","originalChain":"sapphire-1","originalTokenID":"000000p","originalMintHeight":251041,"traitChain":"TEST-8","metal":"Platinum","shapeIdx":4,"colorIdx":0,"active":false},{"tid":"000000n","owner":"g1wryt0g4g7h8eldzankzpx55kraljjepxh9ukkd","originalChain":"sapphire-1","originalTokenID":"000000n","originalMintHeight":251041,"traitChain":"TEST-12","metal":"Platinum","shapeIdx":3,"colorIdx":5,"active":false},{"tid":"000000m","owner":"g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr","originalChain":"sapphire-1","originalTokenID":"000000m","originalMintHeight":249290,"traitChain":"TEST-10","metal":"Bronze","shapeIdx":4,"colorIdx":2,"active":false},{"tid":"000000k","owner":"g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr","originalChain":"sapphire-1","originalTokenID":"000000k","originalMintHeight":249098,"traitChain":"TEST-13","metal":"Gold","shapeIdx":0,"colorIdx":5,"active":false},{"tid":"000000j","owner":"g1tlljkncyxtwmfdl9vpm38uq2mq55mdesek2ttr","originalChain":"sapphire-1","originalTokenID":"000000j","originalMintHeight":249067,"traitChain":"TEST-11","metal":"Silver","shapeIdx":1,"colorIdx":0,"active":true},{"tid":"000000h","owner":"g1vmjgpgsy7v7t7xvwwgcya8thuufuyh2ak6zsqc","originalChain":"sapphire-1","originalTokenID":"000000h","originalMintHeight":244835,"traitChain":"TEST-13","metal":"Gold","shapeIdx":0,"colorIdx":8,"active":false},{"tid":"000000g","owner":"g1z360harzpshhdnlrdgj5ljkx2aeckzavkyl9g0","originalChain":"sapphire-1","originalTokenID":"000000g","originalMintHeight":244307,"traitChain":"TEST-11","metal":"Silver","shapeIdx":10,"colorIdx":5,"active":false},{"tid":"000000f","owner":"g1z360harzpshhdnlrdgj5ljkx2aeckzavkyl9g0","originalChain":"sapphire-1","originalTokenID":"000000f","originalMintHeight":244245,"traitChain":"TEST-3","metal":"Silver","shapeIdx":10,"colorIdx":8,"active":false},{"tid":"000000e","owner":"g1x4zvyxlwauaanupr43fjm4l3kltk5h6lzgpvwn","originalChain":"sapphire-1","originalTokenID":"000000e","originalMintHeight":227818,"traitChain":"TEST-2","metal":"Silver","shapeIdx":0,"colorIdx":0,"active":false},{"tid":"000000d","owner":"g10h5qkujhw8jnztppngtjtg5wy2ma9xwqc93uky","originalChain":"sapphire-1","originalTokenID":"000000d","originalMintHeight":223250,"traitChain":"TEST-7","metal":"Bronze","shapeIdx":4,"colorIdx":6,"active":false},{"tid":"000000c","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"000000c","originalMintHeight":218353,"traitChain":"TEST-7","metal":"Silver","shapeIdx":5,"colorIdx":8,"active":true},{"tid":"000000b","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"000000b","originalMintHeight":218353,"traitChain":"TEST-13","metal":"Obsidian","shapeIdx":9,"colorIdx":6,"active":false},{"tid":"000000a","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"000000a","originalMintHeight":218353,"traitChain":"TEST-11","metal":"Obsidian","shapeIdx":3,"colorIdx":9,"active":false},{"tid":"0000009","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000009","originalMintHeight":218353,"traitChain":"BETANET","metal":"Platinum","shapeIdx":3,"colorIdx":9,"active":true},{"tid":"0000008","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000008","originalMintHeight":218353,"traitChain":"TEST-12","metal":"Obsidian","shapeIdx":10,"colorIdx":8,"active":false},{"tid":"0000007","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000007","originalMintHeight":218353,"traitChain":"TEST-8","metal":"Bronze","shapeIdx":8,"colorIdx":1,"active":false},{"tid":"0000006","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000006","originalMintHeight":218353,"traitChain":"SAPPHIRE-1","metal":"Gold","shapeIdx":2,"colorIdx":6,"active":true},{"tid":"0000005","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000005","originalMintHeight":218353,"traitChain":"TEST-9","metal":"Platinum","shapeIdx":10,"colorIdx":8,"active":false},{"tid":"0000004","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000004","originalMintHeight":218353,"traitChain":"TEST-2","metal":"Platinum","shapeIdx":8,"colorIdx":9,"active":false},{"tid":"0000003","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000003","originalMintHeight":218353,"traitChain":"TEST-8","metal":"Silver","shapeIdx":10,"colorIdx":9,"active":false},{"tid":"0000002","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000002","originalMintHeight":218170,"traitChain":"TEST-9","metal":"Gold","shapeIdx":5,"colorIdx":9,"active":false},{"tid":"0000001","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000001","originalMintHeight":218170,"traitChain":"TEST-4","metal":"Bronze","shapeIdx":0,"colorIdx":5,"active":false},{"tid":"0000000","owner":"g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems","originalChain":"sapphire-1","originalTokenID":"0000000","originalMintHeight":218137,"traitChain":"SAPPHIRE-1","metal":"Obsidian","shapeIdx":4,"colorIdx":3,"active":false}];
+
+function renderWalletGate() {
+  const w = getWallet();
+  const gate = document.getElementById("walletGate");
+  if (w.status !== "connected") {
+    gate.className = "wallet-gate warn";
+    gate.innerHTML = `<span class="dot"></span> Connect Adena (top right) as the collection owner to run this.`;
+    return;
+  }
+  const isOwner = w.address === OWNER_ADDR;
+  gate.className = "wallet-gate " + (isOwner ? "ok" : "warn");
+  gate.innerHTML = isOwner
+    ? `<span class="dot"></span> Connected as <code>${w.address}</code> — collection owner, both steps below will work.`
+    : `<span class="dot"></span> Connected as <code>${w.address}</code>, but that's not the collection owner (<code>${OWNER_ADDR}</code>) — both calls below are owner-only and will fail.`;
+}
+onWalletChange(renderWalletGate);
+renderWalletGate();
+
+function renderTable() {
+  const tbody = document.querySelector("#entriesTable tbody");
+  tbody.innerHTML = ENTRIES.map(t => `
+    <tr>
+      <td>${t.tid}</td>
+      <td>${t.owner}</td>
+      <td>${t.traitChain}</td>
+      <td>${t.shapeIdx}</td>
+      <td>${t.colorIdx}</td>
+      <td>${t.metal}</td>
+      <td>${t.active}</td>
+    </tr>
+  `).join("");
+}
+renderTable();
+
+function setStatus(id, cls, text) {
+  document.getElementById(id).innerHTML = `<div class="status-line ${cls}">${text}</div>`;
+}
+
+// Adena's DoContract, Sign, AND SignTx all expose zero gas control
+// (confirmed against Adena's own docs) -- gasWanted comes out fixed at
+// ~2,000,000,000 regardless of message count or type, not something this
+// page can raise or work around except by sending fewer messages per tx.
+// Two real measurements against g19, both landing within ~70 units of
+// that same fixed ceiling regardless of batch size:
+//   56 AddMigrationSnapshotEntry messages -> gas used 2,000,000,066
+//   25 AddMigrationSnapshotEntry messages -> gas used 2,000,000,058
+// Neither the batch-size difference nor a read of the deployed source
+// (assertOwner, a cross-package trait-table validation call, an
+// avl.Get + two avl.Has lookups, an avl.Set, all backed by small
+// tables/trees on a freshly-deployed realm) explains gas anywhere near
+// that scale from ordinary per-call cost alone -- there just isn't a
+// loop or large-data scan in AddMigrationSnapshotEntry's own code path.
+// Whatever the real mechanism, empirically even 25 wasn't safely under
+// the ceiling, so this drops to 8 (7 chunks for 56 entries) as a more
+// conservative next data point rather than guessing a second time in
+// the same failed range.
+const CHUNK_SIZE = 8;
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+function parseBool(raw) { if (raw == null) return null; return /^\(true/.test(raw); }
+
+async function qeval(expr) {
+  return abciQuery(NETWORKS.pearl, "vm/qeval", `${REALM_PATH}.${expr}`, 10000);
+}
+
+// Re-clicking "Deliver" always looped from ENTRIES[0] again with no
+// memory of what a PRIOR click already got through -- a real run hit
+// this: 24/56 delivered, then a second click re-sent the same first
+// chunk and every message in it panicked with "already claimed" (an
+// AdminDeliverMigrated call on an already-delivered entry), which
+// aborts that whole transaction, not just the one message -- so
+// nothing past the repeat ever got a chance to run. Filtering to only
+// still-unclaimed entries before chunking makes the button resumable:
+// re-clicking after a partial run (or a gas failure partway through)
+// just picks up wherever it actually left off.
+async function unclaimedEntries(setStatusFn) {
+  setStatusFn("pending", `Checking which of ${ENTRIES.length} are already delivered…`);
+  const flags = await Promise.all(ENTRIES.map(t => qeval(`IsMigrationClaimed("${t.originalChain}", "${t.originalTokenID}")`).catch(() => null)));
+  return ENTRIES.filter((t, i) => !parseBool(flags[i]));
+}
+
+document.getElementById("seedBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") { setStatus("seedStatus", "error", "Connect Adena first."); return; }
+  const btn = document.getElementById("seedBtn");
+  btn.disabled = true;
+  let done = 0;
+  try {
+    const chunks = chunk(ENTRIES, CHUNK_SIZE);
+    for (const part of chunks) {
+      setStatus("seedStatus", "pending", `Waiting for Adena approval — seeding ${part.length} (${done}/${ENTRIES.length} done so far)…`);
+      const messages = part.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationSnapshotEntry",
+          args: [t.owner, t.originalChain, t.originalTokenID, String(t.originalMintHeight), t.traitChain, t.metal, String(t.shapeIdx), String(t.colorIdx), String(t.active)],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `seed migration snapshot (${part.length} tokens) for g19`);
+      done += part.length;
+      setStatus("seedStatus", "success", `Seeded ${done}/${ENTRIES.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setStatus("seedStatus", "error", `${err.message || err} (${done}/${ENTRIES.length} seeded before this failed — click again to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("deliverBtn").addEventListener("click", async () => {
+  const w = getWallet();
+  if (w.status !== "connected") { setStatus("deliverStatus", "error", "Connect Adena first."); return; }
+  const btn = document.getElementById("deliverBtn");
+  btn.disabled = true;
+  let done = 0;
+  let alreadyDone = 0;
+  try {
+    const remaining = await unclaimedEntries((cls, text) => setStatus("deliverStatus", cls, text));
+    if (!remaining.length) {
+      setStatus("deliverStatus", "success", `All ${ENTRIES.length}/${ENTRIES.length} already delivered — nothing left to do.`);
+      return;
+    }
+    alreadyDone = ENTRIES.length - remaining.length;
+    const chunks = chunk(remaining, CHUNK_SIZE);
+    for (const part of chunks) {
+      setStatus("deliverStatus", "pending", `Waiting for Adena approval — delivering ${part.length} (${alreadyDone + done}/${ENTRIES.length} done so far)…`);
+      const messages = part.map(t => ({
+        type: "/vm.m_call",
+        value: {
+          caller: w.address, send: "", pkg_path: REALM_PATH, func: "AdminDeliverMigrated",
+          args: [t.originalChain, t.originalTokenID],
+        },
+      }));
+      const { hash, height } = await doContract(messages, `deliver migrated pieces (${part.length} tokens) for g19`);
+      done += part.length;
+      setStatus("deliverStatus", "success", `Delivered ${alreadyDone + done}/${ENTRIES.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+    }
+  } catch (err) {
+    setStatus("deliverStatus", "error", `${err.message || err} (${alreadyDone + done}/${ENTRIES.length} delivered before this failed — click again to retry the rest)`);
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>

@@ -140,7 +140,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g18</p>
+    <p class="eyebrow">Gno.land · GRC721 · public mint · gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g20</p>
     <h1>Mint a Gem</h1>
     <p class="sub">Every mint assembles a fresh trait combination on the fly — chain, shape, color, and metal drawn at random from the on-chain rosters, automatically retried if it collides with something already minted. No picking, no preview before you own it. What you get stays sealed behind a placeholder for a short delay after mint, then reveals for good.</p>
   </div>
@@ -410,14 +410,24 @@ import { doContract } from "./lib/adena-connect.js";
 import { abciQuery, NETWORKS, fromBaseUnits, toBaseUnits, NATIVE_DECIMALS, b64ToUtf8, fetchNativeBalance, graphqlQuery, mapLimit } from "./lib/gno-rpc.js";
 initSiteChrome();
 
-const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g18";
+const REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g20";
 
 // The immediately-prior iteration -- read-only, used only as the
 // migration source (see "Migrate previous iteration" below). Hand-
 // maintained the same way REALM_PATH itself is: gno.land packages can't
 // be redeployed in place, so each new iteration means updating both of
 // these by hand, same as nftminter.gno's own realmRelPath constant.
-const PREVIOUS_REALM_PATH = "gno.land/r/nym-gemsnft000/g17";
+const PREVIOUS_REALM_PATH = "gno.land/r/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/g19";
+
+// FindShapeIndex/FindColorIndex (used by the migration preview below to
+// reverse-map a rendered trait string back to its raw index) live on
+// the art package itself, not on REALM_PATH -- nftminter.gno imports
+// gemsart2 but never re-exports those two functions under its own name,
+// so qeval-ing them against REALM_PATH always failed with "undefined"
+// for every token, not just Pearl ones. Confirmed by reading REALM_PATH's
+// own deployed source directly: it exports StoneForChain as a passthrough,
+// but not these two.
+const GEMSART_PATH = "gno.land/p/g17cjym5e9hhws46lt6329pv2gtx2ay0503hgems/gemsart2";
 
 // How many MintAssembled calls one transaction queues at most -- a UI
 // choice, not an on-chain limit. Set high on purpose for stress-testing
@@ -993,16 +1003,49 @@ function parseTokenSummaryQ(raw) {
   return parseSummaryLines(body)[0] || null;
 }
 
-// PREVIOUS_REALM_PATH predates the CollectionSummary/WalletSummary
-// pagination fix -- gno.land realms are immutable once deployed, so
-// whichever iteration it points at is permanently stuck with the old
-// unbounded version, already confirmed live to fail with "out of gas"
-// at just 21 minted tokens. TokenSummary(tid) itself was always safe
-// per-call (only the aggregate loops were unbounded), so reading the
-// previous realm's tokens goes one tid at a time instead: try every
-// zero-padded tid from "0000000" up until expectedCount live tokens are
-// found (burns leave gaps, so this can't stop at the first miss) or a
-// generous safety cap is hit.
+// Older comment here assumed PREVIOUS_REALM_PATH would always be stuck
+// on a pre-CollectionSummary-pagination-fix iteration (confirmed live
+// once to fail with "out of gas" past 21 tokens on an old unbounded
+// version), and guessed sequential decimal tids ("0000000", "0000001",
+// ...) one at a time as a workaround instead. That workaround was never
+// actually correct even for a patched realm: gno's seqid encoding isn't
+// decimal past its first ~30-something values -- it rolls into letters
+// ("000001q", "00000h6") -- so `String(i)` can never generate most real
+// token ids at all. Confirmed live against g19 as a migration source:
+// of 81 real tokens, only the 30 with pure-digit ids were ever found
+// this way; the other 51 were silently skipped, not counted as sealed
+// or failed, just invisible. PREVIOUS_REALM_PATH now always points at
+// this same collection's own prior g-number iteration, which already
+// has the CollectionSummary pagination fix -- so paginate through that
+// instead of guessing tids.
+async function fetchAllTokensPaginated(qevalFn) {
+  const tokens = [];
+  for (let page = 1; page <= 200; page++) {
+    const raw = await qevalFn(`CollectionSummary(${page})`).catch(() => null);
+    const m = raw && raw.match(/^\("([\s\S]*)" string\)$/);
+    if (!m) break;
+    const body = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+    const pageTokens = parseSummaryLines(body);
+    if (!pageTokens.length) break;
+    tokens.push(...pageTokens);
+  }
+  return tokens;
+}
+
+// g7/g8/g9 (see fetchMyTokensFromPriorRealm below) predate the
+// CollectionSummary/WalletSummary pagination fix -- gno.land realms are
+// immutable once deployed, so those three are permanently stuck with the
+// old unbounded version, already confirmed live to fail with "out of
+// gas" at just 21 minted tokens; fetchAllTokensPaginated above can't help
+// them. TokenSummary(tid) itself was always safe per-call (only the
+// aggregate loops were unbounded), so this tries every zero-padded tid
+// from "0000000" up until expectedCount live tokens are found (burns
+// leave gaps, so this can't stop at the first miss) or a generous safety
+// cap is hit. Only ever safe to rely on for a realm whose real tids are
+// known to be low sequential integers -- true for these three specific
+// old deployments checked at the time this was written, NOT a general
+// solution (see fetchAllTokensPaginated's own comment for why guessing
+// tids silently misses anything using gno's real seqid encoding).
 async function fetchAllTokensPerTid(qevalFn, expectedCount) {
   const tokens = [];
   const maxAttempts = Math.max(expectedCount * 3, 50);
@@ -1239,18 +1282,66 @@ document.getElementById("migrateFromPath").textContent = PREVIOUS_REALM_PATH;
 document.getElementById("burnGapFromPath").textContent = PREVIOUS_REALM_PATH;
 document.getElementById("burnGapPreviousBurnedLink").href = gnowebCollectionUrl(PREVIOUS_REALM_PATH) + ":burned";
 
-// AddMigrationSnapshotEntry now carries only a compact trait tuple, not
-// a whole rendered image -- so a single message here costs a small
-// fraction of what it used to. Batches can go much larger than the
-// old 5-per-tx image-bearing cap; still chunked (not one giant tx) so
-// a failure partway through doesn't lose everything already approved.
-const MIGRATE_CHUNK_SIZE = 100;
+// Adena's DoContract/Sign/SignTx all expose zero gas control (confirmed
+// against Adena's own docs) -- gasWanted comes out fixed at roughly
+// 2,000,000,000 regardless of message count or type, and there's no way
+// for this page to raise it. AddMigrationSnapshotEntry costs far more
+// per call than the ~8.16M/msg MintAssembled measurement this comment
+// used to cite (that number was for a *different* function -- confirmed
+// wrong for migration calls specifically): real g19 migration runs put
+// BOTH 56 and 25 AddMigrationSnapshotEntry messages within ~70 gas units
+// of that same ~2B ceiling, meaning even 25 wasn't reliably under it.
+// Dropped to 8 per chunk (proven safe empirically) and paired with
+// runChunkedWithRetry below so a single click survives a chunk that
+// still comes in too large or hits a stale/already-done entry, instead
+// of stopping the whole run on the first failure.
+const MIGRATE_CHUNK_SIZE = 8;
+const DELIVER_CHUNK_SIZE = 8;
 
-// AdminDeliverMigrated does a full mint (same shape as MintAssembled's
-// own write work) per call, not a cheap tuple write -- a real 150-message
-// MintAssembled batch measured ~1.22B gas (~8.16M/msg) against a 3B
-// block cap, so this stays a bit under that proven ceiling per tx.
-const DELIVER_CHUNK_SIZE = 100;
+// Runs `items` through `callFn` (given a sub-array, returns {hash,
+// height} via doContract) in chunks of `chunkSize`, calling
+// `onProgress(doneCount, total, message)` after each success. On a
+// chunk failure, halves that SAME sub-batch and retries (down to a
+// floor of 1 item) before giving up on it -- covers both "chunk still
+// too large for the fixed gas ceiling" and adapts without the user
+// needing to guess a new chunk size by hand. A single item that still
+// fails (e.g. "already claimed", a genuine error rather than a gas
+// problem) is logged and skipped rather than aborting every remaining
+// item -- one bad entry shouldn't block the other 90-something. Returns
+// {done, failed: [{item, error}]} so the caller can report a real
+// summary instead of just "it stopped somewhere."
+async function runChunkedWithRetry(items, chunkSize, callFn, onProgress) {
+  const total = items.length;
+  let done = 0;
+  const failed = [];
+  let i = 0;
+  while (i < items.length) {
+    let size = Math.min(chunkSize, items.length - i);
+    let batch = items.slice(i, i + size);
+    let succeeded = false;
+    while (!succeeded) {
+      try {
+        const { hash, height } = await callFn(batch);
+        done += batch.length;
+        i += batch.length;
+        succeeded = true;
+        onProgress(done, total, `ok — ${batch.length} in this tx${height ? ` (block ${height})` : ""} — ${hash}`);
+      } catch (err) {
+        if (batch.length > 1) {
+          const half = Math.ceil(batch.length / 2);
+          onProgress(done, total, `chunk of ${batch.length} failed (${err.message || err}) — retrying as ${half} + ${batch.length - half}…`);
+          batch = batch.slice(0, half);
+        } else {
+          failed.push({ item: batch[0], error: err.message || String(err) });
+          onProgress(done, total, `skipped 1 (${err.message || err})`);
+          i += 1;
+          succeeded = true; // move on -- this single item is done (failed), not retried further
+        }
+      }
+    }
+  }
+  return { done, failed };
+}
 
 // (idx int, ok bool) is FindShapeIndex/FindColorIndex's own multi-return
 // qeval shape -- same two-line pattern as Provenance's 3-line one above,
@@ -1262,6 +1353,21 @@ function parseIntBoolQ(raw) {
   const okM = lines[1] && lines[1].match(/^\((true|false)/);
   if (!idxM || !okM) return null;
   return { idx: parseInt(idxM[1], 10), ok: okM[1] === "true" };
+}
+
+// Reverse-maps a rendered (traitChain, shapeVal, colorVal) trio back to
+// the raw (shapeIdx, colorIdx) a migrated/reserved entry needs, against
+// GEMSART_PATH -- not REALM_PATH, which never re-exports FindShapeIndex/
+// FindColorIndex under its own name (see GEMSART_PATH's own comment).
+// FindShapeIndex additionally needs the stone (Pearl draws from a
+// completely different shape list), resolved first via StoneForChain.
+async function resolveShapeColor(traitChain, shapeVal, colorVal) {
+  const stone = parseStrQ(await qevalAt(GEMSART_PATH, `StoneForChain("${traitChain}")`).catch(() => null)) || "Not Set";
+  const [shapeR, colorR] = await Promise.all([
+    qevalAt(GEMSART_PATH, `FindShapeIndex("${stone}", "${shapeVal}")`).catch(() => null),
+    qevalAt(GEMSART_PATH, `FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
+  ]);
+  return { shape: parseIntBoolQ(shapeR), color: parseIntBoolQ(colorR) };
 }
 
 function traitValue(traits, type) {
@@ -1297,9 +1403,7 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
   deliverBtn.style.display = "none";
   preview.innerHTML = `<p class="qty-note">Reading ${escapeHtml(PREVIOUS_REALM_PATH)}…</p>`;
   try {
-    const countRaw = await previousQeval("TokenCount()");
-    const expectedCount = parseInt64(countRaw) || 0;
-    const tokens = await fetchAllTokensPerTid(previousQeval, expectedCount);
+    const tokens = await fetchAllTokensPaginated(previousQeval);
     const revealed = tokens.filter(t => !t.sealed);
     const sealedCount = tokens.length - revealed.length;
 
@@ -1325,12 +1429,7 @@ document.getElementById("migrateFetchBtn").addEventListener("click", async () =>
       const colorVal = traitValue(t.traits, "Color");
       const metal = stripTraitSuffix(traitValue(t.traits, "Metal"), " Ring");
       const active = traitValue(t.traits, "Status") === "Active";
-      const [shapeR, colorR] = await Promise.all([
-        qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),
-        qeval(`FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
-      ]);
-      const shape = parseIntBoolQ(shapeR);
-      const color = parseIntBoolQ(colorR);
+      const { shape, color } = await resolveShapeColor(traitChain, shapeVal, colorVal);
       const tupleOk = !!(traitChain && metal && shape && shape.ok && color && color.ok);
       return { ...t, traitChain, metal, shapeIdx: shape ? shape.idx : null, colorIdx: color ? color.idx : null, active, tupleOk };
     }));
@@ -1360,24 +1459,26 @@ document.getElementById("migrateSubmitBtn").addEventListener("click", async () =
   if (w.status !== "connected" || !migrateCandidates.length) return;
   const btn = document.getElementById("migrateSubmitBtn");
   btn.disabled = true;
-  let done = 0;
   try {
-    for (let i = 0; i < migrateCandidates.length; i += MIGRATE_CHUNK_SIZE) {
-      const chunk = migrateCandidates.slice(i, i + MIGRATE_CHUNK_SIZE);
-      setMigrateStatus("pending", `Waiting for Adena approval — seeding ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
-      const messages = chunk.map(t => ({
+    const { done, failed } = await runChunkedWithRetry(
+      migrateCandidates,
+      MIGRATE_CHUNK_SIZE,
+      (batch) => doContract(batch.map(t => ({
         type: "/vm.m_call",
         value: {
           caller: w.address, send: "", pkg_path: REALM_PATH, func: "AddMigrationSnapshotEntry",
           args: [t.owner, t.prov.chain, t.prov.tokenId, t.prov.height, t.traitChain, t.metal, String(t.shapeIdx), String(t.colorIdx), String(t.active)],
         },
-      }));
-      const { hash, height } = await doContract(messages, `seed migration snapshot (${chunk.length} tokens)`);
-      done += chunk.length;
-      setMigrateStatus("success", `Seeded ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+      })), `seed migration snapshot (${batch.length} tokens)`),
+      (done, total, msg) => setMigrateStatus("pending", `${done}/${total} — ${msg}`),
+    );
+    const failNote = failed.length ? ` — ${failed.length} skipped (see below)` : "";
+    setMigrateStatus(failed.length ? "error" : "success", `Seeded ${done}/${migrateCandidates.length}${failNote}`);
+    if (failed.length) {
+      console.warn("Seed failures:", failed);
     }
   } catch (err) {
-    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} seeded before this failed — click "Preview" again to retry the rest)`);
+    setMigrateStatus("error", err.message || String(err));
   } finally {
     btn.disabled = false;
   }
@@ -1388,24 +1489,26 @@ document.getElementById("migrateDeliverBtn").addEventListener("click", async () 
   if (w.status !== "connected" || !migrateCandidates.length) return;
   const btn = document.getElementById("migrateDeliverBtn");
   btn.disabled = true;
-  let done = 0;
   try {
-    for (let i = 0; i < migrateCandidates.length; i += DELIVER_CHUNK_SIZE) {
-      const chunk = migrateCandidates.slice(i, i + DELIVER_CHUNK_SIZE);
-      setMigrateStatus("pending", `Waiting for Adena approval — delivering ${chunk.length} (${done}/${migrateCandidates.length} done so far)…`);
-      const messages = chunk.map(t => ({
+    const { done, failed } = await runChunkedWithRetry(
+      migrateCandidates,
+      DELIVER_CHUNK_SIZE,
+      (batch) => doContract(batch.map(t => ({
         type: "/vm.m_call",
         value: {
           caller: w.address, send: "", pkg_path: REALM_PATH, func: "AdminDeliverMigrated",
           args: [t.prov.chain, t.prov.tokenId],
         },
-      }));
-      const { hash, height } = await doContract(messages, `deliver migrated pieces (${chunk.length} tokens)`);
-      done += chunk.length;
-      setMigrateStatus("success", `Delivered ${done}/${migrateCandidates.length}${height ? ` (last tx at block ${height})` : ""} — ${hash}`);
+      })), `deliver migrated pieces (${batch.length} tokens)`),
+      (done, total, msg) => setMigrateStatus("pending", `${done}/${total} — ${msg}`),
+    );
+    const failNote = failed.length ? ` — ${failed.length} skipped (see below; entries not yet seeded will fail here until seeded first)` : "";
+    setMigrateStatus(failed.length ? "error" : "success", `Delivered ${done}/${migrateCandidates.length}${failNote}`);
+    if (failed.length) {
+      console.warn("Deliver failures:", failed);
     }
   } catch (err) {
-    setMigrateStatus("error", `${err.message || err} (${done}/${migrateCandidates.length} delivered before this failed — click "Preview" again to retry the rest; entries not yet seeded will fail here until seeded first)`);
+    setMigrateStatus("error", err.message || String(err));
   } finally {
     btn.disabled = false;
   }
@@ -1439,14 +1542,7 @@ document.getElementById("burnGapSubmitBtn").addEventListener("click", async () =
   btn.disabled = true;
   setBurnGapStatus("pending", "Resolving shape/color against this realm's own tables…");
   try {
-    // Same reverse-lookup this realm's tables always use for a rendered
-    // trait string -- see the migrate-fetch handler above.
-    const [shapeR, colorR] = await Promise.all([
-      qeval(`FindShapeIndex("${shapeVal}")`).catch(() => null),
-      qeval(`FindColorIndex("${traitChain}", "${colorVal}")`).catch(() => null),
-    ]);
-    const shape = parseIntBoolQ(shapeR);
-    const color = parseIntBoolQ(colorR);
+    const { shape, color } = await resolveShapeColor(traitChain, shapeVal, colorVal);
     if (!shape || !shape.ok) throw new Error(`"${shapeVal}" isn't a recognized shape name on this realm.`);
     if (!color || !color.ok) throw new Error(`"${colorVal}" isn't a recognized color for chain "${traitChain}" on this realm.`);
 
@@ -1471,10 +1567,13 @@ document.getElementById("burnGapSubmitBtn").addEventListener("click", async () =
 
 // Burn frees storage (owners/tokenApprovals/extensions/mintProvenance
 // records), it doesn't allocate any -- gas per call should be well
-// under a mint's. Kept conservative and equal to the other bulk actions
-// in this file (MIGRATE_CHUNK_SIZE/DELIVER_CHUNK_SIZE) rather than
-// assuming burns are cheap enough to go higher without a real
-// measurement backing that up.
+// under a mint's. NOT actually measured, though -- MIGRATE_CHUNK_SIZE/
+// DELIVER_CHUNK_SIZE used to make the same "should be cheap" assumption
+// and turned out to need dropping from 100 to 8 once real g19 migration
+// runs hit Adena's fixed ~2B gas ceiling well before 100 messages. This
+// stays at 100 unchanged since burn hasn't been checked the same way --
+// flagging that it rests on the same kind of unverified assumption that
+// was already wrong once in this file, not a claim that it's fine.
 const BURN_CHUNK_SIZE = 100;
 
 function setBurnStatus(cls, text) {
@@ -1591,11 +1690,10 @@ function qevalAt(pkgPath, expr) {
 
 // g7/g8/g9 all predate the CollectionSummary/WalletSummary pagination fix
 // (single-string, unbounded WalletSummary(owner) -- confirmed out-of-gas
-// past ~21 tokens, same reasoning as PREVIOUS_REALM_PATH's own
-// fetchAllTokensPerTid usage above) -- so this reads each realm one tid at
-// a time, exactly like the migrate panel already does for g9-as-
-// PREVIOUS_REALM_PATH, then filters to this wallet's own tokens
-// client-side.
+// past ~21 tokens) -- so this reads each realm one tid at a time via
+// fetchAllTokensPerTid (see its own comment for why that's only safe for
+// these specific old deployments, not a general approach), then filters
+// to this wallet's own tokens client-side.
 async function fetchMyTokensFromPriorRealm(realm, owner) {
   const countRaw = await qevalAt(realm.path, "TokenCount()").catch(() => null);
   const expectedCount = parseInt64(countRaw) || 0;
